@@ -1,0 +1,100 @@
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import { Clipboard } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+
+export default function ManagementTab() {
+  const router = useRouter();
+
+  const managementPrograms = [
+    {
+      id: 'part-time-timesheet',
+      name: 'Part Time TimeSheet',
+      icon: Clipboard,
+      route: '/(tabs)/management/part-time-timesheet',
+    },
+  ];
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Management</Text>
+      </View>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <View style={styles.grid}>
+          {managementPrograms.map((program) => {
+            const IconComponent = program.icon;
+            return (
+              <TouchableOpacity
+                key={program.id}
+                style={styles.programCard}
+                onPress={() => {
+                  router.push(program.route as any);
+                }}
+              >
+                <View style={styles.iconContainer}>
+                  <IconComponent size={48} color="#2563EB" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.programName}>{program.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 20,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  programCard: {
+    width: '48%',
+    aspectRatio: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  iconContainer: {
+    marginBottom: 12,
+  },
+  programName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+});

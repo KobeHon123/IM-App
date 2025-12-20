@@ -1,0 +1,291 @@
+import { supabase } from './supabase';
+import { Project, Venue, Part, Event, Comment } from '@/types';
+
+// A single place to convert database snake_case to app camelCase
+// and ensure data types are correct (e.g., creating Date objects)
+const fromSupabase = {
+  project: (p: any): Project => ({ id: p.id, name: p.name, description: p.description, pic: p.pic, thumbnail: p.thumbnail, createdAt: new Date(p.created_at) }),
+  venue: (v: any): Venue => ({ id: v.id, projectId: v.project_id, name: v.name, description: v.description, pic: v.pic, thumbnail: v.thumbnail, partQuantities: v.part_quantities || {}, createdAt: new Date(v.created_at) }),
+  part: (p: any): Part => ({ id: p.id, projectId: p.project_id, parentPartId: p.parent_part_id, name: p.name, type: p.type, status: p.status, description: p.description, designer: p.designer, dimensions: p.dimensions || {}, cadDrawing: p.cad_drawing, pictures: p.pictures || [], comments: [], createdAt: new Date(p.created_at) }),
+  event: (e: any): Event => ({ id: e.id, projectId: e.project_id, date: e.date, type: e.type, description: e.description, parts: e.parts || [] }),
+  comment: (c: any): Comment => ({ id: c.id, partId: c.part_id, author: c.author, text: c.text, isPending: c.is_pending, isCompleted: c.is_completed, createdAt: new Date(c.created_at), venueId: c.venue_id, venueName: c.venue_name }),
+};
+
+// --- Part Type Prefix Mapping ---
+const partTypePrefix: Record<string, string> = {
+    'U shape': 'U',
+    'Straight': 'S',
+    'Knob': 'K',
+    'Button': 'B',
+    'Push Pad': 'P',
+    'Cover': 'C',
+    'X - Special Design': 'X',
+    'Gadget': 'G',
+};
+
+// --- Part Naming Helper ---
+const generatePartName = (partType: string, partNumber: number): string => {
+    const prefix = partTypePrefix[partType] || 'P';
+    return `${prefix}${partNumber}`;
+}
+
+// --- NEW Data Fetching Functions ---
+export const getProjects = async () => {
+  const { data, error } = await supabase.from('projects').select('*');
+  if (error) throw error;
+  return data.map(fromSupabase.project);
+};
+
+export const getVenues = async () => {
+  const { data, error } = await supabase.from('venues').select('*');
+  if (error) throw error;
+  return data.map(fromSupabase.venue);
+};
+
+export const getVenuesByProject = async (projectId: string) => {
+  const { data, error } = await supabase.from('venues').select('*').eq('project_id', projectId);
+  if (error) throw error;
+  return data.map(fromSupabase.venue);
+};
+
+export const getVenue = async (id: string) => {
+  const { data, error } = await supabase.from('venues').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? fromSupabase.venue(data) : null;
+};
+
+export const getParts = async () => {
+  const { data, error } = await supabase.from('parts').select('*');
+  if (error) throw error;
+  return data.map(fromSupabase.part);
+};
+
+export const getPartsByProject = async (projectId: string) => {
+  const { data, error } = await supabase.from('parts').select('*').eq('project_id', projectId);
+  if (error) throw error;
+  return data.map(fromSupabase.part);
+};
+
+export const getComments = async () => {
+  const { data, error } = await supabase.from('comments').select('*');
+  if (error) throw error;
+  return data.map(fromSupabase.comment);
+};
+
+export const getCommentsByPart = async (partId: string) => {
+  const { data, error } = await supabase.from('comments').select('*').eq('part_id', partId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(fromSupabase.comment);
+};
+
+export const getEvents = async () => {
+  const { data, error } = await supabase.from('events').select('*');
+  if (error) throw error;
+  return data.map(fromSupabase.event);
+};
+
+// --- Create/Update/Delete Functions ---
+
+export const createProject = async (project: Omit<Project, 'id' | 'createdAt'>) => {
+  const { data, error } = await supabase.from('projects').insert(project).select().single();
+  if (error) throw error;
+  return fromSupabase.project(data);
+};
+
+export const updateProject = async (id: string, updates: Partial<Project>) => {
+  const { data, error } = await supabase.from('projects').update(updates).eq('id', id).select().single();
+  if (error) throw error;
+  return fromSupabase.project(data);
+};
+
+export const deleteProject = async (id: string) => {
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+};
+
+export const createVenue = async (venue: Omit<Venue, 'id' | 'createdAt'>) => {
+  const { projectId, partQuantities, ...rest } = venue;
+  const payload = { ...rest, project_id: projectId, part_quantities: partQuantities || {} };
+  const { data, error } = await supabase.from('venues').insert(payload).select().single();
+  if (error) throw error;
+  return fromSupabase.venue(data);
+};
+
+export const updateVenue = async (id: string, updates: Partial<Venue>) => {
+  const { projectId, partQuantities, ...rest } = updates;
+  const payload: Record<string, any> = { ...rest };
+  if (projectId) payload.project_id = projectId;
+  if (partQuantities) payload.part_quantities = partQuantities;
+
+  const { data, error } = await supabase.from('venues').update(payload).eq('id', id).select().single();
+  if (error) throw error;
+  return fromSupabase.venue(data);
+};
+
+export const deleteVenue = async (id: string) => {
+  const { error } = await supabase.from('venues').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+};
+
+export const getVenuePartQuantity = async (venueId: string, partId: string): Promise<number> => {
+  const venue = await getVenue(venueId);
+  return venue?.partQuantities?.[partId] || 0;
+};
+
+export const updateVenuePartQuantity = async (venueId: string, partId: string, quantity: number) => {
+  const venue = await getVenue(venueId);
+  if (!venue) throw new Error('Venue not found');
+
+  const newQuantities = { ...venue.partQuantities, [partId]: quantity };
+  return await updateVenue(venueId, { partQuantities: newQuantities });
+};
+
+export const getNextPartNumber = async (partType: string): Promise<number> => {
+    const prefix = partTypePrefix[partType] || 'P';
+    const { data, error } = await supabase.rpc('get_next_part_number', { p_prefix: prefix });
+    if (error) throw error;
+    return data;
+};
+
+export const getCurrentPartNumber = async (partType: string): Promise<number> => {
+    const prefix = partTypePrefix[partType] || 'P';
+    const { data, error } = await supabase.rpc('get_current_part_number', { p_prefix: prefix });
+    if (error) throw error;
+    return data;
+};
+
+export const createPart = async (part: Omit<Part, 'id' | 'createdAt' | 'comments' | 'name'>) => {
+    const nextNumber = await getNextPartNumber(part.type);
+    const name = generatePartName(part.type, nextNumber);
+
+    const { projectId, cadDrawing, parentPartId, ...rest } = part;
+    const payload = { ...rest, name, project_id: projectId, cad_drawing: cadDrawing, parent_part_id: parentPartId };
+    const { data, error } = await supabase.from('parts').insert(payload).select().single();
+    if (error) throw error;
+    return fromSupabase.part(data);
+};
+
+export const createSubPart = async (parentId: string, subPart: Omit<Part, 'id' | 'createdAt' | 'comments' | 'parentPartId' | 'name'>) => {
+    const { data: parentPart, error: parentError } = await supabase.from('parts').select('name').eq('id', parentId).single();
+    if (parentError) throw parentError;
+
+    const { count, error: countError } = await supabase.from('parts').select('id', { count: 'exact', head: true }).eq('parent_part_id', parentId);
+    if (countError) throw countError;
+
+    // Generate letter suffix: a, b, c, etc.
+    const subPartIndex = count || 0;
+    const letterSuffix = String.fromCharCode(97 + subPartIndex); // 97 is 'a' in ASCII
+    const name = `${parentPart.name}${letterSuffix}`;
+
+    const { projectId, cadDrawing, ...rest } = subPart;
+    const payload = { ...rest, name, project_id: projectId, cad_drawing: cadDrawing, parent_part_id: parentId };
+    const { data, error } = await supabase.from('parts').insert(payload).select().single();
+    if (error) throw error;
+    return fromSupabase.part(data);
+};
+
+export const updatePart = async (id: string, updates: Partial<Part>) => {
+    const { projectId, cadDrawing, parentPartId, ...rest } = updates;
+    const payload: Record<string, any> = { ...rest };
+    if (projectId) payload.project_id = projectId;
+    if (cadDrawing) payload.cad_drawing = cadDrawing;
+    if (parentPartId) payload.parent_part_id = parentPartId;
+
+    const { data, error } = await supabase.from('parts').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return fromSupabase.part(data);
+};
+
+export const deletePart = async (id: string) => {
+    const { error } = await supabase.from('parts').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+};
+
+export const findDuplicatePart = async (projectId: string, type: string, dimensions: Record<string, any>) => {
+    const { data, error } = await supabase
+        .from('parts')
+        .select('id, name')
+        .eq('project_id', projectId)
+        .eq('type', type)
+        .eq('dimensions', JSON.stringify(dimensions))
+        .maybeSingle();
+
+    if (error) throw error;
+    return data;
+};
+
+export const checkPartNumberExists = async (partName: string): Promise<boolean> => {
+    const { data, error } = await supabase
+        .from('parts')
+        .select('id')
+        .eq('name', partName)
+        .maybeSingle();
+
+    if (error) throw error;
+    return !!data;
+};
+
+export const createComment = async (comment: Omit<Comment, 'id' | 'createdAt'>) => {
+    const { partId, isPending, venueId, venueName, ...rest } = comment;
+    const payload = { ...rest, part_id: partId, is_pending: isPending, venue_id: venueId, venue_name: venueName };
+    const { data, error } = await supabase.from('comments').insert(payload).select().single();
+    if (error) throw error;
+    return fromSupabase.comment(data);
+};
+
+export const updateComment = async (id: string, updates: Partial<Comment>) => {
+    const { partId, isPending, venueId, venueName, ...rest } = updates;
+    const payload: Record<string, any> = { ...rest };
+    if (partId) payload.part_id = partId;
+    if (isPending !== undefined) payload.is_pending = isPending;
+    if (venueId) payload.venue_id = venueId;
+    if (venueName) payload.venue_name = venueName;
+
+    const { data, error } = await supabase.from('comments').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return fromSupabase.comment(data);
+};
+
+export const deleteComment = async (id: string) => {
+    const { error } = await supabase.from('comments').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+};
+
+export const toggleCommentCompletion = async (id: string) => {
+    const { data: comment, error: fetchError } = await supabase.from('comments').select('is_completed').eq('id', id).single();
+    if (fetchError) throw fetchError;
+
+    const newCompletedStatus = !comment.is_completed;
+    const { data, error } = await supabase.from('comments').update({ is_completed: newCompletedStatus }).eq('id', id).select().single();
+    if (error) throw error;
+    return fromSupabase.comment(data);
+};
+
+// Event functions are not fully implemented in the UI yet, but helpers are here.
+export const createEvent = async (event: Omit<Event, 'id'>) => {
+  const { projectId, ...rest } = event;
+  const payload = { ...rest, project_id: projectId };
+  const { data, error } = await supabase.from('events').insert(payload).select().single();
+  if (error) throw error;
+  return fromSupabase.event(data);
+};
+
+export const updateEvent = async (id: string, updates: Partial<Event>) => {
+  const { projectId, ...rest } = updates;
+  const payload: Record<string, any> = { ...rest };
+  if (projectId) payload.project_id = projectId;
+
+  const { data, error } = await supabase.from('events').update(payload).eq('id', id).select().single();
+  if (error) throw error;
+  return fromSupabase.event(data);
+};
+
+export const deleteEvent = async (id: string) => {
+  const { error } = await supabase.from('events').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+};
