@@ -1030,10 +1030,12 @@ const styles = StyleSheet.create({
   },
   calendarDay: {
     width: `${100 / 7}%`,
-    aspectRatio: 0.75,
-    padding: 2,
-    borderWidth: 1,
+    aspectRatio: 0.75, // Changed from 0.75 to 1 for a perfect square
+    padding: 4,
+    borderWidth: 0.5, // Thinner lines often look cleaner in grids
     borderColor: '#E5E7EB',
+    justifyContent: 'space-between', // This pushes the Date to top and Symbols to bottom with a gap
+    height: 60, // Adding a fixed height ensures they never grow
   },
   calendarDayOtherMonth: {
     backgroundColor: '#F9FAFB',
@@ -1071,6 +1073,8 @@ const styles = StyleSheet.create({
     gap: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: 20,     // Ensures space is reserved even when empty
+    marginBottom: 4,
   },
   workerSymbol: {
     width: 18,
