@@ -26,12 +26,18 @@ const ProfileScreen = () => {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [phone, setPhone] = useState('');
+  const [bio, setBio] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editBio, setEditBio] = useState('');
 
   useEffect(() => {
     if (profile) {
       console.log('Profile loaded:', profile);
       setUserName(profile.full_name || 'User');
       setUserPhoto(profile.avatar_url);
+      setPhone(profile.phone_number || '');
+      setBio(profile.bio || '');
     } else {
       console.log('No profile loaded');
     }
@@ -121,15 +127,12 @@ const ProfileScreen = () => {
 
   const handleEditName = () => {
     setEditName(userName);
+    setEditPhone(phone);
+    setEditBio(bio);
     setShowEditModal(true);
   };
 
   const handleSaveName = async () => {
-    if (!editName.trim()) {
-      setErrorMessage('Name cannot be empty');
-      return;
-    }
-
     if (!profile) {
       setErrorMessage('Profile not loaded');
       return;
@@ -141,13 +144,14 @@ const ProfileScreen = () => {
       console.log('Current session:', session ? 'Active' : 'None');
       console.log('Session user ID:', session?.user?.id);
       console.log('Profile ID:', profile.id);
-      console.log('Updating profile name for user:', profile.id);
-      console.log('New name:', editName.trim());
+      console.log('Updating profile for user:', profile.id);
 
       const { data, error } = await supabase
         .from('profiles')
         .update({
           full_name: editName.trim(),
+          phone_number: editPhone.trim(),
+          bio: editBio.trim(),
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id)
@@ -161,12 +165,14 @@ const ProfileScreen = () => {
       }
 
       setUserName(editName.trim());
+      setPhone(editPhone.trim());
+      setBio(editBio.trim());
       setShowEditModal(false);
       await refreshProfile();
-      setSuccessMessage('Name updated successfully');
+      setSuccessMessage('Profile updated successfully');
     } catch (error: any) {
-      console.error('Error updating name:', error);
-      setErrorMessage(error.message || 'Failed to update name. Please try again.');
+      console.error('Error updating profile:', error);
+      setErrorMessage(error.message || 'Failed to update profile. Please try again.');
     } finally {
       setIsUpdating(false);
     }
@@ -235,15 +241,18 @@ const ProfileScreen = () => {
             {profile?.email && (
               <Text style={styles.userEmail}>{profile.email}</Text>
             )}
+            {phone ? <Text style={styles.infoText}>📞 {phone}</Text> : null}
+            {bio ? <Text style={styles.bioText}>"{bio}"</Text> : null}
+            
             <TouchableOpacity
               style={styles.editButton}
               onPress={handleEditName}
             >
               <Edit2 color="#2563EB" size={18} />
-              <Text style={styles.editButtonText}>Edit Name</Text>
+              <Text style={styles.editButtonText}>Edit Profile</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </View> 
 
         <View style={styles.actionsSection}>
           <TouchableOpacity
@@ -269,7 +278,9 @@ const ProfileScreen = () => {
             activeOpacity={1}
           />
           <View style={styles.editModal}>
-            <Text style={styles.modalTitle}>Edit Name</Text>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            
+            <Text style={styles.inputLabel}>Name</Text>
             <TextInput
               style={styles.nameInput}
               value={editName}
@@ -278,6 +289,25 @@ const ProfileScreen = () => {
               placeholderTextColor="#6B728080"
               autoFocus
             />
+
+            <Text style={styles.inputLabel}>Phone Number</Text>
+            <TextInput
+              style={styles.nameInput}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="Enter phone number"
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.inputLabel}>About You</Text>
+            <TextInput
+              style={[styles.nameInput, { height: 80 }]}
+              value={editBio}
+              onChangeText={setEditBio}
+              placeholder="Describe yourself..."
+              multiline
+            />
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -566,6 +596,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#4B5563',
+    marginBottom: 4,
+  },
+  bioText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginHorizontal: 20,
+    marginBottom: 12,
   },
 });
 
