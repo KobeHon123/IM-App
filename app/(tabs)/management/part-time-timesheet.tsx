@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, SafeAreaView, Alert, TextInput } from 'react-native';
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -49,6 +49,7 @@ export default function PartTimeTimesheet() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('full');
   const [selectedVenue, setSelectedVenue] = useState<string>('');
+  const [siteName, setSiteName] = useState<string>('');
   const [customStartTime, setCustomStartTime] = useState(new Date());
   const [customEndTime, setCustomEndTime] = useState(new Date());
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
@@ -155,13 +156,18 @@ export default function PartTimeTimesheet() {
       return;
     }
 
+    if (selectedVenue === 'Site' && !siteName.trim()) {
+      Alert.alert('Required', 'Please enter the site name');
+      return;
+    }
+
     const dateStr = formatDateToLocalString(selectedDate);
 
     const timesheetData: any = {
       worker_name: selectedMember,
       work_date: dateStr,
       period: selectedPeriod,
-      location: selectedVenue.toLowerCase(),
+      location: selectedVenue === 'Site' ? siteName.trim() : selectedVenue.toLowerCase(),
     };
 
     if (selectedPeriod === 'other') {
@@ -198,6 +204,7 @@ export default function PartTimeTimesheet() {
     }
 
     setShowAddModal(false);
+    setSiteName('');
     loadData();
   };
 
@@ -314,7 +321,7 @@ export default function PartTimeTimesheet() {
       case 'full': return '#10B981';  // Green
       case 'am': return '#EF4444';     // Red
       case 'pm': return '#3B82F6';     // Blue
-      case 'other': return '#8B5CF6';  // Purple
+      case 'other': return '#9CA3AF';  // Grey
     }
   };
 
@@ -538,13 +545,13 @@ export default function PartTimeTimesheet() {
               <View style={[styles.legendSymbol, { backgroundColor: '#EF4444' }]}>
                 <Text style={styles.legendSymbolText}>AM</Text>
               </View>
-              <Text style={styles.legendText}>Morning</Text>
+              <Text style={styles.legendText}>10am-2pm</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendSymbol, { backgroundColor: '#3B82F6' }]}>
                 <Text style={styles.legendSymbolText}>PM</Text>
               </View>
-              <Text style={styles.legendText}>Afternoon</Text>
+              <Text style={styles.legendText}>2pm-6:30pm</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendSymbol, { backgroundColor: '#10B981' }]}>
@@ -606,7 +613,12 @@ export default function PartTimeTimesheet() {
                       styles.memberButton,
                       selectedVenue === venue && styles.memberButtonSelected
                     ]}
-                    onPress={() => setSelectedVenue(venue)}
+                    onPress={() => {
+                      setSelectedVenue(venue);
+                      if (venue !== 'Site') {
+                        setSiteName('');
+                      }
+                    }}
                   >
                     <Text style={[
                       styles.memberButtonText,
@@ -618,6 +630,20 @@ export default function PartTimeTimesheet() {
                 ))}
               </View>
             </View>
+
+            {/* Site Name Input */}
+            {selectedVenue === 'Site' && (
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Site Name *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter site name"
+                  value={siteName}
+                  onChangeText={setSiteName}
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            )}
 
             {/* Date Selection */}
             <View style={styles.formGroup}>
@@ -801,6 +827,20 @@ export default function PartTimeTimesheet() {
                 ))}
               </View>
             </View>
+
+            {/* Site Name Input */}
+            {selectedVenue === 'Site' && (
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Site Name *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter site name"
+                  value={siteName}
+                  onChangeText={setSiteName}
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            )}
 
             {/* Date Selection */}
             <View style={styles.formGroup}>
@@ -1238,6 +1278,16 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 16,
     color: '#111827',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#111827',
+    backgroundColor: '#F3F4F6',
   },
   periodButtons: {
     flexDirection: 'row',

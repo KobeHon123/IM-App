@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -105,19 +105,38 @@ export default function SearchScreen() {
 
     const fields = getRequiredDimensionFields(searchFilters.type);
     
+    const handleDimensionChange = useCallback((fieldName: string, text: string) => {
+      if (fieldName === 'shape') {
+        setSearchFilters(prev => ({
+          ...prev,
+          dimensions: { ...prev.dimensions, [fieldName]: text }
+        }));
+      } else {
+        // Allow only numbers and one decimal point
+        const validText = text.replace(/[^0-9.]/g, '');
+        // Ensure only one decimal place
+        const parts = validText.split('.');
+        let formattedText = parts[0];
+        if (parts.length > 1) {
+          formattedText += '.' + parts[1].substring(0, 1);
+        }
+        setSearchFilters(prev => ({
+          ...prev,
+          dimensions: { ...prev.dimensions, [fieldName]: formattedText }
+        }));
+      }
+    }, []);
+    
     return fields.map(field => (
       <View key={field} style={styles.inputGroup}>
         <Text style={styles.inputLabel}>{field.charAt(0).toUpperCase() + field.slice(1)}</Text>
         <TextInput
           style={styles.input}
           value={searchFilters.dimensions[field] || ''}
-          onChangeText={(text) => setSearchFilters(prev => ({
-            ...prev,
-            dimensions: { ...prev.dimensions, [field]: text }
-          }))}
+          onChangeText={(text) => handleDimensionChange(field, text)}
           placeholder="Enter value (optional)"
           placeholderTextColor="#6B728080"
-          keyboardType={field === 'shape' ? 'default' : 'numeric'}
+          keyboardType={field === 'shape' ? 'default' : 'decimal-pad'}
         />
       </View>
     ));

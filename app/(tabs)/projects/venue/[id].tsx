@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -104,7 +104,82 @@ export default function VenueDetailScreen() {
   });
   const [nextPartNumber, setNextPartNumber] = useState<number>(0);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [similarPart, setSimilarPart] = useState<{ part: Part; similarity: number } | null>(null);
+
+  // Calculate similarity between two sets of dimensions
+  const calculateDimensionSimilarity = (dims1: any, dims2: any): number => {
+    const keys = Object.keys(dims1).filter(key => dims2[key] !== undefined && dims2[key] !== '' && dims1[key] !== '');
+    if (keys.length === 0) return 0;
+
+    let totalDifference = 0;
+    let validKeys = 0;
+
+    for (const key of keys) {
+      const val1 = parseFloat(dims1[key]) || 0;
+      const val2 = parseFloat(dims2[key]) || 0;
+
+      if ((val1 === 0 && val2 === 0) || (isNaN(val1) && isNaN(val2))) {
+        continue;
+      }
+
+      const maxVal = Math.max(Math.abs(val1), Math.abs(val2));
+      if (maxVal === 0) continue;
+
+      const percentageDifference = Math.abs(val1 - val2) / maxVal * 100;
+      totalDifference += percentageDifference;
+      validKeys++;
+    }
+
+    if (validKeys === 0) return 0;
+
+    const avgDifference = totalDifference / validKeys;
+    return Math.max(0, 100 - avgDifference);
+  };
+
+  // Check for similar parts in real-time
   useEffect(() => {
+    if (!newPart.type || Object.keys(newPart.dimensions).length === 0) {
+      setSimilarPart(null);
+      return;
+    }
+
+    let highestSimilarity = 0;
+    let mostSimilarPart: Part | null = null;
+
+    for (const part of projectParts) {
+      // Only compare with parts of the same type
+      if (part.type !== newPart.type) continue;
+
+      const similarity = calculateDimensionSimilarity(newPart.dimensions, part.dimensions || {});
+      
+      if (similarity > 95 && similarity > highestSimilarity) {
+        highestSimilarity = similarity;
+        mostSimilarPart = part;
+      }
+    }
+
+    if (mostSimilarPart) {
+      setSimilarPart({ part: mostSimilarPart, similarity: highestSimilarity });
+    } else {
+      setSimilarPart(null);
+    }
+  }, [newPart.dimensions, newPart.type, projectParts]);
+
+  // Use existing similar part data
+  const handleUseSimilarPart = () => {
+    if (similarPart) {
+      setNewPart(prev => ({
+        ...prev,
+        description: similarPart.part.description,
+        designer: similarPart.part.designer,
+        cadDrawing: similarPart.part.cadDrawing,
+        pictures: similarPart.part.pictures,
+        dimensions: { ...similarPart.part.dimensions }
+      }));
+    }
+  };
+
+  useEffect(() {
     if (!selectedPart && showPartDetailModal) {
       setShowPartDetailModal(false);
     }
@@ -144,6 +219,38 @@ export default function VenueDetailScreen() {
     const comments = allComments[partId] || [];
     return comments.some(comment => !comment.isCompleted);
   };
+
+  // Define all hooks and callbacks BEFORE any conditional returns
+  const handleDimensionChange = useCallback((fieldName: string, text: string) => {
+    // Allow only numbers and one decimal point
+    const validText = text.replace(/[^0-9.]/g, '');
+    // Ensure only one decimal place
+    const parts = validText.split('.');
+    let formattedText = parts[0];
+    if (parts.length > 1) {
+      formattedText += '.' + parts[1].substring(0, 1);
+    }
+    setNewPart(prev => ({
+      ...prev,
+      dimensions: { ...prev.dimensions, [fieldName]: formattedText }
+    }));
+  }, []);
+
+  const handleEditDimensionChange = useCallback((fieldName: string, text: string) => {
+    // Allow only numbers and one decimal point
+    const validText = text.replace(/[^0-9.]/g, '');
+    // Ensure only one decimal place
+    const parts = validText.split('.');
+    let formattedText = parts[0];
+    if (parts.length > 1) {
+      formattedText += '.' + parts[1].substring(0, 1);
+    }
+    setEditingPart(prev => ({
+      ...prev,
+      dimensions: { ...prev.dimensions, [fieldName]: formattedText }
+    }));
+  }, []);
+
   if (!venue || !project) {
     return (
       <SafeAreaView style={styles.container}>
@@ -482,33 +589,154 @@ export default function VenueDetailScreen() {
         return [];
     }
   };
+
   const renderDimensionInputs = () => {
     switch (newPart.type) {
       case 'U shape':
         return (
           <>
-            <DimensionInput label="Length *" field="length" />
-            <DimensionInput label="Radius *" field="radius" />
-            <DimensionInput label="Depth *" field="depth" />
-            <DimensionInput label="O Fillet *" field="oFillet" />
-            <DimensionInput label="I Fillet *" field="iFillet" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Depth *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['depth'] || ''}
+                onChangeText={(text) => handleDimensionChange('depth', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>O Fillet *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['oFillet'] || ''}
+                onChangeText={(text) => handleDimensionChange('oFillet', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>I Fillet *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['iFillet'] || ''}
+                onChangeText={(text) => handleDimensionChange('iFillet', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Straight':
         return (
           <>
-            <DimensionInput label="Length *" field="length" />
-            <DimensionInput label="Radius *" field="radius" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Knob':
         return (
           <>
-            <DimensionInput label="Front Radius *" field="frontRadius" />
-            <DimensionInput label="Middle Radius *" field="middleRadius" />
-            <DimensionInput label="Back Radius *" field="backRadius" />
-            <DimensionInput label="Depth *" field="depth" />
-            <DimensionInput label="Middle to Back Depth *" field="middleToBackDepth" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Front Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['frontRadius'] || ''}
+                onChangeText={(text) => handleDimensionChange('frontRadius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Middle Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['middleRadius'] || ''}
+                onChangeText={(text) => handleDimensionChange('middleRadius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Back Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['backRadius'] || ''}
+                onChangeText={(text) => handleDimensionChange('backRadius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Depth *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['depth'] || ''}
+                onChangeText={(text) => handleDimensionChange('depth', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Middle to Back Depth *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['middleToBackDepth'] || ''}
+                onChangeText={(text) => handleDimensionChange('middleToBackDepth', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Button':
@@ -539,90 +767,253 @@ export default function VenueDetailScreen() {
                 ))}
               </View>
             </View>
-            {newPart.dimensions.shape !== 'Rectangular' && (
-              <DimensionInput label="Radius *" field="radius" />
-            )}
-            {newPart.dimensions.shape !== 'Circle' && (
-              <>
-                <DimensionInput label="Length *" field="length" />
-                <DimensionInput label="Width *" field="width" />
-                <DimensionInput label="Fillet *" field="fillet" />
-              </>
-            )}
-            <DimensionInput label="Thickness *" field="thickness" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Width *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['width'] || ''}
+                onChangeText={(text) => handleDimensionChange('width', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Fillet *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['fillet'] || ''}
+                onChangeText={(text) => handleDimensionChange('fillet', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Thickness *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['thickness'] || ''}
+                onChangeText={(text) => handleDimensionChange('thickness', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Push Pad':
         return (
           <>
-            <DimensionInput label="Length *" field="length" />
-            <DimensionInput label="Width *" field="width" />
-            <DimensionInput label="Radius *" field="radius" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Width *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['width'] || ''}
+                onChangeText={(text) => handleDimensionChange('width', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={newPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       default:
         return null;
     }
   };
-  const DimensionInput = ({ label, field }: { label: string; field: string }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={newPart.dimensions[field]?.toString() || ''}
-        onChangeText={(text) => setNewPart(prev => ({
-          ...prev,
-          dimensions: { ...prev.dimensions, [field]: parseFloat(text) || text }
-        }))}
-        placeholder="mm"
-        placeholderTextColor="#6B728080"
-        keyboardType="numeric"
-      />
-    </View>
-  );
-  const EditDimensionInput = ({ label, field }: { label: string; field: string }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={editingPart.dimensions[field]?.toString() || ''}
-        onChangeText={(text) => setEditingPart(prev => ({
-          ...prev,
-          dimensions: { ...prev.dimensions, [field]: parseFloat(text) || text }
-        }))}
-        placeholder="mm"
-        placeholderTextColor="#6B728080"
-        keyboardType="numeric"
-      />
-    </View>
-  );
+
   const renderEditDimensionInputs = () => {
     switch (editingPart.type) {
       case 'U shape':
         return (
           <>
-            <EditDimensionInput label="Length *" field="length" />
-            <EditDimensionInput label="Radius *" field="radius" />
-            <EditDimensionInput label="Depth *" field="depth" />
-            <EditDimensionInput label="O Fillet *" field="oFillet" />
-            <EditDimensionInput label="I Fillet *" field="iFillet" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Depth *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['depth'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('depth', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>O Fillet *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['oFillet'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('oFillet', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>I Fillet *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['iFillet'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('iFillet', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Straight':
         return (
           <>
-            <EditDimensionInput label="Length *" field="length" />
-            <EditDimensionInput label="Radius *" field="radius" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Knob':
         return (
           <>
-            <EditDimensionInput label="Front Radius *" field="frontRadius" />
-            <EditDimensionInput label="Middle Radius *" field="middleRadius" />
-            <EditDimensionInput label="Back Radius *" field="backRadius" />
-            <EditDimensionInput label="Depth *" field="depth" />
-            <EditDimensionInput label="Middle to Back Depth *" field="middleToBackDepth" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Front Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['frontRadius'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('frontRadius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Middle Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['middleRadius'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('middleRadius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Back Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['backRadius'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('backRadius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Depth *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['depth'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('depth', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Middle to Back Depth *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['middleToBackDepth'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('middleToBackDepth', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Button':
@@ -653,25 +1044,99 @@ export default function VenueDetailScreen() {
                 ))}
               </View>
             </View>
-            {editingPart.dimensions.shape !== 'Rectangular' && (
-              <EditDimensionInput label="Radius *" field="radius" />
-            )}
-            {editingPart.dimensions.shape !== 'Circle' && (
-              <>
-                <EditDimensionInput label="Length *" field="length" />
-                <EditDimensionInput label="Width *" field="width" />
-                <EditDimensionInput label="Fillet *" field="fillet" />
-              </>
-            )}
-            <EditDimensionInput label="Thickness *" field="thickness" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Width *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['width'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('width', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Fillet *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['fillet'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('fillet', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Thickness *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['thickness'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('thickness', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       case 'Push Pad':
         return (
           <>
-            <EditDimensionInput label="Length *" field="length" />
-            <EditDimensionInput label="Width *" field="width" />
-            <EditDimensionInput label="Radius *" field="radius" />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Length *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['length'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('length', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Width *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['width'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('width', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Radius *</Text>
+              <TextInput
+                style={styles.input}
+                value={editingPart.dimensions['radius'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                placeholder="mm"
+                placeholderTextColor="#6B728080"
+                keyboardType="decimal-pad"
+              />
+            </View>
           </>
         );
       default:
@@ -854,7 +1319,7 @@ export default function VenueDetailScreen() {
                 style={[styles.input, styles.textArea]}
                 value={newPart.description}
                 onChangeText={(text) => setNewPart(prev => ({ ...prev, description: text }))}
-                placeholder="Enter part description"
+                placeholder="Enter part location and description"
                 placeholderTextColor="#6B728080"
                 multiline
                 numberOfLines={4}
@@ -919,6 +1384,23 @@ export default function VenueDetailScreen() {
                 )}
               />
             </View>
+            {similarPart && (
+              <View style={styles.similarPartContainer}>
+                <View style={styles.similarPartMessageBox}>
+                  <Text style={styles.similarPartMessage}>
+                    This part has {similarPart.similarity.toFixed(1)}% similarity with {similarPart.part.name}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.useSimilarPartButton}
+                  onPress={handleUseSimilarPart}
+                >
+                  <Text style={styles.useSimilarPartButtonText}>
+                    Use {similarPart.part.name}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
             <TouchableOpacity
               style={styles.createButton}
               onPress={handleCreatePart}
@@ -1365,6 +1847,34 @@ export default function VenueDetailScreen() {
   );
 }
 const styles = StyleSheet.create({
+  similarPartContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+  },
+  similarPartMessageBox: {
+    marginBottom: 12,
+  },
+  similarPartMessage: {
+    fontSize: 14,
+    color: '#7F1D1D',
+    fontWeight: '500',
+  },
+  useSimilarPartButton: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  useSimilarPartButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',

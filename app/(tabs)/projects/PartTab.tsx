@@ -3,7 +3,7 @@ import { useData } from '@/hooks/useData';
 import { Part, PartType } from '@/types';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, CheckSquare, ChevronDown, ChevronRight, Edit2, FileText, Image as ImageIcon, Info, MessageCircle, Package, Ruler, Square, User, X } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import {
   Alert,
@@ -393,39 +393,67 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     }
   };
 
-  const DimensionInput = ({ label, field }: { label: string; field: string }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={newSubPart.dimensions[field]?.toString() || ''}
-        onChangeText={(text) => setNewSubPart(prev => ({
-          ...prev,
-          dimensions: { ...prev.dimensions, [field]: parseFloat(text) || text }
-        }))}
-        placeholder="Enter value"
-        placeholderTextColor="#6B728080"
-        keyboardType="numeric"
-      />
-    </View>
-  );
+  const DimensionInput = ({ label, field }: { label: string; field: string }) => {
+    const handleDimensionChange = useCallback((text: string) => {
+      // Allow only numbers and one decimal point
+      const validText = text.replace(/[^0-9.]/g, '');
+      // Ensure only one decimal place
+      const parts = validText.split('.');
+      let formattedText = parts[0];
+      if (parts.length > 1) {
+        formattedText += '.' + parts[1].substring(0, 1);
+      }
+      setNewSubPart(prev => ({
+        ...prev,
+        dimensions: { ...prev.dimensions, [field]: formattedText }
+      }));
+    }, [field]);
 
-  const EditDimensionInput = ({ label, field }: { label: string; field: string }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={editingPart.dimensions[field]?.toString() || ''}
-        onChangeText={(text) => setEditingPart(prev => ({
-          ...prev,
-          dimensions: { ...prev.dimensions, [field]: parseFloat(text) || text }
-        }))}
-        placeholder="mm"
-        placeholderTextColor="#6B728080"
-        keyboardType="numeric"
-      />
-    </View>
-  );
+    return (
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <TextInput
+          style={styles.input}
+          value={newSubPart.dimensions[field] || ''}
+          onChangeText={handleDimensionChange}
+          placeholder="Enter value"
+          placeholderTextColor="#6B728080"
+          keyboardType="decimal-pad"
+        />
+      </View>
+    );
+  };
+
+  const EditDimensionInput = ({ label, field }: { label: string; field: string }) => {
+    const handleDimensionChange = useCallback((text: string) => {
+      // Allow only numbers and one decimal point
+      const validText = text.replace(/[^0-9.]/g, '');
+      // Ensure only one decimal place
+      const parts = validText.split('.');
+      let formattedText = parts[0];
+      if (parts.length > 1) {
+        formattedText += '.' + parts[1].substring(0, 1);
+      }
+      setEditingPart(prev => ({
+        ...prev,
+        dimensions: { ...prev.dimensions, [field]: formattedText }
+      }));
+    }, [field]);
+
+    return (
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <TextInput
+          style={styles.input}
+          value={editingPart.dimensions[field] || ''}
+          onChangeText={handleDimensionChange}
+          placeholder="mm"
+          placeholderTextColor="#6B728080"
+          keyboardType="decimal-pad"
+        />
+      </View>
+    );
+  };
 
   const renderEditDimensionInputs = () => {
     switch (editingPart.type) {

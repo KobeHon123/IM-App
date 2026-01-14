@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,14 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { User, Edit2, LogOut, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import PublicProfile from '@/components/PublicProfile';
+import ContactList from '@/components/ContactList';
 
 const ProfileScreen = () => {
   const { profile, signOut, refreshProfile, user } = useAuth();
@@ -28,8 +31,17 @@ const ProfileScreen = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
+  const [email, setEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editBio, setEditBio] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showContactListModal, setShowContactListModal] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const emailValidationTimer = useRef<NodeJS.Timeout | null>(null);
+  const successOpacityAnim = useRef(new Animated.Value(1)).current;
+  const errorOpacityAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (profile) {
@@ -38,18 +50,28 @@ const ProfileScreen = () => {
       setUserPhoto(profile.avatar_url);
       setPhone(profile.phone_number || '');
       setBio(profile.bio || '');
+      setEmail(profile.email || '');
     } else {
       console.log('No profile loaded');
     }
   }, [profile]);
 
   useEffect(() => {
-    if (successMessage || errorMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage(null);
-        setErrorMessage(null);
-      }, 3000);
-      return () => clearTimeout(timer);
+    if (successMessage) {
+      successOpacityAnim.setValue(1);
+      Animated.timing(successOpacityAnim, {
+        toValue: 0,
+        duration: 3000,
+        useNativeDriver: true,
+      }).start(() => setSuccessMessage(null));
+    }
+    if (errorMessage) {
+      errorOpacityAnim.setValue(1);
+      Animated.timing(errorOpacityAnim, {
+        toValue: 0,
+        duration: 3000,
+        useNativeDriver: true,
+      }).start(() => setErrorMessage(null));
     }
   }, [successMessage, errorMessage]);
 
@@ -129,12 +151,58 @@ const ProfileScreen = () => {
     setEditName(userName);
     setEditPhone(phone);
     setEditBio(bio);
+    setEditEmail(email);
+    setEmailError(null);
     setShowEditModal(true);
+  };
+
+  const validateEmail = async (emailToCheck: string) => {
+    if (!emailToCheck || emailToCheck === email) {
+      setEmailError(null);
+      return;
+    }
+
+    setCheckingEmail(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', emailToCheck.toLowerCase())
+        .neq('id', profile?.id || 'null')
+        .single();
+
+      if (data) {
+        setEmailError('This email was already registered by another user');
+      } else {
+        setEmailError(null);
+      }
+    } catch (error) {
+      setEmailError(null);
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
+
+  const handleEmailChange = (text: string) => {
+    setEditEmail(text);
+    
+    if (emailValidationTimer.current) {
+      clearTimeout(emailValidationTimer.current);
+    }
+
+    emailValidationTimer.current = setTimeout(() => {
+      validateEmail(text);
+    }, 500);
   };
 
   const handleSaveName = async () => {
     if (!profile) {
       setErrorMessage('Profile not loaded');
+      return;
+    }
+
+    if (emailError) {
+      setErrorMessage('Please fix the email error before saving');
       return;
     }
 
@@ -152,6 +220,7 @@ const ProfileScreen = () => {
           full_name: editName.trim(),
           phone_number: editPhone.trim(),
           bio: editBio.trim(),
+          email: editEmail.trim(),
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id)
@@ -167,6 +236,7 @@ const ProfileScreen = () => {
       setUserName(editName.trim());
       setPhone(editPhone.trim());
       setBio(editBio.trim());
+      setEmail(editEmail.trim());
       setShowEditModal(false);
       await refreshProfile();
       setSuccessMessage('Profile updated successfully');
@@ -202,14 +272,18 @@ const ProfileScreen = () => {
       </View>
 
       {successMessage && (
-        <View style={styles.successBanner}>
-          <Text style={styles.successText}>{successMessage}</Text>
+        <View style={styles.messageOverlay}>
+          <Animated.View style={[styles.successMessageBox, { opacity: successOpacityAnim }]}>
+            <Text style={styles.successMessageText}>{successMessage}</Text>
+          </Animated.View>
         </View>
       )}
 
       {errorMessage && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
+        <View style={styles.messageOverlay}>
+          <Animated.View style={[styles.errorMessageBox, { opacity: errorOpacityAnim }]}>
+            <Text style={styles.errorMessageText}>{errorMessage}</Text>
+          </Animated.View>
         </View>
       )}
 
@@ -236,23 +310,41 @@ const ProfileScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.nameSection}>
-            <Text style={styles.userName}>{userName}</Text>
-            {profile?.email && (
-              <Text style={styles.userEmail}>{profile.email}</Text>
-            )}
-            {phone ? <Text style={styles.infoText}>📞 {phone}</Text> : null}
-            {bio ? <Text style={styles.bioText}>"{bio}"</Text> : null}
-            
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={handleEditName}
-            >
-              <Edit2 color="#2563EB" size={18} />
-              <Text style={styles.editButtonText}>Edit Profile</Text>
-            </TouchableOpacity>
-          </View>
+         <View style={styles.nameSection}>
+  <Text style={styles.userName}>{userName}</Text>
+  {email ? <Text style={styles.userEmail}>{email}</Text> : null}
+  
+  {/* Added display for Phone and Bio */}
+  {phone ? <Text style={styles.infoText}>📞 {phone}</Text> : null}
+  {bio ? <Text style={styles.bioText}>"{bio}"</Text> : null}
+
+  {/* New Row for Edit and Preview Buttons */}
+  <View style={styles.buttonRow}>
+    <TouchableOpacity style={styles.editButton} onPress={handleEditName}>
+      <Edit2 color="#2563EB" size={18} />
+      <Text style={styles.editButtonText}>Edit</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity 
+      style={styles.previewButton}
+      onPress={() => setShowPreviewModal(true)}
+    >
+      <User color="#4B5563" size={18} />
+      <Text style={styles.previewButtonText}>Preview</Text>
+    </TouchableOpacity>
+  </View>
+</View>
         </View> 
+
+        <View style={styles.contactListButtonSection}>
+          <TouchableOpacity
+            style={styles.contactListButton}
+            onPress={() => setShowContactListModal(true)}
+          >
+            <User color="#2563EB" size={20} />
+            <Text style={styles.contactListButtonText}>View Contacts</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.actionsSection}>
           <TouchableOpacity
@@ -290,6 +382,17 @@ const ProfileScreen = () => {
               autoFocus
             />
 
+            <Text style={styles.inputLabel}>Email</Text>
+            <TextInput
+              style={[styles.nameInput, emailError && styles.inputError]}
+              value={editEmail}
+              onChangeText={handleEmailChange}
+              placeholder="Enter email"
+              keyboardType="email-address"
+              editable={!checkingEmail}
+            />
+            {emailError && <Text style={styles.errorText}>{emailError}</Text>}
+
             <Text style={styles.inputLabel}>Phone Number</Text>
             <TextInput
               style={styles.nameInput}
@@ -316,9 +419,9 @@ const ProfileScreen = () => {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.saveButton, isUpdating && { opacity: 0.6 }]}
+                style={[styles.saveButton, (isUpdating || emailError) && { opacity: 0.6 }]}
                 onPress={handleSaveName}
-                disabled={isUpdating}
+                disabled={isUpdating || !!emailError}
               >
                 {isUpdating ? (
                   <ActivityIndicator color="#FFFFFF" />
@@ -362,6 +465,30 @@ const ProfileScreen = () => {
             </View>
           </View>
         </View>
+      </Modal>
+      <Modal
+
+  visible={showPreviewModal}
+  animationType="slide"
+  presentationStyle="pageSheet"
+  onRequestClose={() => setShowPreviewModal(false)}
+>
+  <PublicProfile 
+    profile={profile} 
+    onClose={() => setShowPreviewModal(false)} 
+  />
+</Modal>
+
+      <Modal
+        visible={showContactListModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowContactListModal(false)}
+      >
+        <ContactList
+          onClose={() => setShowContactListModal(false)}
+          currentUserId={profile?.id}
+        />
       </Modal>
     </SafeAreaView>
   );
@@ -465,7 +592,7 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingTop: 12,
   },
   logoutButton: {
     flexDirection: 'row',
@@ -578,6 +705,51 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  messageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+    zIndex: 10,
+  },
+  successMessageBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  successMessageText: {
+    color: '#065F46',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  errorMessageBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  errorMessageText: {
+    color: '#991B1B',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   confirmText: {
     fontSize: 16,
     color: '#6B7280',
@@ -603,9 +775,20 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 4,
   },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '500',
+    marginTop: -16,
+    marginBottom: 16,
+  },
   infoText: {
     fontSize: 14,
     color: '#4B5563',
+    marginTop: 4,
     marginBottom: 4,
   },
   bioText: {
@@ -613,8 +796,56 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: '#6B7280',
     textAlign: 'center',
-    marginHorizontal: 20,
+    marginTop: 8,
+    paddingHorizontal: 20,
     marginBottom: 12,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  previewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  previewButtonText: {
+    fontSize: 14,
+    color: '#4B5563',
+    fontWeight: '600',
+  },
+  contactListButtonSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  contactListButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  contactListButtonText: {
+    fontSize: 16,
+    color: '#2563EB',
+    fontWeight: '600',
   },
 });
 
