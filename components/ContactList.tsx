@@ -13,6 +13,8 @@ import {
 import { User, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import PublicProfile from './PublicProfile';
+import { useEasterEgg } from '@/context/EasterEggContext';
+import { ThemedText } from '@/components/ThemedText';
 
 interface ContactProfile {
   id: string;
@@ -21,6 +23,7 @@ interface ContactProfile {
   bio: string | null;
   email: string | null;
   phone_number: string | null;
+  role?: string;
 }
 
 interface ContactListProps {
@@ -33,6 +36,7 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
   const [loading, setLoading] = useState(true);
   const [selectedContact, setSelectedContact] = useState<ContactProfile | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const { showOffWorkCounter, setShowOffWorkCounter, handleBioTap } = useEasterEgg();
 
   useEffect(() => {
     fetchContacts();
@@ -43,7 +47,7 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, bio, email, phone_number')
+        .select('id, full_name, avatar_url, bio, email, phone_number, role')
         .neq('id', currentUserId || 'null')
         .order('full_name', { ascending: true });
 
@@ -65,32 +69,41 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
     setShowPreview(true);
   };
 
-  const renderContactItem = ({ item }: { item: ContactProfile }) => (
-    <TouchableOpacity
-      style={styles.contactCard}
-      onPress={() => handleContactPress(item)}
-    >
-      <View style={styles.photoWrapper}>
-        {item.avatar_url ? (
-          <Image source={{ uri: item.avatar_url }} style={styles.contactPhoto} />
-        ) : (
-          <View style={styles.placeholderPhoto}>
-            <User color="#6B7280" size={40} />
-          </View>
-        )}
-      </View>
-      <Text style={styles.contactName} numberOfLines={2}>
-        {item.full_name}
-      </Text>
-    </TouchableOpacity>
-  );
+  const renderContactItem = ({ item }: { item: ContactProfile }) => {
+    const isAdmin = item.role === 'admin';
+    const borderColor = isAdmin ? '#2563EB' : '#E5E7EB';
+
+    return (
+      <TouchableOpacity
+        style={styles.contactCard}
+        onPress={() => handleContactPress(item)}
+      >
+        <View style={styles.photoWrapper}>
+          {item.avatar_url ? (
+            <Image
+              source={{ uri: item.avatar_url }}
+              style={[styles.contactPhoto, { borderColor }]}
+            />
+          ) : (
+            <View style={[styles.placeholderPhoto, { borderColor }]}>
+              <User color="#6B7280" size={40} />
+            </View>
+          )}
+          {isAdmin && <View style={styles.adminBadge} />}
+        </View>
+        <ThemedText style={styles.contactName} numberOfLines={2}>
+          {item.full_name}
+        </ThemedText>
+      </TouchableOpacity>
+    );
+  };
 
   const columnWidth = Dimensions.get('window').width / 3;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Contacts</Text>
+        <ThemedText style={styles.headerTitle}>Contacts</ThemedText>
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
           <X color="#6B7280" size={24} />
         </TouchableOpacity>
@@ -103,7 +116,7 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
       ) : contacts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <User color="#D1D5DB" size={60} />
-          <Text style={styles.emptyText}>No contacts found</Text>
+          <ThemedText style={styles.emptyText}>No contacts found</ThemedText>
         </View>
       ) : (
         <FlatList
@@ -122,10 +135,13 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowPreview(false)}
       >
-        <PublicProfile
-          profile={selectedContact}
-          onClose={() => setShowPreview(false)}
-        />
+        <View style={styles.modalContainer}>
+          <PublicProfile
+            profile={selectedContact}
+            onClose={() => setShowPreview(false)}
+            onBioTap={handleBioTap}
+          />
+        </View>
       </Modal>
     </View>
   );
@@ -182,6 +198,18 @@ const styles = StyleSheet.create({
   },
   photoWrapper: {
     marginBottom: 12,
+    position: 'relative',
+  },
+  adminBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#2563EB',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
   },
   contactPhoto: {
     width: 100,
@@ -199,6 +227,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#E5E7EB',
+  },
+  modalContainer: {
+    flex: 1,
   },
   contactName: {
     fontSize: 13,

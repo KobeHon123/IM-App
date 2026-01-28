@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { User } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { ThemedText } from '@/components/ThemedText';
 
 export function SetupNameScreen() {
   const { user, refreshProfile } = useAuth();
@@ -51,21 +53,21 @@ export function SetupNameScreen() {
           <View style={styles.iconContainer}>
             <User color="#2563EB" size={48} />
           </View>
-          <Text style={styles.title}>Welcome!</Text>
-          <Text style={styles.subtitle}>
+          <ThemedText style={styles.title}>Welcome!</ThemedText>
+          <ThemedText style={styles.subtitle}>
             Please set your name to get started
-          </Text>
+          </ThemedText>
         </View>
 
         <View style={styles.formSection}>
           {error && (
             <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
             </View>
           )}
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Full Name</Text>
+            <ThemedText style={styles.label}>Full Name</ThemedText>
             <TextInput
               style={styles.input}
               placeholder="Enter your full name"
@@ -90,7 +92,7 @@ export function SetupNameScreen() {
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.saveButtonText}>Continue</Text>
+              <ThemedText style={styles.saveButtonText}>Continue</ThemedText>
             )}
           </TouchableOpacity>
         </View>
@@ -187,5 +189,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
 });

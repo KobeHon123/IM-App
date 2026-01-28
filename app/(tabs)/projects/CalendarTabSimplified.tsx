@@ -5,31 +5,31 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  SafeAreaView,
   SectionList,
   Modal,
   TextInput,
   Platform,
   StyleSheet,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, ChevronUp, X, CheckSquare, Clock } from 'lucide-react-native';
 import EventCardSimplified from '@/components/EventCardSimplified';
 import { useData } from '@/hooks/useData';
 import { Part } from '@/types';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { ThemedText } from '@/components/ThemedText';
 
 const eventColors = {
   Measurement: '#3B82F6',
   'Test-Fit': '#10B981',
   Installation: '#F97316',
   Delivery: '#F59E0B',
-  Meeting: '#8B5CF6',
+  Meeting: '#EC4899',
   Other: '#6B7280',
 };
 
 const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
-  const { loading, getEventsByProject, createEvent, getPartsByProject } = useData();
+  const { loading, getEventsByProject, createEvent, getPartsByProject, updateEvent, deleteEvent } = useData();
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [isCalendarFolded, setIsCalendarFolded] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -38,7 +38,8 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [timeInput, setTimeInput] = useState('');
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
   const events = getEventsByProject(projectId);
   const projectParts: Part[] = getPartsByProject(projectId); // Fetch parts
@@ -72,16 +73,43 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
 
   const getMonthEvents = () => {
     const [month, year] = [selectedMonth.getMonth() + 1, selectedMonth.getFullYear()];
-    return events
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const monthEvents = events
       .filter((event) => {
         const [day, eventMonth, eventYear] = event.date.split('-').map(Number);
         return eventMonth === month && eventYear === year;
-      })
-      .sort((a, b) => {
-        const dateA = parseDate(a.date);
-        const dateB = parseDate(b.date);
-        return dateA.getTime() - dateB.getTime();
       });
+
+    // Separate into upcoming and past events
+    const upcomingEvents = monthEvents.filter(event => {
+      const eventDate = parseDate(event.date);
+      eventDate.setHours(0, 0, 0, 0);
+      return eventDate >= today;
+    });
+
+    const pastEvents = monthEvents.filter(event => {
+      const eventDate = parseDate(event.date);
+      eventDate.setHours(0, 0, 0, 0);
+      return eventDate < today;
+    });
+
+    // Sort both groups by date
+    upcomingEvents.sort((a, b) => {
+      const dateA = parseDate(a.date);
+      const dateB = parseDate(b.date);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    pastEvents.sort((a, b) => {
+      const dateA = parseDate(a.date);
+      const dateB = parseDate(b.date);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    // Return upcoming events first, then past events
+    return [...upcomingEvents, ...pastEvents];
   };
 
   const getEventColorForDay = (day: number): string | null => {
@@ -98,25 +126,91 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
         const timeStr = selectedTime ? formatTime(selectedTime) : '';
         const finalDescription = timeStr ? `${timeStr} - ${description}` : description;
 
-        const result = await createEvent({
-          date: formatDate(selectedDateForCreation),
-          type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other',
-          parts: selectedParts,
-          description: finalDescription,
-          projectId,
-        });
-
-        if (result) {
-          Alert.alert('Event Created', `Event for ${formatDate(selectedDateForCreation)} has been added.`);
-          resetModal();
+        if (editingEventId) {
+          // Update existing event
+          const result = await updateEvent(editingEventId, {
+            date: formatDate(selectedDateForCreation),
+            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other',
+            parts: selectedParts,
+            description: finalDescription,
+            projectId,
+          });
+          if (result) {
+            Alert.alert('Event Updated', 'Event has been updated successfully.');
+            resetModal();
+          } else {
+            Alert.alert('Error', 'Failed to update event. Please try again.');
+          }
         } else {
-          Alert.alert('Error', 'Failed to create event. Please try again.');
+          // Create new event
+          const result = await createEvent({
+            date: formatDate(selectedDateForCreation),
+            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other',
+            parts: selectedParts,
+            description: finalDescription,
+            projectId,
+          });
+
+          if (result) {
+            Alert.alert('Event Created', `Event for ${formatDate(selectedDateForCreation)} has been added.`);
+            resetModal();
+          } else {
+            Alert.alert('Error', 'Failed to create event. Please try again.');
+          }
         }
       } catch (error) {
-        console.error('Error creating event:', error);
-        Alert.alert('Error', 'An unexpected error occurred while creating the event.');
+        console.error('Error saving event:', error);
+        Alert.alert('Error', 'An unexpected error occurred while saving the event.');
       }
     }
+  };
+
+  const handleEditEvent = (eventId: string) => {
+    const event = events.find(e => e.id === eventId);
+    if (event) {
+      setEditingEventId(eventId);
+      setSelectedDateForCreation(parseDate(event.date));
+      setSelectedType(event.type);
+      setSelectedParts(event.parts || []);
+      
+      // Parse time from description if present
+      const descriptionParts = event.description.split(' - ');
+      if (descriptionParts.length === 2 && /^\d{2}:\d{2}$/.test(descriptionParts[0])) {
+        const [hours, minutes] = descriptionParts[0].split(':').map(Number);
+        const time = new Date();
+        time.setHours(hours, minutes);
+        setSelectedTime(time);
+        setDescription(descriptionParts[1]);
+      } else {
+        setSelectedTime(null);
+        setDescription(event.description);
+      }
+      
+      setShowConfirmModal(true);
+    }
+  };
+
+  const handleDeleteEvent = (eventId: string) => {
+    Alert.alert(
+      'Delete Event',
+      'Are you sure you want to delete this event?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteEvent(eventId);
+              Alert.alert('Event Deleted', 'Event has been deleted successfully.');
+            } catch (error) {
+              console.error('Error deleting event:', error);
+              Alert.alert('Error', 'Failed to delete event');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handlePartSelection = (partId: string) => {
@@ -125,10 +219,21 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
     );
   };
 
-  const onTimeChange = (event: any, time?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
-    if (time) {
-      setSelectedTime(time);
+  const handleTimeInput = (text: string) => {
+    // Only allow digits and colon
+    const cleaned = text.replace(/[^0-9:]/g, '');
+    setTimeInput(cleaned);
+
+    // Auto-format as user types (HH:MM)
+    if (cleaned.length === 2 && !cleaned.includes(':')) {
+      setTimeInput(cleaned + ':');
+    } else if (cleaned.length === 5 && cleaned[2] === ':') {
+      // Valid HH:MM format
+      const [hours, minutes] = cleaned.split(':').map(Number);
+      if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+        const today = new Date();
+        setSelectedTime(new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes));
+      }
     }
   };
 
@@ -139,7 +244,8 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
     setSelectedParts([]);
     setDescription('');
     setSelectedTime(null);
-    setShowTimePicker(false);
+    setTimeInput('');
+    setEditingEventId(null);
   };
 
   const renderCalendarDay = (day: number, isCurrentMonth: boolean, onPress: () => void, keyParam: string) => {
@@ -152,13 +258,13 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
     return (
       <TouchableOpacity key={keyParam} style={[styles.calendarDay, !isCurrentMonth && styles.inactiveDay]} onPress={onPress}>
         <View style={eventColor ? [styles.eventDay, { backgroundColor: eventColor }] : null}>
-          <Text style={[
+          <ThemedText style={[
             styles.dayText,
             !isCurrentMonth && styles.inactiveText,
             eventColor ? { color: '#FFFFFF' } : null
           ]}>
             {day}
-          </Text>
+          </ThemedText>
         </View>
       </TouchableOpacity>
     );
@@ -197,7 +303,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
       <>
         <View style={styles.calendarHeader}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <Text key={day} style={styles.headerDay}>{day}</Text>
+            <ThemedText key={day} style={styles.headerDay}>{day}</ThemedText>
           ))}
         </View>
         {weeks}
@@ -213,11 +319,11 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
           onPress={() => setIsCalendarFolded(!isCalendarFolded)}
         >
           <TouchableOpacity style={styles.monthNav} onPress={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1))}>
-            <Text style={styles.navText}>Previous</Text>
+            <ThemedText style={styles.navText}>Previous</ThemedText>
           </TouchableOpacity>
-          <Text style={styles.monthTitle}>{selectedMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}</Text>
+          <ThemedText style={styles.monthTitle}>{selectedMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}</ThemedText>
           <TouchableOpacity style={styles.monthNav} onPress={() => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1))}>
-            <Text style={styles.navText}>Next</Text>
+            <ThemedText style={styles.navText}>Next</ThemedText>
           </TouchableOpacity>
           {isCalendarFolded ? (
             <ChevronDown color="#6B7280" size={20} />
@@ -246,15 +352,26 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
       <SectionList
         sections={[{ title: '', data: getMonthEvents() }]}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <EventCardSimplified
-            date={item.date}
-            type={item.type}
-            parts={item.parts || []}
-            projectParts={projectParts}
-            description={item.description}
-          />
-        )}
+        renderItem={({ item }) => {
+          const eventDate = new Date(item.date.split('-').reverse().join('-'));
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          eventDate.setHours(0, 0, 0, 0);
+          const isPast = eventDate < today;
+
+          return (
+            <EventCardSimplified
+              date={item.date}
+              type={item.type}
+              parts={item.parts || []}
+              projectParts={projectParts}
+              description={item.description}
+              onEdit={() => handleEditEvent(item.id)}
+              onDelete={() => handleDeleteEvent(item.id)}
+              isPast={isPast}
+            />
+          );
+        }}
         renderSectionHeader={() => null}
         showsVerticalScrollIndicator={false}
       />
@@ -262,95 +379,164 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
       <Modal
         visible={showConfirmModal}
         animationType="slide"
-        presentationStyle="fullScreen" // Full screen mode
+        presentationStyle="fullScreen"
         onRequestClose={resetModal}
       >
         <SafeAreaView style={styles.modalFullScreen}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create Event</Text>
-            <TouchableOpacity onPress={resetModal}>
+            <View>
+              <ThemedText style={styles.modalTitle}>{editingEventId ? 'Edit Event' : 'Create Event'}</ThemedText>
+              <ThemedText style={styles.modalSubtitle}>
+                {selectedDateForCreation ? formatDate(selectedDateForCreation) : 'Select date'}
+              </ThemedText>
+            </View>
+            <TouchableOpacity style={styles.closeButton} onPress={resetModal}>
               <X color="#6B7280" size={24} />
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.modalInnerContent}>
-            <Text style={styles.confirmText}>
-              Are you sure to make an event on {selectedDateForCreation ? formatDate(selectedDateForCreation) : ''}?
-            </Text>
-            <Text style={styles.inputLabel}>Event Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.eventTypeContainer}>
-              {(['Measurement', 'Test-Fit', 'Installation', 'Delivery', 'Meeting', 'Other'] as const).map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.eventTypeButton,
-                    selectedType === type && { backgroundColor: eventColors[type] },
-                  ]}
-                  onPress={() => setSelectedType(type)}
-                >
-                  <Text style={[
-                    styles.eventTypeText,
-                    selectedType === type && { color: '#FFFFFF' },
-                  ]}>
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <Text style={styles.inputLabel}>Select Parts (Multi-select)</Text>
-            {projectParts.length === 0 ? (
-              <Text style={styles.noContentText}>No parts available</Text>
-            ) : (
-              <ScrollView style={styles.partsList} showsVerticalScrollIndicator={false}>
-                {projectParts.map((item) => (
+
+          <ScrollView style={styles.modalInnerContent} showsVerticalScrollIndicator={false}>
+            {/* Event Type Section */}
+            <View style={styles.sectionContainer}>
+              <ThemedText style={styles.sectionTitle}>Event Type</ThemedText>
+              <View style={styles.eventTypeGrid}>
+                {(['Measurement', 'Test-Fit', 'Installation', 'Delivery', 'Meeting', 'Other'] as const).map((type) => {
+                  const isSelected = selectedType === type;
+                  const color = eventColors[type];
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.eventTypeOption,
+                        isSelected && { backgroundColor: color, borderColor: color },
+                      ]}
+                      onPress={() => setSelectedType(type)}
+                    >
+                      <ThemedText style={[
+                        styles.eventTypeOptionText,
+                        isSelected && { color: '#FFFFFF', fontWeight: '600' },
+                      ]}>
+                        {type}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Time Section */}
+            <View style={styles.sectionContainer}>
+              <ThemedText style={styles.sectionTitle}>Time (Optional)</ThemedText>
+              <View style={styles.timeInputContainer}>
+                <Clock color={eventColors[selectedType]} size={20} />
+                <TextInput
+                  style={styles.timeInputField}
+                  placeholder="HH:MM"
+                  placeholderTextColor="#9CA3AF"
+                  value={timeInput || (selectedTime ? formatTime(selectedTime) : '')}
+                  onChangeText={handleTimeInput}
+                  maxLength={5}
+                  keyboardType="decimal-pad"
+                />
+                <ThemedText style={styles.timeFormatLabel}>24H</ThemedText>
+                {selectedTime && (
                   <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.partSelectionItem,
-                      selectedParts.includes(item.id) && styles.selectedPartItem,
-                    ]}
-                    onPress={() => handlePartSelection(item.id)}
+                    style={styles.timeClearButton}
+                    onPress={() => {
+                      setSelectedTime(null);
+                      setTimeInput('');
+                    }}
                   >
-                    <View style={styles.partSelectionContent}>
-                      <Text style={styles.partSelectionText}>
-                        {selectedParts.includes(item.id) ? '✓ ' : ''}{item.name}
-                      </Text>
-                      <Text style={styles.partTypeText}>{item.type}</Text>
-                    </View>
+                    <ThemedText style={styles.timeClearText}>✕</ThemedText>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-            <Text style={styles.inputLabel}>Time (Optional)</Text>
-            <TouchableOpacity style={styles.timeButton} onPress={() => setShowTimePicker(true)}>
-              <Clock color="#6B7280" size={24} />
-              <Text style={styles.timeButtonText}>
-                {selectedTime ? formatTime(selectedTime) : 'Select Time'}
-              </Text>
-            </TouchableOpacity>
-            {showTimePicker && (
-              <DateTimePicker
-                value={selectedTime || new Date()}
-                mode="time"
-                is24Hour={true}
-                display={Platform.OS === 'android' ? 'clock' : 'spinner'}
-                onChange={onTimeChange}
+                )}
+              </View>
+            </View>
+
+            {/* Parts Section */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionTitleRow}>
+                <ThemedText style={styles.sectionTitle}>Parts</ThemedText>
+                {selectedParts.length > 0 && (
+                  <View style={styles.partBadge}>
+                    <ThemedText style={styles.partBadgeText}>{selectedParts.length}</ThemedText>
+                  </View>
+                )}
+              </View>
+              {projectParts.length === 0 ? (
+                <ThemedText style={styles.noContentText}>No parts available</ThemedText>
+              ) : (
+                <View style={styles.partsListCompact}>
+                  {projectParts.map((item) => {
+                    const isSelected = selectedParts.includes(item.id);
+                    const color = eventColors[selectedType];
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.partListItem,
+                          isSelected && { backgroundColor: color },
+                        ]}
+                        onPress={() => handlePartSelection(item.id)}
+                      >
+                        <View style={styles.partListContent}>
+                          <View style={[
+                            styles.partListCheckbox,
+                            isSelected && { backgroundColor: color, borderColor: color },
+                          ]}>
+                            {isSelected && <ThemedText style={styles.partListCheckmark}>✓</ThemedText>}
+                          </View>
+                          <View style={styles.partListTextContent}>
+                            <ThemedText style={[
+                              styles.partListName,
+                              isSelected && { color: '#FFFFFF' },
+                            ]}>
+                              {item.name}
+                            </ThemedText>
+                            <ThemedText style={[
+                              styles.partListType,
+                              isSelected && { color: '#FFFFFF', opacity: 0.85 },
+                            ]}>
+                              {item.type}
+                            </ThemedText>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* Description Section */}
+            <View style={styles.sectionContainer}>
+              <ThemedText style={styles.sectionTitle}>Description (Optional)</ThemedText>
+              <TextInput
+                style={styles.textAreaModern}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Add notes or details about this event..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
               />
-            )}
-            <Text style={styles.inputLabel}>Description (Optional)</Text>
-            <TextInput
-              style={styles.textArea}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Enter event description"
-              placeholderTextColor="#6B728080"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
+            </View>
           </ScrollView>
-          <TouchableOpacity style={styles.createButton} onPress={handleConfirmCreate}>
-            <Text style={styles.createButtonText}>Create Event</Text>
-          </TouchableOpacity>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity style={styles.cancelButton} onPress={resetModal}>
+              <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.createButtonModern, { backgroundColor: eventColors[selectedType] }]} 
+              onPress={handleConfirmCreate}
+            >
+              <ThemedText style={styles.createButtonTextModern}>
+                {editingEventId ? 'Update Event' : 'Create Event'}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       </Modal>
     </View>
@@ -360,6 +546,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
 const styles = StyleSheet.create({
   tabContent: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   loadingContainer: {
     flex: 1,
@@ -367,34 +554,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   calendarContainer: {
-    padding: 6,
+    padding: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 6,
+    borderRadius: 12,
     marginLeft: 12,
     marginRight: 12,
-    marginTop: 6,
+    marginTop: 12,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   calendarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 12,
   },
   headerDay: {
     flex: 1,
     textAlign: 'center',
     fontSize: 13,
     color: '#6B7280',
-    fontWeight: '500',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   calendarWeek: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 0,
+    marginBottom: 4,
   },
   calendarDay: {
     flex: 1,
@@ -426,101 +618,221 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
   },
   monthNav: {
-    padding: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
   },
   navText: {
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '600',
     color: '#2563EB',
   },
   monthTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#111827',
+    flex: 1,
+    textAlign: 'center',
   },
-  // Full screen modal styles (white background, light colors hardcoded)
+  // Modern modal styles
   modalFullScreen: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // White background
-    padding: 20,
-  },
-  modalInnerContent: {
-    flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827', // Dark text
-    marginLeft: 16,
-    marginTop: 16,
-  },
-  confirmText: {
-    fontSize: 16,
-    color: '#374151', // Dark gray text
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#374151', // Dark label
-    marginBottom: 8,
-    marginLeft: 10,
-  },
-  eventTypeContainer: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    marginLeft: 12,
-    marginRight: 12,
-  },
-  eventTypeButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 18,
-    marginRight: 8,
-  },
-  eventTypeText: {
-    fontSize: 14,
-    color: '#6B7280', // Gray text
-  },
-  partSelectionItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  selectedPartItem: {
-    backgroundColor: '#E6F0FA',
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
   },
-  partSelectionContent: {
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  closeButton: {
+    padding: 8,
+    marginRight: -8,
+  },
+  modalInnerContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  eventTypeGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  eventTypeOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    flex: 1,
+    minWidth: '45%',
     alignItems: 'center',
   },
-  partSelectionText: {
-    fontSize: 16,
-    color: '#111827', // Dark text
-    fontWeight: '500',
-    flex: 1,
-  },
-  partTypeText: {
+  eventTypeOptionText: {
     fontSize: 13,
     color: '#6B7280',
-    fontStyle: 'italic',
+    fontWeight: '500',
   },
-  partsList: {
-    maxHeight: 200,
-    marginBottom: 16,
+  timeButtonModern: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  timeButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  timeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  timeInputField: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    padding: 0,
+  },
+  timeClearButton: {
+    padding: 8,
+    marginLeft: 4,
+  },
+  timeClearText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
+  timeFormatLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 12,
+  },
+  partBadge: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -2,
+  },
+  partBadgeText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    lineHeight: 14,
+  },
+  partsListCompact: {
+    gap: 8,
+  },
+  partListItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  partListContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  partListCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  partListCheckmark: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  partListTextContent: {
+    flex: 1,
+  },
+  partListName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  partListType: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
   noContentText: {
     fontSize: 14,
@@ -528,46 +840,57 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 20,
   },
-  timeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
+  textAreaModern: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    marginBottom: 16,
-    marginLeft: 12,
-    marginRight: 12,
-  },
-  timeButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#6B7280', // Gray text (dark on white)
-  },
-  textArea: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 12,
-    height: 100,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    height: 110,
     textAlignVertical: 'top',
-    marginBottom: 16,
-    marginLeft: 12,
-    marginRight: 12,
-    color: '#111827', // Dark input text
-    backgroundColor: '#FFFFFF', // White background
+    color: '#111827',
+    backgroundColor: '#FFFFFF',
+    fontSize: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  createButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 16,
-    paddingVertical: 18,
-    width: '90%',
+  modalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
     alignItems: 'center',
-    marginLeft: 20,
-    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
   },
-  createButtonText: {
+  cancelButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  createButtonModern: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  createButtonTextModern: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',

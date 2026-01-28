@@ -7,18 +7,22 @@ import {
   Modal,
   TextInput,
   Alert,
-  SafeAreaView,
   Image,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Plus, MapPin, Camera, EllipsisVertical} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { getVenuesByProject, createVenue, updateVenue, deleteVenue } from '@/lib/supabaseHelpers';
 import { Venue } from '@/types';
+import { useData } from '@/hooks/useData';
+import { DesignerSelector } from '@/components/DesignerSelector';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { ThemedText } from '@/components/ThemedText';
 
 const VenueTab = ({ projectId }: { projectId: string }) => {
+  const { profiles } = useData();
   const [venues, setVenues] = React.useState<Venue[]>([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -55,6 +59,10 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
     pic: '',
     thumbnail: '',
   });
+
+  // Check if venue name already exists in this project
+  const isVenueNameDuplicate = newVenue.name.trim() !== '' && 
+    venues.some(v => v.name.toLowerCase() === newVenue.name.trim().toLowerCase());
 
 
   const handleCreateVenue = async () => {
@@ -203,9 +211,11 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
                 )}
               </View>
               <View style={styles.venueContent}>
-                <Text style={styles.venueName}>{venue.name}</Text>
-                <Text style={styles.venueDescription}>{venue.description}</Text>
-                <Text style={styles.venuePic}>Measurer: {venue.pic}</Text>
+                <ThemedText style={[styles.venueName, !venue.description && styles.venueNameNoDescription]}>{venue.name}</ThemedText>
+                {venue.description ? (
+                  <ThemedText style={styles.venueDescription}>{venue.description}</ThemedText>
+                ) : null}
+                <ThemedText style={styles.venuePic}>Measurer: {venue.pic}</ThemedText>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -237,7 +247,7 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create New Venue</Text>
+            <ThemedText style={styles.modalTitle}>Create New Venue</ThemedText>
             <TouchableOpacity
               onPress={() => {
                 console.log('Closing create venue modal');
@@ -245,12 +255,12 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
                 setSelectedVenue(null);
               }}
             >
-              <Text style={styles.modalClose}>Cancel</Text>
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Venue Name *</Text>
+              <ThemedText style={styles.inputLabel}>Venue Name *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={newVenue.name}
@@ -260,17 +270,18 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Measurer*</Text>
-              <TextInput
-                style={styles.input}
+              <ThemedText style={styles.inputLabel}>Measurer*</ThemedText>
+              <DesignerSelector
                 value={newVenue.pic}
                 onChangeText={(text) => setNewVenue((prev) => ({ ...prev, pic: text }))}
+                profiles={profiles}
                 placeholder="Enter PIC name"
                 placeholderTextColor="#6B728080"
+                inputStyle={styles.input}
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
+              <ThemedText style={styles.inputLabel}>Description</ThemedText>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={newVenue.description}
@@ -283,23 +294,28 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Venue Thumbnail (Optional)</Text>
+              <ThemedText style={styles.inputLabel}>Venue Thumbnail (Optional)</ThemedText>
               <TouchableOpacity
                 style={styles.pictureButton}
                 onPress={() => handleSelectThumbnail(false)}
               >
                 <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Add Thumbnail</Text>
+                <ThemedText style={styles.pictureButtonText}>Add Thumbnail</ThemedText>
               </TouchableOpacity>
               {newVenue.thumbnail && (
                 <Image source={{ uri: newVenue.thumbnail }} style={styles.thumbnailPreview} />
               )}
             </View>
+            {isVenueNameDuplicate && (
+              <ThemedText style={styles.duplicateWarning}>A venue with this name already exists in this project</ThemedText>
+            )}
+
             <TouchableOpacity
-              style={styles.createButton}
+              style={[styles.createButton, isVenueNameDuplicate && styles.disabledButton]}
               onPress={handleCreateVenue}
+              disabled={isVenueNameDuplicate}
             >
-              <Text style={styles.createButtonText}>Create Venue</Text>
+              <ThemedText style={[styles.createButtonText, isVenueNameDuplicate && styles.disabledButtonText]}>Create Venue</ThemedText>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
@@ -311,7 +327,7 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Venue</Text>
+            <ThemedText style={styles.modalTitle}>Edit Venue</ThemedText>
             <TouchableOpacity
               onPress={() => {
                 console.log('Closing edit venue modal');
@@ -319,12 +335,12 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
                 setSelectedVenue(null);
               }}
             >
-              <Text style={styles.modalClose}>Cancel</Text>
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Venue Name *</Text>
+              <ThemedText style={styles.inputLabel}>Venue Name *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingVenue.name}
@@ -334,17 +350,18 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Person in Charge (PIC) *</Text>
-              <TextInput
-                style={styles.input}
+              <ThemedText style={styles.inputLabel}>Person in Charge (PIC) *</ThemedText>
+              <DesignerSelector
                 value={editingVenue.pic}
                 onChangeText={(text) => setEditingVenue((prev) => ({ ...prev, pic: text }))}
+                profiles={profiles}
                 placeholder="Enter PIC name"
                 placeholderTextColor="#6B728080"
+                inputStyle={styles.input}
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
+              <ThemedText style={styles.inputLabel}>Description</ThemedText>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={editingVenue.description}
@@ -357,13 +374,13 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Venue Thumbnail (Optional)</Text>
+              <ThemedText style={styles.inputLabel}>Venue Thumbnail (Optional)</ThemedText>
               <TouchableOpacity
                 style={styles.pictureButton}
                 onPress={() => handleSelectThumbnail(true)}
               >
                 <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Change Thumbnail</Text>
+                <ThemedText style={styles.pictureButtonText}>Change Thumbnail</ThemedText>
               </TouchableOpacity>
               {editingVenue.thumbnail && (
                 <Image source={{ uri: editingVenue.thumbnail }} style={styles.thumbnailPreview} />
@@ -373,7 +390,7 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
               style={styles.createButton}
               onPress={handleEditVenue}
             >
-              <Text style={styles.createButtonText}>Save Changes</Text>
+              <ThemedText style={styles.createButtonText}>Save Changes</ThemedText>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
@@ -403,13 +420,13 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
               style={styles.actionButton}
               onPress={() => handleVenueAction('edit')}
             >
-              <Text style={styles.actionButtonText}>Edit Venue</Text>
+              <ThemedText style={styles.actionButtonText}>Edit Venue</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.deleteButton]}
               onPress={() => handleVenueAction('delete')}
             >
-              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Venue</Text>
+              <ThemedText style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Venue</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -484,6 +501,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 4,
+  },
+  venueNameNoDescription: {
+    marginBottom: 8,
   },
   venueDescription: {
     fontSize: 14,
@@ -597,6 +617,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  disabledButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  disabledButtonText: {
+    color: '#9CA3AF',
+  },
+  duplicateWarning: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 8,
   },
   modalOverlay: {
     flex: 1,

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, MapPin, Package, Calendar as CalendarIcon } from 'lucide-react-native';
 import { useData } from '@/hooks/useData';
 import VenueTab from './VenueTab';
 import PartTab from './PartTab';
 import CalendarTabSimplified from './CalendarTabSimplified';
+import { ThemedText } from '@/components/ThemedText';
 
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -17,7 +19,7 @@ export default function ProjectDetailScreen() {
   if (!project) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.notFoundText}>Project not found</Text>
+        <ThemedText style={styles.notFoundText}>Project not found</ThemedText>
       </SafeAreaView>
     );
   }
@@ -35,8 +37,8 @@ export default function ProjectDetailScreen() {
           <ArrowLeft color="#6B7280" size={24} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{project.name}</Text>
-          <Text style={styles.headerSubtitle}>PIC: {project.pic}</Text>
+          <ThemedText style={styles.headerTitle}>{project.name}</ThemedText>
+          <ThemedText style={styles.headerSubtitle}>PIC: {project.pic}</ThemedText>
         </View>
       </View>
       <View style={styles.tabContainer}>
@@ -48,9 +50,9 @@ export default function ProjectDetailScreen() {
           }}
         >
           <MapPin color={activeTab === 'venue' ? '#2563EB' : '#6B7280'} size={20} />
-          <Text style={[styles.tabText, activeTab === 'venue' && styles.activeTabText]}>
+          <ThemedText style={[styles.tabText, activeTab === 'venue' && styles.activeTabText]}>
             Venue
-          </Text>
+          </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'part' && styles.activeTab]}
@@ -60,9 +62,9 @@ export default function ProjectDetailScreen() {
           }}
         >
           <Package color={activeTab === 'part' ? '#2563EB' : '#6B7280'} size={20} />
-          <Text style={[styles.tabText, activeTab === 'part' && styles.activeTabText]}>
+          <ThemedText style={[styles.tabText, activeTab === 'part' && styles.activeTabText]}>
             Part
-          </Text>
+          </ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'calendar' && styles.activeTab]}
@@ -72,9 +74,9 @@ export default function ProjectDetailScreen() {
           }}
         >
           <CalendarIcon color={activeTab === 'calendar' ? '#2563EB' : '#6B7280'} size={20} />
-          <Text style={[styles.tabText, activeTab === 'calendar' && styles.activeTabText]}>
+          <ThemedText style={[styles.tabText, activeTab === 'calendar' && styles.activeTabText]}>
             Calendar
-          </Text>
+          </ThemedText>
         </TouchableOpacity>
       </View>
       {activeTab === 'venue' && <VenueTab projectId={id as string} />}

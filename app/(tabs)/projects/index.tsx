@@ -8,19 +8,21 @@ import {
   Modal, 
   TextInput, 
   Alert,
-  SafeAreaView,
   Image
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Plus, X, Camera, } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useData } from '@/hooks/useData';
+import { DesignerSelector } from '@/components/DesignerSelector';
 import { SearchBar } from '@/components/SearchBar';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Project } from '@/types';
+import { ThemedText } from '@/components/ThemedText';
 
 export default function ProjectsScreen() {
-  const { projects, createProject, updateProject, deleteProject } = useData();
+  const { projects, createProject, updateProject, deleteProject, profiles } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -44,6 +46,10 @@ export default function ProjectsScreen() {
     project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
     project.pic.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Check if project name already exists
+  const isProjectNameDuplicate = newProject.name.trim() !== '' && 
+    projects.some(p => p.name.toLowerCase() === newProject.name.trim().toLowerCase());
 
   const handleCreateProject = async () => {
     if (!newProject.name.trim() || !newProject.pic.trim()) {
@@ -149,7 +155,7 @@ export default function ProjectsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Projects</Text>
+        <ThemedText style={styles.title}>Projects</ThemedText>
       </View>
 
       <SearchBar
@@ -196,20 +202,20 @@ export default function ProjectsScreen() {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create New Project</Text>
+            <ThemedText style={styles.modalTitle}>Create New Project</ThemedText>
             <TouchableOpacity 
               onPress={() => {
                 console.log('Closing create project modal');
                 setShowCreateModal(false);
               }}
             >
-              <Text style={styles.modalClose}>Cancel</Text>
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
           </View>
 
           <View style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Project Name *</Text>
+              <ThemedText style={styles.inputLabel}>Project Name *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={newProject.name}
@@ -220,18 +226,19 @@ export default function ProjectsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Measurer *</Text>
-              <TextInput
-                style={styles.input}
+              <ThemedText style={styles.inputLabel}>Measurer *</ThemedText>
+              <DesignerSelector
                 value={newProject.pic}
                 onChangeText={(text) => setNewProject(prev => ({ ...prev, pic: text }))}
+                profiles={profiles}
                 placeholder="Enter Measurer name"
                 placeholderTextColor="#6B728080"
+                inputStyle={styles.input}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
+              <ThemedText style={styles.inputLabel}>Description</ThemedText>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={newProject.description}
@@ -245,24 +252,29 @@ export default function ProjectsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Project Thumbnail (Optional)</Text>
+              <ThemedText style={styles.inputLabel}>Project Thumbnail (Optional)</ThemedText>
               <TouchableOpacity 
                 style={styles.pictureButton} 
                 onPress={() => handleSelectThumbnail(false)}
               >
                 <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Add Thumbnail</Text>
+                <ThemedText style={styles.pictureButtonText}>Add Thumbnail</ThemedText>
               </TouchableOpacity>
               {newProject.thumbnail && (
                 <Image source={{ uri: newProject.thumbnail }} style={styles.thumbnailPreview} />
               )}
             </View>
 
+            {isProjectNameDuplicate && (
+              <ThemedText style={styles.duplicateWarning}>A project with this name already exists</ThemedText>
+            )}
+
             <TouchableOpacity 
-              style={styles.createProjectButton}
+              style={[styles.createProjectButton, isProjectNameDuplicate && styles.disabledButton]}
               onPress={handleCreateProject}
+              disabled={isProjectNameDuplicate}
             >
-              <Text style={styles.createProjectButtonText}>Create Project</Text>
+              <ThemedText style={[styles.createProjectButtonText, isProjectNameDuplicate && styles.disabledButtonText]}>Create Project</ThemedText>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -275,7 +287,7 @@ export default function ProjectsScreen() {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Project</Text>
+            <ThemedText style={styles.modalTitle}>Edit Project</ThemedText>
             <TouchableOpacity 
               onPress={() => {
                 console.log('Closing edit project modal');
@@ -283,13 +295,13 @@ export default function ProjectsScreen() {
                 setSelectedProject(null);
               }}
             >
-              <Text style={styles.modalClose}>Cancel</Text>
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
           </View>
 
           <View style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Project Name *</Text>
+              <ThemedText style={styles.inputLabel}>Project Name *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingProject.name}
@@ -300,18 +312,19 @@ export default function ProjectsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Measurer *</Text>
-              <TextInput
-                style={styles.input}
+              <ThemedText style={styles.inputLabel}>Measurer *</ThemedText>
+              <DesignerSelector
                 value={editingProject.pic}
                 onChangeText={(text) => setEditingProject(prev => ({ ...prev, pic: text }))}
+                profiles={profiles}
                 placeholder="Enter Measurer name"
                 placeholderTextColor="#6B728080"
+                inputStyle={styles.input}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
+              <ThemedText style={styles.inputLabel}>Description</ThemedText>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={editingProject.description}
@@ -325,13 +338,13 @@ export default function ProjectsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Project Thumbnail (Optional)</Text>
+              <ThemedText style={styles.inputLabel}>Project Thumbnail (Optional)</ThemedText>
               <TouchableOpacity 
                 style={styles.pictureButton} 
                 onPress={() => handleSelectThumbnail(true)}
               >
                 <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Change Thumbnail</Text>
+                <ThemedText style={styles.pictureButtonText}>Change Thumbnail</ThemedText>
               </TouchableOpacity>
               {editingProject.thumbnail && (
                 <Image source={{ uri: editingProject.thumbnail }} style={styles.thumbnailPreview} />
@@ -342,7 +355,7 @@ export default function ProjectsScreen() {
               style={styles.createProjectButton}
               onPress={handleEditProject}
             >
-              <Text style={styles.createProjectButtonText}>Save Changes</Text>
+              <ThemedText style={styles.createProjectButtonText}>Save Changes</ThemedText>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -373,13 +386,13 @@ export default function ProjectsScreen() {
               style={styles.actionButton}
               onPress={() => handleProjectAction('edit')}
             >
-              <Text style={styles.actionButtonText}>Edit Project</Text>
+              <ThemedText style={styles.actionButtonText}>Edit Project</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionButton, styles.deleteButton]}
               onPress={() => handleProjectAction('delete')}
             >
-              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Project</Text>
+              <ThemedText style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Project</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -470,6 +483,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  disabledButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  disabledButtonText: {
+    color: '#9CA3AF',
+  },
+  duplicateWarning: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 8,
   },
   pictureButton: {
     flexDirection: 'row',

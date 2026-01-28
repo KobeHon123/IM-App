@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { Project, Venue, Part, Event, Comment } from '@/types';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 
 // A single place to convert database snake_case to app camelCase
 // and ensure data types are correct (e.g., creating Date objects)
@@ -28,6 +30,79 @@ const generatePartName = (partType: string, partNumber: number): string => {
     const prefix = partTypePrefix[partType] || 'P';
     return `${prefix}${partNumber}`;
 }
+
+// --- Image Upload Helpers ---
+const isLocalUri = (uri: string): boolean => {
+  return uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/');
+};
+
+export const uploadPartImage = async (uri: string, folder: string = 'parts'): Promise<string> => {
+  // If it's already a remote URL, return as-is
+  if (!isLocalUri(uri)) {
+    return uri;
+  }
+
+  try {
+    // Normalize URI - ensure it starts with file://
+    let normalizedUri = uri;
+    if (uri.startsWith('/') && !uri.startsWith('file://')) {
+      normalizedUri = `file://${uri}`;
+    }
+
+    console.log('Attempting to upload image from:', normalizedUri);
+
+    // Check if file exists first
+    const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
+    if (!fileInfo.exists) {
+      console.warn('File does not exist:', normalizedUri);
+      return uri; // Return original URI as fallback
+    }
+
+    const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+    const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    // Read file as base64
+    const base64Data = await FileSystem.readAsStringAsync(normalizedUri, {
+      encoding: 'base64',
+    });
+
+    if (!base64Data || base64Data.length === 0) {
+      throw new Error('Failed to read image file');
+    }
+
+    console.log('Read base64 data, length:', base64Data.length);
+
+    // Upload to Supabase storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('parts')
+      .upload(fileName, decode(base64Data), {
+        contentType: `image/${fileExt}`,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      throw uploadError;
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('parts')
+      .getPublicUrl(fileName);
+
+    console.log('Uploaded successfully, public URL:', publicUrlData.publicUrl);
+    return publicUrlData.publicUrl;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    // Return original URI as fallback (will work locally but not across devices)
+    return uri;
+  }
+};
+
+export const uploadPartImages = async (uris: string[]): Promise<string[]> => {
+  const uploadPromises = uris.map(uri => uploadPartImage(uri, 'pictures'));
+  return Promise.all(uploadPromises);
+};
 
 // --- NEW Data Fetching Functions ---
 export const getProjects = async () => {
@@ -142,6 +217,26 @@ export const updateVenuePartQuantity = async (venueId: string, partId: string, q
   return await updateVenue(venueId, { partQuantities: newQuantities });
 };
 
+export const getUsedPartNumbers = async (partType: string): Promise<number[]> => {
+  const prefix = partTypePrefix[partType] || 'P';
+  const { data, error } = await supabase
+    .from('parts')
+    .select('name')
+    .like('name', `${prefix}%`);
+  
+  if (error) throw error;
+  
+  // Extract numbers from part names (e.g., "U1" -> 1, "U23" -> 23)
+  const usedNumbers = (data || [])
+    .map(part => {
+      const match = part.name.match(/^[A-Z]+(\d+)$/);
+      return match ? parseInt(match[1], 10) : null;
+    })
+    .filter((num): num is number => num !== null);
+  
+  return usedNumbers;
+};
+
 export const getNextPartNumber = async (partType: string): Promise<number> => {
     const prefix = partTypePrefix[partType] || 'P';
     const { data, error } = await supabase.rpc('get_next_part_number', { p_prefix: prefix });
@@ -156,12 +251,36 @@ export const getCurrentPartNumber = async (partType: string): Promise<number> =>
     return data;
 };
 
-export const createPart = async (part: Omit<Part, 'id' | 'createdAt' | 'comments' | 'name'>) => {
-    const nextNumber = await getNextPartNumber(part.type);
-    const name = generatePartName(part.type, nextNumber);
+export const createPart = async (part: Omit<Part, 'id' | 'createdAt' | 'comments' | 'name'> & { existingPartName?: string }) => {
+    // If existingPartName is provided, use it; otherwise generate a new name
+    let name: string;
+    if (part.existingPartName) {
+        name = part.existingPartName;
+    } else {
+        const nextNumber = await getNextPartNumber(part.type);
+        name = generatePartName(part.type, nextNumber);
+    }
 
-    const { projectId, cadDrawing, parentPartId, ...rest } = part;
-    const payload = { ...rest, name, project_id: projectId, cad_drawing: cadDrawing, parent_part_id: parentPartId };
+    // Upload images to cloud storage
+    let uploadedCadDrawing = part.cadDrawing;
+    let uploadedPictures = part.pictures;
+
+    if (part.cadDrawing) {
+        uploadedCadDrawing = await uploadPartImage(part.cadDrawing, 'cad-drawings');
+    }
+    if (part.pictures && part.pictures.length > 0) {
+        uploadedPictures = await uploadPartImages(part.pictures);
+    }
+
+    const { projectId, cadDrawing, parentPartId, existingPartName, pictures, ...rest } = part;
+    const payload = { 
+        ...rest, 
+        name, 
+        project_id: projectId, 
+        cad_drawing: uploadedCadDrawing, 
+        parent_part_id: parentPartId,
+        pictures: uploadedPictures 
+    };
     const { data, error } = await supabase.from('parts').insert(payload).select().single();
     if (error) throw error;
     return fromSupabase.part(data);
@@ -179,19 +298,53 @@ export const createSubPart = async (parentId: string, subPart: Omit<Part, 'id' |
     const letterSuffix = String.fromCharCode(97 + subPartIndex); // 97 is 'a' in ASCII
     const name = `${parentPart.name}${letterSuffix}`;
 
-    const { projectId, cadDrawing, ...rest } = subPart;
-    const payload = { ...rest, name, project_id: projectId, cad_drawing: cadDrawing, parent_part_id: parentId };
+    // Upload images to cloud storage
+    let uploadedCadDrawing = subPart.cadDrawing;
+    let uploadedPictures = subPart.pictures;
+
+    if (subPart.cadDrawing) {
+        uploadedCadDrawing = await uploadPartImage(subPart.cadDrawing, 'cad-drawings');
+    }
+    if (subPart.pictures && subPart.pictures.length > 0) {
+        uploadedPictures = await uploadPartImages(subPart.pictures);
+    }
+
+    const { projectId, cadDrawing, pictures, ...rest } = subPart;
+    const payload = { 
+        ...rest, 
+        name, 
+        project_id: projectId, 
+        cad_drawing: uploadedCadDrawing, 
+        parent_part_id: parentId,
+        pictures: uploadedPictures 
+    };
     const { data, error } = await supabase.from('parts').insert(payload).select().single();
     if (error) throw error;
     return fromSupabase.part(data);
 };
 
 export const updatePart = async (id: string, updates: Partial<Part>) => {
-    const { projectId, cadDrawing, parentPartId, ...rest } = updates;
+    // Upload images to cloud storage if they're local URIs
+    let uploadedCadDrawing = updates.cadDrawing;
+    let uploadedPictures = updates.pictures;
+
+    if (updates.cadDrawing && isLocalUri(updates.cadDrawing)) {
+        uploadedCadDrawing = await uploadPartImage(updates.cadDrawing, 'cad-drawings');
+    }
+    if (updates.pictures && updates.pictures.length > 0) {
+        uploadedPictures = await Promise.all(
+            updates.pictures.map(pic => isLocalUri(pic) ? uploadPartImage(pic, 'pictures') : pic)
+        );
+    }
+
+    const { projectId, cadDrawing, parentPartId, dimensions, designer, pictures, ...rest } = updates;
     const payload: Record<string, any> = { ...rest };
     if (projectId) payload.project_id = projectId;
-    if (cadDrawing) payload.cad_drawing = cadDrawing;
+    if (uploadedCadDrawing !== undefined) payload.cad_drawing = uploadedCadDrawing;
     if (parentPartId) payload.parent_part_id = parentPartId;
+    if (dimensions) payload.dimensions = dimensions;
+    if (designer !== undefined) payload.designer = designer;
+    if (uploadedPictures !== undefined) payload.pictures = uploadedPictures;
 
     const { data, error } = await supabase.from('parts').update(payload).eq('id', id).select().single();
     if (error) throw error;

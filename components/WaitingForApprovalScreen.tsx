@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock, LogOut, User, RefreshCw } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
+import { ThemedText } from '@/components/ThemedText';
 
 export function WaitingForApprovalScreen() {
   const { profile, signOut, refreshProfile } = useAuth();
@@ -40,11 +42,11 @@ export function WaitingForApprovalScreen() {
             <Clock color="#F59E0B" size={64} />
           </View>
 
-          <Text style={styles.title}>Waiting for Approval</Text>
+          <ThemedText style={styles.title}>Waiting for Approval</ThemedText>
 
-          <Text style={styles.subtitle}>
+          <ThemedText style={styles.subtitle}>
             Your account has been created successfully, but it requires approval from an administrator before you can access the app.
-          </Text>
+          </ThemedText>
         </View>
 
         <View style={styles.profileSection}>
@@ -61,21 +63,21 @@ export function WaitingForApprovalScreen() {
             )}
 
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>
+              <ThemedText style={styles.profileName}>
                 {profile?.full_name || 'User'}
-              </Text>
-              <Text style={styles.profileEmail}>
+              </ThemedText>
+              <ThemedText style={styles.profileEmail}>
                 {profile?.email}
-              </Text>
+              </ThemedText>
             </View>
           </View>
         </View>
 
         <View style={styles.infoSection}>
           <View style={styles.infoBox}>
-            <Text style={styles.infoText}>
+            <ThemedText style={styles.infoText}>
               We'll notify you once your access has been approved. This usually takes a few minutes to a few hours.
-            </Text>
+            </ThemedText>
           </View>
         </View>
 
@@ -90,7 +92,7 @@ export function WaitingForApprovalScreen() {
             ) : (
               <>
                 <RefreshCw color="#2563EB" size={20} />
-                <Text style={styles.refreshButtonText}>Check Status</Text>
+                <ThemedText style={styles.refreshButtonText}>Check Status</ThemedText>
               </>
             )}
           </TouchableOpacity>
@@ -100,7 +102,7 @@ export function WaitingForApprovalScreen() {
             onPress={handleSignOut}
           >
             <LogOut color="#EF4444" size={20} />
-            <Text style={styles.signOutButtonText}>Sign Out</Text>
+            <ThemedText style={styles.signOutButtonText}>Sign Out</ThemedText>
           </TouchableOpacity>
         </View>
       </View>

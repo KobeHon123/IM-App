@@ -1,17 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Project, Venue, Part, PartType, PartStatus, Event, Comment } from '@/types';
+import { Project, Venue, Part, PartType, PartStatus, Event, Comment, Profile } from '@/types';
 import { Alert } from 'react-native';
 import * as h from '@/lib/supabaseHelpers';
+import { uploadPartImage, uploadPartImages } from '@/lib/supabaseHelpers';
+
+// Helper to check if a URI is a local file
+const isLocalUri = (uri: string): boolean => {
+  return uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/');
+};
+
+export type DataContextType = ReturnType<typeof useDataInternal>;
 
 // Custom hook for interacting with Supabase data
-export function useData() {
+export function useDataInternal() {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchData = useCallback(async () => {
@@ -23,12 +32,14 @@ export function useData() {
         { data: partsData, error: partsError },
         { data: eventsData, error: eventsError },
         { data: commentsData, error: commentsError },
+        { data: profilesData, error: profilesError },
       ] = await Promise.all([
         supabase.from('projects').select('*'),
         supabase.from('venues').select('*'),
         supabase.from('parts').select('*'),
         supabase.from('events').select('*'),
         supabase.from('comments').select('*'),
+        supabase.from('profiles').select('*').eq('is_authorized', true),
       ]);
 
       if (projectsError) throw new Error(`Projects Error: ${projectsError.message}`);
@@ -36,6 +47,7 @@ export function useData() {
       if (partsError) throw new Error(`Parts Error: ${partsError.message}`);
       if (eventsError) throw new Error(`Events Error: ${eventsError.message}`);
       if (commentsError) throw new Error(`Comments Error: ${commentsError.message}`);
+      if (profilesError) throw new Error(`Profiles Error: ${profilesError.message}`);
       
       // Convert date strings back to Date objects and snake_case to camelCase
       const typedProjects = projectsData?.map(p => ({ ...p, createdAt: new Date(p.created_at) })) || [];
@@ -49,6 +61,7 @@ export function useData() {
         ...p,
         projectId: p.project_id,
         parentPartId: p.parent_part_id,
+        cadDrawing: p.cad_drawing,
         createdAt: new Date(p.created_at),
         comments: []
       })) || [];
@@ -71,17 +84,28 @@ export function useData() {
         venueName: c.venue_name,
         createdAt: new Date(c.created_at)
       })) || [];
+      const typedProfiles = profilesData?.map(p => ({
+        id: p.id,
+        email: p.email,
+        fullName: p.full_name,
+        avatarUrl: p.avatar_url,
+        isAuthorized: p.is_authorized,
+        createdAt: new Date(p.created_at),
+        updatedAt: new Date(p.updated_at),
+      })) || [];
 
       // Associate comments with parts
       typedParts.forEach(part => {
         part.comments = typedComments.filter(c => c.partId === part.id);
       });
 
+
       setProjects(typedProjects);
       setVenues(typedVenues);
       setParts(typedParts);
       setEvents(typedEvents);
       setComments(typedComments);
+      setProfiles(typedProfiles);
 
     } catch (error) {
       if (error instanceof Error) {
@@ -96,6 +120,57 @@ export function useData() {
   useEffect(() => {
     fetchData();
   }, [refreshKey, fetchData]);
+
+  // Set up real-time subscriptions for all tables
+  useEffect(() => {
+    const channel = supabase
+      .channel('db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projects' },
+        () => {
+          console.log('Projects table changed, refreshing...');
+          setRefreshKey(prev => prev + 1);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'venues' },
+        () => {
+          console.log('Venues table changed, refreshing...');
+          setRefreshKey(prev => prev + 1);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'parts' },
+        () => {
+          console.log('Parts table changed, refreshing...');
+          setRefreshKey(prev => prev + 1);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'events' },
+        () => {
+          console.log('Events table changed, refreshing...');
+          setRefreshKey(prev => prev + 1);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'comments' },
+        () => {
+          console.log('Comments table changed, refreshing...');
+          setRefreshKey(prev => prev + 1);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const refresh = () => setRefreshKey(prev => prev + 1);
 
@@ -120,6 +195,13 @@ export function useData() {
 
   // --- Projects ---
   const createProject = async (project: Omit<Project, 'id' | 'createdAt'>) => {
+    // Check for duplicate project name
+    const existingProject = projects.find(p => p.name.toLowerCase() === project.name.toLowerCase());
+    if (existingProject) {
+      Alert.alert('Duplicate Name', `A project with the name "${project.name}" already exists. Please choose a different name.`);
+      return null;
+    }
+
     const { data, error } = await supabase.from('projects').insert(project).select().single();
     if (handleSupabaseError(error, 'project')) return null;
     return triggerRefresh(setProjects, { ...data, createdAt: new Date(data.created_at) });
@@ -150,6 +232,14 @@ export function useData() {
   const getVenue = (id: string) => venues.find(v => v.id === id) || null;
 
   const createVenue = async (venue: Omit<Venue, 'id' | 'createdAt'>) => {
+    // Check for duplicate venue name within the same project
+    const projectVenues = venues.filter(v => v.projectId === venue.projectId);
+    const existingVenue = projectVenues.find(v => v.name.toLowerCase() === venue.name.toLowerCase());
+    if (existingVenue) {
+      Alert.alert('Duplicate Name', `A venue with the name "${venue.name}" already exists in this project. Please choose a different name.`);
+      return null;
+    }
+
     const { data, error } = await supabase.from('venues').insert(venue).select().single();
     if (handleSupabaseError(error, 'venue')) return null;
     return triggerRefresh(setVenues, { ...data, createdAt: new Date(data.created_at) });
@@ -200,15 +290,36 @@ export function useData() {
     };
     const name = `${typeInitials[part.type]}${nextNumber}`;
 
+    // Upload images to cloud storage
+    let uploadedCadDrawing = part.cadDrawing;
+    let uploadedPictures = part.pictures;
+
+    if (part.cadDrawing) {
+      uploadedCadDrawing = await uploadPartImage(part.cadDrawing, 'cad-drawings');
+    }
+    if (part.pictures && part.pictures.length > 0) {
+      uploadedPictures = await uploadPartImages(part.pictures);
+    }
+
     const partPayload: any = {
       name,
       type: part.type,
       description: part.description,
-      pictures: part.pictures,
+      pictures: uploadedPictures,
+      status: part.status,
       project_id: part.projectId,
     };
     if (part.parentPartId) {
       partPayload.parent_part_id = part.parentPartId;
+    }
+    if (uploadedCadDrawing) {
+      partPayload.cad_drawing = uploadedCadDrawing;
+    }
+    if (part.dimensions) {
+      partPayload.dimensions = part.dimensions;
+    }
+    if (part.designer) {
+      partPayload.designer = part.designer;
     }
     const { data, error } = await supabase.from('parts').insert(partPayload).select().single();
     if (handleSupabaseError(error, 'part')) return null;
@@ -217,6 +328,7 @@ export function useData() {
       ...data,
       projectId: data.project_id,
       parentPartId: data.parent_part_id,
+      cadDrawing: data.cad_drawing,
       createdAt: new Date(data.created_at),
       comments: []
     };
@@ -232,14 +344,36 @@ export function useData() {
     if (handleSupabaseError(countError, 'sub-part count')) return null;
 
     const subPartName = `${parentPart.name}${String.fromCharCode(97 + (count || 0))}`;
+
+    // Upload images to cloud storage
+    let uploadedCadDrawing = part.cadDrawing;
+    let uploadedPictures = part.pictures;
+
+    if (part.cadDrawing) {
+      uploadedCadDrawing = await uploadPartImage(part.cadDrawing, 'cad-drawings');
+    }
+    if (part.pictures && part.pictures.length > 0) {
+      uploadedPictures = await uploadPartImages(part.pictures);
+    }
+
     const partPayload: any = {
       name: subPartName,
       type: part.type,
       description: part.description,
-      pictures: part.pictures,
+      pictures: uploadedPictures,
+      status: part.status,
       project_id: part.projectId,
       parent_part_id: parentPartId,
     };
+    if (uploadedCadDrawing) {
+      partPayload.cad_drawing = uploadedCadDrawing;
+    }
+    if (part.dimensions) {
+      partPayload.dimensions = part.dimensions;
+    }
+    if (part.designer) {
+      partPayload.designer = part.designer;
+    }
 
     const { data, error } = await supabase.from('parts').insert(partPayload).select().single();
     if (handleSupabaseError(error, 'sub-part')) return null;
@@ -248,6 +382,7 @@ export function useData() {
       ...data,
       projectId: data.project_id,
       parentPartId: data.parent_part_id,
+      cadDrawing: data.cad_drawing,
       createdAt: new Date(data.created_at),
       comments: []
     };
@@ -256,25 +391,96 @@ export function useData() {
   };
 
   const updatePart = async (id: string, updates: Partial<Part>) => {
+    // First, get the current part to find its name
+    const currentPart = parts.find(p => p.id === id);
+    if (!currentPart) return null;
+
+    console.log('=== UPDATE PART START ===');
+    console.log('Part ID:', id);
+    console.log('Updates received:', JSON.stringify(updates, null, 2));
+    console.log('cadDrawing in updates:', updates.cadDrawing);
+
+    // Upload images to cloud storage if they're local URIs
+    let uploadedCadDrawing = updates.cadDrawing;
+    let uploadedPictures = updates.pictures;
+
+    if (updates.cadDrawing && isLocalUri(updates.cadDrawing)) {
+      console.log('CAD is local URI, uploading...');
+      uploadedCadDrawing = await uploadPartImage(updates.cadDrawing, 'cad-drawings');
+      console.log('Uploaded CAD URL:', uploadedCadDrawing);
+    } else {
+      console.log('CAD is NOT local URI or empty:', updates.cadDrawing);
+    }
+    if (updates.pictures && updates.pictures.length > 0) {
+      uploadedPictures = await Promise.all(
+        updates.pictures.map(pic => isLocalUri(pic) ? uploadPartImage(pic, 'pictures') : pic)
+      );
+    }
+
     const updatePayload: any = {};
     if (updates.name !== undefined) updatePayload.name = updates.name;
     if (updates.type !== undefined) updatePayload.type = updates.type;
     if (updates.description !== undefined) updatePayload.description = updates.description;
-    if (updates.pictures !== undefined) updatePayload.pictures = updates.pictures;
+    if (uploadedPictures !== undefined) updatePayload.pictures = uploadedPictures;
+    if (uploadedCadDrawing !== undefined) updatePayload.cad_drawing = uploadedCadDrawing;
+    if (updates.dimensions !== undefined) updatePayload.dimensions = updates.dimensions;
+    if (updates.designer !== undefined) updatePayload.designer = updates.designer;
+    if (updates.status !== undefined) updatePayload.status = updates.status;
     if (updates.projectId !== undefined) updatePayload.project_id = updates.projectId;
     if (updates.parentPartId !== undefined) updatePayload.parent_part_id = updates.parentPartId;
 
+    console.log('Update payload being sent to DB:', JSON.stringify(updatePayload, null, 2));
+
+    // Update the current part
     const { data, error } = await supabase.from('parts').update(updatePayload).eq('id', id).select().single();
     if (handleSupabaseError(error, 'part update')) return null;
+
+    console.log('Data returned from DB:', JSON.stringify(data, null, 2));
+    console.log('cad_drawing from DB:', data.cad_drawing);
 
     const result = {
       ...data,
       projectId: data.project_id,
       parentPartId: data.parent_part_id,
+      cadDrawing: data.cad_drawing,
       createdAt: new Date(data.created_at),
       comments: []
     };
-    setParts(prev => prev.map(p => p.id === id ? result : p));
+
+    // Global sync: Update all parts with the same name across all projects
+    // Only sync dimension-related fields (type, dimensions, cadDrawing, designer)
+    const globalSyncPayload: any = {};
+    if (updates.type !== undefined) globalSyncPayload.type = updates.type;
+    if (updates.dimensions !== undefined) globalSyncPayload.dimensions = updates.dimensions;
+    if (uploadedCadDrawing !== undefined) globalSyncPayload.cad_drawing = uploadedCadDrawing;
+    if (updates.designer !== undefined) globalSyncPayload.designer = updates.designer;
+
+    // Find all other parts with the same name (excluding current part)
+    const sameNameParts = parts.filter(p => p.name === currentPart.name && p.id !== id);
+    
+    if (sameNameParts.length > 0 && Object.keys(globalSyncPayload).length > 0) {
+      // Update all parts with the same name in the database
+      const sameNameIds = sameNameParts.map(p => p.id);
+      await supabase.from('parts').update(globalSyncPayload).in('id', sameNameIds);
+      
+      // Update local state for all synced parts
+      setParts(prev => prev.map(p => {
+        if (p.id === id) return result;
+        if (sameNameIds.includes(p.id)) {
+          return {
+            ...p,
+            ...(updates.type !== undefined && { type: updates.type }),
+            ...(updates.dimensions !== undefined && { dimensions: updates.dimensions }),
+            ...(uploadedCadDrawing !== undefined && { cadDrawing: uploadedCadDrawing }),
+            ...(updates.designer !== undefined && { designer: updates.designer }),
+          };
+        }
+        return p;
+      }));
+    } else {
+      setParts(prev => prev.map(p => p.id === id ? result : p));
+    }
+
     return result;
   };
   
@@ -384,7 +590,7 @@ export function useData() {
     };
     // Add comment to local state immediately
     setComments(prev => [result, ...prev]);
-    setParts(prevParts => prevParts.map(p => p.id === result.partId ? { ...p, comments: [result, ...p.comments] } : p));
+    setParts(prevParts => prevParts.map(p => p.id === result.partId ? { ...p, comments: [result, ...(p.comments || [])] } : p));
     return result;
   };
   
@@ -413,8 +619,8 @@ export function useData() {
     };
     setComments(prev => prev.map(c => c.id === id ? result : c));
     setParts(prevParts => prevParts.map(p => {
-      if (p.comments.some(c => c.id === id)) {
-        return { ...p, comments: p.comments.map(c => c.id === id ? result : c) };
+      if (p.comments?.some((c: any) => c.id === id)) {
+        return { ...p, comments: (p.comments || []).map((c: any) => c.id === id ? result : c) };
       }
       return p;
     }));
@@ -425,7 +631,7 @@ export function useData() {
     const { error } = await supabase.from('comments').delete().eq('id', id);
     if (handleSupabaseError(error, 'comment delete')) return false;
     setComments(prev => prev.filter(c => c.id !== id));
-    setParts(prevParts => prevParts.map(p => ({ ...p, comments: p.comments.filter(c => c.id !== id) })));
+    setParts(prevParts => prevParts.map(p => ({ ...p, comments: (p.comments || []).filter((c: any) => c.id !== id) })));
     return true;
   };
 
@@ -448,8 +654,8 @@ export function useData() {
     };
     setComments(prev => prev.map(c => c.id === id ? result : c));
     setParts(prevParts => prevParts.map(p => {
-      if (p.comments.some(c => c.id === id)) {
-        return { ...p, comments: p.comments.map(c => c.id === id ? result : c) };
+      if (p.comments?.some((c: any) => c.id === id)) {
+        return { ...p, comments: (p.comments || []).map((c: any) => c.id === id ? result : c) };
       }
       return p;
     }));
@@ -467,6 +673,7 @@ export function useData() {
     parts,
     events,
     comments,
+    profiles,
     createProject,
     updateProject,
     deleteProject,
@@ -497,3 +704,6 @@ export function useData() {
     toggleCommentCompletion,
   };
 }
+
+// Alias for DataContext compatibility
+export const useData = useDataInternal;

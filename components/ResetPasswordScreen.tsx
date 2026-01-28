@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lock } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { ThemedText } from '@/components/ThemedText';
 
 export function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
@@ -51,16 +53,16 @@ export function ResetPasswordScreen() {
         <View style={styles.content}>
           <View style={styles.headerSection}>
             <View style={styles.logoContainer}>
-              <Text style={styles.logoText}>Immune Manager</Text>
+              <ThemedText style={styles.logoText}>Immune Manager</ThemedText>
             </View>
-            <Text style={styles.title}>Password Updated</Text>
-            <Text style={styles.subtitle}>
+            <ThemedText style={styles.title}>Password Updated</ThemedText>
+            <ThemedText style={styles.subtitle}>
               Your password has been successfully updated. You can now sign in with your new password.
-            </Text>
+            </ThemedText>
           </View>
 
           <View style={styles.successContainer}>
-            <Text style={styles.successText}>Password updated successfully!</Text>
+            <ThemedText style={styles.successText}>Password updated successfully!</ThemedText>
           </View>
         </View>
       </SafeAreaView>
@@ -75,18 +77,18 @@ export function ResetPasswordScreen() {
       >
         <View style={styles.headerSection}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>Immune Manager</Text>
+            <ThemedText style={styles.logoText}>Immune Manager</ThemedText>
           </View>
-          <Text style={styles.title}>Set New Password</Text>
-          <Text style={styles.subtitle}>
+          <ThemedText style={styles.title}>Set New Password</ThemedText>
+          <ThemedText style={styles.subtitle}>
             Enter your new password below
-          </Text>
+          </ThemedText>
         </View>
 
         <View style={styles.formSection}>
           {error && (
             <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
             </View>
           )}
 
@@ -137,7 +139,7 @@ export function ResetPasswordScreen() {
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.updateButtonText}>Update Password</Text>
+              <ThemedText style={styles.updateButtonText}>Update Password</ThemedText>
             )}
           </TouchableOpacity>
         </View>

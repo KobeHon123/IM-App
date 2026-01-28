@@ -8,21 +8,28 @@ import {
   Modal,
   TextInput,
   Alert,
-  SafeAreaView,
   FlatList,
   Image,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Camera, CheckSquare, ChevronDown, ChevronRight, Edit2, FileText, Hash, Image as ImageIcon, Info, MessageCircle, Package, Plus, Ruler, Square, Tag, User, X } from 'lucide-react-native';
+import { ArrowLeft, Camera, ChevronDown, ChevronRight, ChevronRightIcon, FileText, Hash, Image as ImageIcon, Plus, Tag, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { getVenue, getPartsByProject, createPart, createSubPart, updatePart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, updateComment, deleteComment, toggleCommentCompletion, getCurrentPartNumber } from '@/lib/supabaseHelpers';
+import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
+import { useData } from '@/hooks/useData';
 import { PartCard } from '@/components/PartCard';
+import { DesignerSelector } from '@/components/DesignerSelector';
+import { EditPartModal } from '@/components/EditPartModal';
+import { PartDetailModal } from '@/components/PartDetailModal';
 import { Part, PartType, Comment } from '@/types';
+import { calculateDimensionSimilarity, findSimilarPart } from '@/lib/similarityDetection';
+import { ThemedText } from '@/components/ThemedText';
 export default function VenueDetailScreen() {
   const { id } = useLocalSearchParams();
+  const { updatePart, parts: globalParts, profiles } = useData();
   const [venue, setVenue] = useState<any>(null);
   const [project, setProject] = useState<any>(null);
   const [projectParts, setProjectParts] = useState<Part[]>([]);
@@ -32,6 +39,14 @@ export default function VenueDetailScreen() {
   useEffect(() => {
     loadVenueData();
   }, [id]);
+
+  // Sync with global parts state when it changes
+  useEffect(() => {
+    if (venue && globalParts.length > 0) {
+      const venueParts = globalParts.filter(p => p.projectId === venue.projectId);
+      setProjectParts(venueParts);
+    }
+  }, [globalParts, venue?.projectId]);
 
   const loadVenueData = async () => {
     try {
@@ -84,8 +99,6 @@ export default function VenueDetailScreen() {
   const [selectedPart, setSelectedPart] = useState<Part | null>(null);
   const [selectedPartComments, setSelectedPartComments] = useState<Comment[]>([]);
   const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editingCommentText, setEditingCommentText] = useState('');
   const [editingPart, setEditingPart] = useState({
     type: 'U shape' as PartType,
     description: '',
@@ -103,67 +116,35 @@ export default function VenueDetailScreen() {
     designer: '',
   });
   const [nextPartNumber, setNextPartNumber] = useState<number>(0);
+  const [manualPartNumber, setManualPartNumber] = useState<number | null>(null);
+  const [showPartNumberPicker, setShowPartNumberPicker] = useState(false);
+  const [usedPartNumbers, setUsedPartNumbers] = useState<number[]>([]);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [similarPart, setSimilarPart] = useState<{ part: Part; similarity: number } | null>(null);
+  const [usingSimilarPart, setUsingSimilarPart] = useState(false);
+  const [showFullImageModal, setShowFullImageModal] = useState(false);
+  const [fullImageUri, setFullImageUri] = useState<string>('');
 
-  // Calculate similarity between two sets of dimensions
-  const calculateDimensionSimilarity = (dims1: any, dims2: any): number => {
-    const keys = Object.keys(dims1).filter(key => dims2[key] !== undefined && dims2[key] !== '' && dims1[key] !== '');
-    if (keys.length === 0) return 0;
-
-    let totalDifference = 0;
-    let validKeys = 0;
-
-    for (const key of keys) {
-      const val1 = parseFloat(dims1[key]) || 0;
-      const val2 = parseFloat(dims2[key]) || 0;
-
-      if ((val1 === 0 && val2 === 0) || (isNaN(val1) && isNaN(val2))) {
-        continue;
-      }
-
-      const maxVal = Math.max(Math.abs(val1), Math.abs(val2));
-      if (maxVal === 0) continue;
-
-      const percentageDifference = Math.abs(val1 - val2) / maxVal * 100;
-      totalDifference += percentageDifference;
-      validKeys++;
-    }
-
-    if (validKeys === 0) return 0;
-
-    const avgDifference = totalDifference / validKeys;
-    return Math.max(0, 100 - avgDifference);
-  };
-
-  // Check for similar parts in real-time
+  // Check for similar parts in real-time (search across ALL projects using globalParts)
   useEffect(() => {
-    if (!newPart.type || Object.keys(newPart.dimensions).length === 0) {
-      setSimilarPart(null);
-      return;
-    }
+    console.log('=== Similarity Detection ===');
+    console.log('newPart.type:', newPart.type);
+    console.log('newPart.dimensions:', JSON.stringify(newPart.dimensions));
+    console.log('globalParts count:', globalParts.length);
+    const similar = findSimilarPart(newPart.type, newPart.dimensions, globalParts);
+    console.log('Similar part found:', similar ? `${similar.part.name} (${similar.similarity}%)` : 'None');
+    setSimilarPart(similar);
+  }, [newPart.dimensions, newPart.type, globalParts]);
 
-    let highestSimilarity = 0;
-    let mostSimilarPart: Part | null = null;
-
-    for (const part of projectParts) {
-      // Only compare with parts of the same type
-      if (part.type !== newPart.type) continue;
-
-      const similarity = calculateDimensionSimilarity(newPart.dimensions, part.dimensions || {});
-      
-      if (similarity > 95 && similarity > highestSimilarity) {
-        highestSimilarity = similarity;
-        mostSimilarPart = part;
+  // Keep selectedPart in sync with global state changes (e.g., after image upload)
+  useEffect(() => {
+    if (selectedPart) {
+      const updatedPart = projectParts.find(p => p.id === selectedPart.id);
+      if (updatedPart && JSON.stringify(updatedPart) !== JSON.stringify(selectedPart)) {
+        setSelectedPart(updatedPart);
       }
     }
-
-    if (mostSimilarPart) {
-      setSimilarPart({ part: mostSimilarPart, similarity: highestSimilarity });
-    } else {
-      setSimilarPart(null);
-    }
-  }, [newPart.dimensions, newPart.type, projectParts]);
+  }, [projectParts, selectedPart?.id]);
 
   // Use existing similar part data
   const handleUseSimilarPart = () => {
@@ -171,15 +152,29 @@ export default function VenueDetailScreen() {
       setNewPart(prev => ({
         ...prev,
         description: similarPart.part.description,
-        designer: similarPart.part.designer,
-        cadDrawing: similarPart.part.cadDrawing,
+        designer: similarPart.part.designer || '',
+        cadDrawing: similarPart.part.cadDrawing || '',
         pictures: similarPart.part.pictures,
         dimensions: { ...similarPart.part.dimensions }
       }));
+      setUsingSimilarPart(true);
     }
   };
 
-  useEffect(() {
+  const handleGenerateNewPart = () => {
+    setUsingSimilarPart(false);
+    setSimilarPart(null);
+    setNewPart({
+      type: 'U shape' as PartType,
+      description: '',
+      pictures: [] as string[],
+      cadDrawing: '',
+      dimensions: {},
+      designer: '',
+    });
+  };
+
+  useEffect(() => {
     if (!selectedPart && showPartDetailModal) {
       setShowPartDetailModal(false);
     }
@@ -191,6 +186,7 @@ export default function VenueDetailScreen() {
   useEffect(() => {
     if (showCreatePartModal) {
       loadNextPartNumber();
+      setManualPartNumber(null); // Reset manual selection when modal opens
     }
   }, [showCreatePartModal, newPart.type]);
 
@@ -198,10 +194,19 @@ export default function VenueDetailScreen() {
     try {
       const nextNum = await getCurrentPartNumber(newPart.type);
       setNextPartNumber(nextNum + 1);
+      // Also load used part numbers for the picker
+      const usedNumbers = await getUsedPartNumbers(newPart.type);
+      setUsedPartNumbers(usedNumbers);
     } catch (error) {
       console.error('Error loading next part number:', error);
       setNextPartNumber(0);
+      setUsedPartNumbers([]);
     }
+  };
+
+  const handleSelectPartNumber = (num: number) => {
+    setManualPartNumber(num);
+    setShowPartNumberPicker(false);
   };
 
   const loadPartComments = async (partId: string) => {
@@ -254,7 +259,7 @@ export default function VenueDetailScreen() {
   if (!venue || !project) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Venue not found</Text>
+        <ThemedText>Venue not found</ThemedText>
       </SafeAreaView>
     );
   }
@@ -319,7 +324,8 @@ export default function VenueDetailScreen() {
         partId,
         author: 'User', // TODO: Replace with actual user name from auth
         text: commentText,
-        isPending: true, // Default to pending status
+        isPending: true,
+        isCompleted: false,
         venueId: venue.id,
         venueName: venue.name,
       });
@@ -338,25 +344,6 @@ export default function VenueDetailScreen() {
     }
   };
 
-  const handleToggleCommentCompletion = async (commentId: string) => {
-    try {
-      const updatedComment = await toggleCommentCompletion(commentId);
-      if (updatedComment) {
-        setSelectedPartComments(prev =>
-          prev.map(c => c.id === commentId ? updatedComment : c)
-        );
-        setAllComments(prev => ({
-          ...prev,
-          [updatedComment.partId]: prev[updatedComment.partId]?.map(c =>
-            c.id === commentId ? updatedComment : c
-          ) || []
-        }));
-      }
-    } catch (error) {
-      console.error('Error toggling comment completion:', error);
-      Alert.alert('Error', 'Failed to update comment status');
-    }
-  };
   const handleSelectPictures = async (isEdit = false) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -420,6 +407,14 @@ export default function VenueDetailScreen() {
       Alert.alert('Error', `Please fill in all required dimensions: ${missingFields.join(', ')}`);
       return;
     }
+    
+    // Generate manual part name if user selected a number
+    let manualPartName: string | undefined;
+    if (manualPartNumber && !usingSimilarPart) {
+      const prefix = {'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type];
+      manualPartName = `${prefix}${manualPartNumber}`;
+    }
+    
     const partToCreate = {
       type: newPart.type,
       description: newPart.description,
@@ -429,6 +424,8 @@ export default function VenueDetailScreen() {
       status: 'measured' as const,
       projectId: project.id,
       designer: newPart.designer || undefined,
+      // Use existing part name if in existing part mode, or manual part name if selected
+      existingPartName: usingSimilarPart && similarPart ? similarPart.part.name : manualPartName,
     };
     createNewPart(partToCreate);
   };
@@ -443,6 +440,9 @@ export default function VenueDetailScreen() {
         dimensions: {},
         designer: '',
       });
+      setUsingSimilarPart(false);
+      setSimilarPart(null);
+      setManualPartNumber(null);
       setShowCreatePartModal(false);
       await loadVenueData();
     } catch (error) {
@@ -508,7 +508,7 @@ export default function VenueDetailScreen() {
       try {
         await updatePart(selectedPart.id, { status: newStatus as Part['status'] });
         setShowStatusModal(false);
-        await loadVenueData();
+        // The global state is updated by useData().updatePart() and will sync via useEffect
       } catch (error) {
         console.error('Error updating status:', error);
       }
@@ -538,7 +538,7 @@ export default function VenueDetailScreen() {
       });
       setShowEditPartModal(false);
       setSelectedPart(null);
-      await loadVenueData();
+      // The global state is updated by useData().updatePart() and will sync via useEffect
     } catch (error) {
       console.error('Error updating part:', error);
       Alert.alert('Error', 'Failed to update part');
@@ -596,59 +596,69 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['length'] || ''}
-                onChangeText={(text) => handleDimensionChange('length', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('length', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleDimensionChange('radius', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Depth *</Text>
+              <ThemedText style={styles.inputLabel}>Depth *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['depth'] || ''}
-                onChangeText={(text) => handleDimensionChange('depth', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('depth', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>O Fillet *</Text>
+              <ThemedText style={styles.inputLabel}>O Fillet *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['oFillet'] || ''}
-                onChangeText={(text) => handleDimensionChange('oFillet', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('oFillet', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>I Fillet *</Text>
+              <ThemedText style={styles.inputLabel}>I Fillet *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['iFillet'] || ''}
-                onChangeText={(text) => handleDimensionChange('iFillet', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('iFillet', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
           </>
         );
@@ -656,26 +666,30 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['length'] || ''}
-                onChangeText={(text) => handleDimensionChange('length', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('length', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleDimensionChange('radius', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
           </>
         );
@@ -683,59 +697,69 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Front Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Front Radius *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['frontRadius'] || ''}
-                onChangeText={(text) => handleDimensionChange('frontRadius', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('frontRadius', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Middle Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Middle Radius *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['middleRadius'] || ''}
-                onChangeText={(text) => handleDimensionChange('middleRadius', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('middleRadius', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Back Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Back Radius *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['backRadius'] || ''}
-                onChangeText={(text) => handleDimensionChange('backRadius', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('backRadius', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Depth *</Text>
+              <ThemedText style={styles.inputLabel}>Depth *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['depth'] || ''}
-                onChangeText={(text) => handleDimensionChange('depth', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('depth', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Middle to Back Depth *</Text>
+              <ThemedText style={styles.inputLabel}>Middle to Back Depth *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['middleToBackDepth'] || ''}
-                onChangeText={(text) => handleDimensionChange('middleToBackDepth', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('middleToBackDepth', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
           </>
         );
@@ -743,84 +767,97 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Shape *</Text>
+              <ThemedText style={styles.inputLabel}>Shape *</ThemedText>
               <View style={styles.buttonShapeContainer}>
                 {['Circle', 'Rectangular', 'Slot'].map((shape) => (
                   <TouchableOpacity
                     key={shape}
                     style={[
                       styles.shapeButton,
-                      newPart.dimensions.shape === shape && styles.selectedShapeButton
+                      newPart.dimensions.shape === shape && styles.selectedShapeButton,
+                      usingSimilarPart && styles.disabledShapeButton
                     ]}
-                    onPress={() => setNewPart(prev => ({
+                    onPress={() => !usingSimilarPart && setNewPart(prev => ({
                       ...prev,
                       dimensions: { ...prev.dimensions, shape }
                     }))}
+                    disabled={usingSimilarPart}
                   >
-                    <Text style={[
+                    <ThemedText style={[
                       styles.shapeButtonText,
                       newPart.dimensions.shape === shape && styles.selectedShapeButtonText
                     ]}>
                       {shape}
-                    </Text>
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </View>
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleDimensionChange('radius', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['length'] || ''}
-                onChangeText={(text) => handleDimensionChange('length', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('length', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Width *</Text>
+              <ThemedText style={styles.inputLabel}>Width *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['width'] || ''}
-                onChangeText={(text) => handleDimensionChange('width', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('width', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Fillet *</Text>
+              <ThemedText style={styles.inputLabel}>Fillet *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['fillet'] || ''}
-                onChangeText={(text) => handleDimensionChange('fillet', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('fillet', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Thickness *</Text>
+              <ThemedText style={styles.inputLabel}>Thickness *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['thickness'] || ''}
-                onChangeText={(text) => handleDimensionChange('thickness', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('thickness', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
           </>
         );
@@ -828,37 +865,43 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['length'] || ''}
-                onChangeText={(text) => handleDimensionChange('length', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('length', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Width *</Text>
+              <ThemedText style={styles.inputLabel}>Width *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['width'] || ''}
-                onChangeText={(text) => handleDimensionChange('width', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('width', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
-                style={styles.input}
+                style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleDimensionChange('radius', text)}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
           </>
         );
@@ -873,7 +916,7 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['length'] || ''}
@@ -884,7 +927,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['radius'] || ''}
@@ -895,7 +938,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Depth *</Text>
+              <ThemedText style={styles.inputLabel}>Depth *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['depth'] || ''}
@@ -906,7 +949,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>O Fillet *</Text>
+              <ThemedText style={styles.inputLabel}>O Fillet *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['oFillet'] || ''}
@@ -917,7 +960,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>I Fillet *</Text>
+              <ThemedText style={styles.inputLabel}>I Fillet *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['iFillet'] || ''}
@@ -933,7 +976,7 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['length'] || ''}
@@ -944,7 +987,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['radius'] || ''}
@@ -960,7 +1003,7 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Front Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Front Radius *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['frontRadius'] || ''}
@@ -971,7 +1014,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Middle Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Middle Radius *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['middleRadius'] || ''}
@@ -982,7 +1025,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Back Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Back Radius *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['backRadius'] || ''}
@@ -993,7 +1036,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Depth *</Text>
+              <ThemedText style={styles.inputLabel}>Depth *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['depth'] || ''}
@@ -1004,7 +1047,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Middle to Back Depth *</Text>
+              <ThemedText style={styles.inputLabel}>Middle to Back Depth *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['middleToBackDepth'] || ''}
@@ -1020,7 +1063,7 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Shape *</Text>
+              <ThemedText style={styles.inputLabel}>Shape *</ThemedText>
               <View style={styles.buttonShapeContainer}>
                 {['Circle', 'Rectangular', 'Slot'].map((shape) => (
                   <TouchableOpacity
@@ -1034,18 +1077,18 @@ export default function VenueDetailScreen() {
                       dimensions: { ...prev.dimensions, shape }
                     }))}
                   >
-                    <Text style={[
+                    <ThemedText style={[
                       styles.shapeButtonText,
                       editingPart.dimensions.shape === shape && styles.selectedShapeButtonText
                     ]}>
                       {shape}
-                    </Text>
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['radius'] || ''}
@@ -1056,7 +1099,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['length'] || ''}
@@ -1067,7 +1110,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Width *</Text>
+              <ThemedText style={styles.inputLabel}>Width *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['width'] || ''}
@@ -1078,7 +1121,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Fillet *</Text>
+              <ThemedText style={styles.inputLabel}>Fillet *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['fillet'] || ''}
@@ -1089,7 +1132,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Thickness *</Text>
+              <ThemedText style={styles.inputLabel}>Thickness *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['thickness'] || ''}
@@ -1105,7 +1148,7 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Length *</Text>
+              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['length'] || ''}
@@ -1116,7 +1159,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Width *</Text>
+              <ThemedText style={styles.inputLabel}>Width *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['width'] || ''}
@@ -1127,7 +1170,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Radius *</Text>
+              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['radius'] || ''}
@@ -1153,8 +1196,8 @@ export default function VenueDetailScreen() {
           <ArrowLeft color="#6B7280" size={24} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{venue.name}</Text>
-          <Text style={styles.headerSubtitle}>{project.name} • PIC: {venue.pic}</Text>
+          <ThemedText style={styles.headerTitle}>{venue.name}</ThemedText>
+          <ThemedText style={styles.headerSubtitle}>{project.name} • PIC: {venue.pic}</ThemedText>
         </View>
         <View style={styles.modeButtons}>
           <TouchableOpacity
@@ -1180,7 +1223,7 @@ export default function VenueDetailScreen() {
                 style={styles.categoryHeader}
                 onPress={() => setCollapsedCategories(prev => ({ ...prev, [type]: !isCollapsed }))}
               >
-                <Text style={styles.categoryTitle}>{type} ({parts.length})</Text>
+                <ThemedText style={styles.categoryTitle}>{type} ({parts.length})</ThemedText>
                 {isCollapsed ? (
                   <ChevronRight color="#6B7280" size={20} />
                 ) : (
@@ -1262,18 +1305,18 @@ export default function VenueDetailScreen() {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create New Part</Text>
+            <ThemedText style={styles.modalTitle}>Create New Part</ThemedText>
             <TouchableOpacity onPress={() => {
               console.log('Closing create part modal');
               setShowCreatePartModal(false);
             }}>
-              <Text style={styles.modalClose}>Cancel</Text>
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Part Type *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeContainer}>
+              <ThemedText style={styles.inputLabel}>Part Type *</ThemedText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.typeContainer, usingSimilarPart && styles.disabledTypeContainer]}>
                 {[
                   'U shape', 'Straight', 'Knob', 'Button', 'Push Pad',
                   'Cover', 'X - Special Design', 'Gadget'
@@ -1282,39 +1325,78 @@ export default function VenueDetailScreen() {
                     key={type}
                     style={[
                       styles.typeButton,
-                      newPart.type === type && styles.selectedTypeButton
+                      newPart.type === type && styles.selectedTypeButton,
+                      usingSimilarPart && styles.disabledTypeButton
                     ]}
-                    onPress={() => setNewPart(prev => ({
+                    onPress={() => !usingSimilarPart && setNewPart(prev => ({
                       ...prev,
                       type: type as PartType,
                       dimensions: {}
                     }))}
+                    disabled={usingSimilarPart}
                   >
-                    <Text style={[
+                    <ThemedText style={[
                       styles.typeButtonText,
-                      newPart.type === type && styles.selectedTypeButtonText
+                      newPart.type === type && styles.selectedTypeButtonText,
+                      usingSimilarPart && styles.disabledTypeButtonText
                     ]}>
                       {type}
-                    </Text>
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              {usingSimilarPart && (
+                <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>
+              )}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Part Number</Text>
-              <View style={styles.autoGeneratedBox}>
-                <Text style={styles.autoGeneratedLabel}>Auto-generated:</Text>
-                <Text style={styles.autoGeneratedValue}>
-                  {nextPartNumber > 0 ? `${{'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type]}${nextPartNumber}` : 'Loading...'}
-                </Text>
-              </View>
-              <Text style={styles.helperText}>
-                Part numbers are assigned automatically across all projects
-              </Text>
+              <ThemedText style={styles.inputLabel}>Part Number</ThemedText>
+              <TouchableOpacity 
+                style={[styles.autoGeneratedBox, usingSimilarPart && styles.lockedFieldBox]}
+                onPress={() => {
+                  console.log('Part number field tapped, usingSimilarPart:', usingSimilarPart);
+                  if (!usingSimilarPart) {
+                    console.log('Opening part number picker');
+                    setShowPartNumberPicker(true);
+                  }
+                }}
+                disabled={usingSimilarPart}
+                activeOpacity={0.7}
+              >
+                <View style={styles.partNumberContent}>
+                  <ThemedText style={styles.autoGeneratedLabel}>
+                    {manualPartNumber ? 'Selected:' : 'Auto-generated:'}
+                  </ThemedText>
+                  <ThemedText style={[styles.autoGeneratedValue, usingSimilarPart && styles.lockedPartNumber]}>
+                    {usingSimilarPart && similarPart
+                      ? similarPart.part.name
+                      : manualPartNumber 
+                        ? `${{'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type]}${manualPartNumber}`
+                        : nextPartNumber > 0
+                          ? `${{'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type]}${nextPartNumber}`
+                          : 'Loading...'}
+                  </ThemedText>
+                </View>
+                {!usingSimilarPart && (
+                  <ChevronRightIcon color="#6B7280" size={20} />
+                )}
+              </TouchableOpacity>
+              {!usingSimilarPart && (
+                <ThemedText style={styles.helperText}>
+                  {manualPartNumber 
+                    ? 'Tap to change part number' 
+                    : 'Part numbers are assigned automatically. Tap to select manually.'}
+                </ThemedText>
+              )}
+              {usingSimilarPart && (
+                <ThemedText style={styles.helperText}>
+                  Using dimensions from existing part. Only description and pictures can be modified.
+                </ThemedText>
+              )}
             </View>
             {renderDimensionInputs()}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description *</Text>
+              <ThemedText style={styles.inputLabel}>Description *</ThemedText>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={newPart.description}
@@ -1327,44 +1409,52 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Designer</Text>
-              <TextInput
-                style={styles.input}
+              <ThemedText style={styles.inputLabel}>Designer</ThemedText>
+              <DesignerSelector
                 value={newPart.designer}
-                onChangeText={(text) => setNewPart(prev => ({ ...prev, designer: text }))}
+                onChangeText={(text) => !usingSimilarPart && setNewPart(prev => ({ ...prev, designer: text }))}
+                profiles={profiles}
                 placeholder="Enter designer name (optional)"
                 placeholderTextColor="#6B728080"
+                inputStyle={[styles.input, usingSimilarPart && styles.disabledInput]}
+                editable={!usingSimilarPart}
               />
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>CAD Drawing (Optional)</Text>
-              <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectCADDrawing(false)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Add CAD Drawing</Text>
-              </TouchableOpacity>
+              <ThemedText style={styles.inputLabel}>CAD Drawing (Optional)</ThemedText>
+              {!usingSimilarPart && (
+                <TouchableOpacity
+                  style={styles.pictureButton}
+                  onPress={() => handleSelectCADDrawing(false)}
+                >
+                  <Camera color="#6B7280" size={24} />
+                  <ThemedText style={styles.pictureButtonText}>Add CAD Drawing</ThemedText>
+                </TouchableOpacity>
+              )}
               {newPart.cadDrawing && (
                 <View style={styles.previewContainer}>
                   <Image source={{ uri: newPart.cadDrawing }} style={styles.thumbnailPreview} />
-                  <TouchableOpacity
-                    style={styles.removePreviewButton}
-                    onPress={() => setNewPart(prev => ({ ...prev, cadDrawing: '' }))}
-                  >
-                    <X color="#FFFFFF" size={16} />
-                  </TouchableOpacity>
+                  {!usingSimilarPart && (
+                    <TouchableOpacity
+                      style={styles.removePreviewButton}
+                      onPress={() => setNewPart(prev => ({ ...prev, cadDrawing: '' }))}
+                    >
+                      <X color="#FFFFFF" size={16} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Pictures (1-6)</Text>
+              <ThemedText style={styles.inputLabel}>Pictures (1-6)</ThemedText>
               <TouchableOpacity
                 style={styles.pictureButton}
                 onPress={() => handleSelectPictures(false)}
               >
                 <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Add Pictures</Text>
+                <ThemedText style={styles.pictureButtonText}>Add Pictures</ThemedText>
               </TouchableOpacity>
               <FlatList
                 data={newPart.pictures}
@@ -1384,375 +1474,153 @@ export default function VenueDetailScreen() {
                 )}
               />
             </View>
-            {similarPart && (
+            {similarPart && !usingSimilarPart && (
               <View style={styles.similarPartContainer}>
                 <View style={styles.similarPartMessageBox}>
-                  <Text style={styles.similarPartMessage}>
+                  <ThemedText style={styles.similarPartMessage}>
                     This part has {similarPart.similarity.toFixed(1)}% similarity with {similarPart.part.name}
-                  </Text>
+                  </ThemedText>
                 </View>
-                <TouchableOpacity
-                  style={styles.useSimilarPartButton}
-                  onPress={handleUseSimilarPart}
-                >
-                  <Text style={styles.useSimilarPartButtonText}>
-                    Use {similarPart.part.name}
-                  </Text>
-                </TouchableOpacity>
+                {similarPart.part.projectId === project.id ? (
+                  <View>
+                    <View style={[styles.useSimilarPartButton, styles.disabledSimilarPartButton]}>
+                      <ThemedText style={[styles.useSimilarPartButtonText, styles.disabledSimilarPartButtonText]}>
+                        Use {similarPart.part.name}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.sameProjectWarning}>
+                      {similarPart.part.name} already exists in this project
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.useSimilarPartButton}
+                    onPress={handleUseSimilarPart}
+                  >
+                    <ThemedText style={styles.useSimilarPartButtonText}>
+                      Use {similarPart.part.name}
+                    </ThemedText>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
+            {usingSimilarPart && (
+              <TouchableOpacity
+                style={styles.generateNewPartButton}
+                onPress={handleGenerateNewPart}
+              >
+                <ThemedText style={styles.generateNewPartButtonText}>Generate New Part</ThemedText>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={styles.createButton}
+              style={[styles.createButton, usingSimilarPart && styles.createPartUsingExistingButton]}
               onPress={handleCreatePart}
             >
-              <Text style={styles.createButtonText}>Create Part</Text>
+              <ThemedText style={styles.createButtonText}>{usingSimilarPart ? 'Create Existing Part' : 'Create Part'}</ThemedText>
             </TouchableOpacity>
           </ScrollView>
-        </SafeAreaView>
-      </Modal>
-      <Modal
-        visible={showPartDetailModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Part Details</Text>
-            <TouchableOpacity onPress={() => {
-              console.log('Closing part detail modal');
-              setShowPartDetailModal(false);
-              setSelectedPart(null);
-            }}>
-              <Text style={styles.modalClose}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          {selectedPart && (
-            <ScrollView style={styles.modalContent}>
-              {/* Pictures Section (Moved to Top) */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <ImageIcon color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Pictures</Text>
-                </View>
-                {selectedPart.pictures?.length ? (
-                  <FlatList
-                    data={selectedPart.pictures}
-                    keyExtractor={(item) => item}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity onPress={() => { /* Optional: Open full-screen image modal */ }}>
-                        <Image source={{ uri: item }} style={styles.imagePreview} />
-                      </TouchableOpacity>
-                    )}
-                  />
-                ) : (
-                  <Text style={styles.noContentText}>No pictures added</Text>
-                )}
-              </View>
-              {/* New CAD Drawing Section */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <FileText color="#6B7280" size={20} /> {/* Using FileText icon for CAD, or change to suitable */}
-                  <Text style={styles.sectionTitle}>CAD Drawing</Text>
-                </View>
-                {selectedPart.cadDrawing ? (
-                  <TouchableOpacity onPress={() => { /* Optional: Open full-screen image modal */ }}>
-                    <Image source={{ uri: selectedPart.cadDrawing }} style={styles.imagePreview} />
+
+          {/* Part Number Picker Overlay - Inside Create Part Modal */}
+          {showPartNumberPicker && (
+            <View style={styles.partNumberPickerOverlay}>
+              <SafeAreaView style={styles.partNumberPickerContainer}>
+                <View style={styles.modalHeader}>
+                  <ThemedText style={styles.modalTitle}>Select Part Number</ThemedText>
+                  <TouchableOpacity onPress={() => setShowPartNumberPicker(false)}>
+                    <ThemedText style={styles.modalClose}>Cancel</ThemedText>
                   </TouchableOpacity>
-                ) : (
-                  <Text style={styles.noContentText}>No CAD drawing added</Text>
-                )}
-              </View>
-              {/* Basic Info Section */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Info color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Basic Info</Text>
                 </View>
-                <View style={styles.fieldRow}>
-                  <Package color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Name:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.name}</Text>
+                <View style={styles.partNumberPickerInfo}>
+                  <ThemedText style={styles.partNumberPickerInfoText}>
+                    Type: {newPart.type} ({{'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type]})
+                  </ThemedText>
+                  <ThemedText style={styles.partNumberPickerSubtext}>
+                    Available numbers are shown. Used numbers are hidden.
+                  </ThemedText>
                 </View>
-                <View style={styles.fieldRow}>
-                  <FileText color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Type:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.type}</Text>
-                </View>
-                <View style={styles.fieldRow}>
-                  <Text style={styles.fieldLabel}>Status:</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: {
-                    measured: '#EF4444',
-                    designed: '#F59E0B',
-                    tested: '#3B82F6',
-                    printed: '#F97316',
-                    installed: '#10B981',
-                  }[selectedPart.status] || '#6B7280' }]}>
-                    <Text style={styles.statusText}>
-                      {selectedPart.status ? selectedPart.status.charAt(0).toUpperCase() + selectedPart.status.slice(1) : 'Unknown'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.fieldRow}>
-                  <User color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Designer:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.designer || 'Not assigned'}</Text>
-                </View>
-                <View style={styles.descriptionSection}>
-                  <Text style={styles.fieldLabel}>Description:</Text>
-                  <Text style={styles.descriptionValue}>{selectedPart.description || 'No description available'}</Text>
-                </View>
-              </View>
-              {/* Dimensions Section */}
-              {Object.keys(selectedPart.dimensions).length > 0 && (
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Ruler color="#6B7280" size={20} />
-                    <Text style={styles.sectionTitle}>Dimensions</Text>
-                  </View>
-                  <FlatList
-                    data={Object.entries(selectedPart.dimensions)}
-                    keyExtractor={([key]) => key}
-                    renderItem={({ item: [key, value] }) => (
-                      <View style={styles.dimensionRow}>
-                        <Text style={styles.dimensionKey}>{key.charAt(0).toUpperCase() + key.slice(1)}:</Text>
-                        <Text style={styles.dimensionValue}>{value}</Text>
-                      </View>
-                    )}
-                    scrollEnabled={false}
-                  />
-                </View>
-              )}
-              {/* Comments Section */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <MessageCircle color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Comments ({selectedPartComments.length})</Text>
-                </View>
-                {selectedPartComments.length > 0 ? (
-                  selectedPartComments.map((comment) => (
-                    <View key={comment.id} style={[
-                      styles.commentItem,
-                      comment.isCompleted && styles.commentItemCompleted
-                    ]}>
-                      <View style={styles.commentHeader}>
+                <ScrollView style={styles.partNumberPickerContent}>
+                  <View style={styles.partNumberGrid}>
+                    {Array.from({ length: 500 }, (_, i) => i + 1).map((num) => {
+                      const isUsed = usedPartNumbers.includes(num);
+                      return (
                         <TouchableOpacity
-                          style={styles.commentCheckbox}
-                          onPress={() => handleToggleCommentCompletion(comment.id)}
+                          key={num}
+                          style={[
+                            styles.partNumberButton,
+                            isUsed && styles.partNumberButtonUsed,
+                            manualPartNumber === num && styles.partNumberButtonSelected,
+                          ]}
+                          onPress={() => !isUsed && handleSelectPartNumber(num)}
+                          disabled={isUsed}
                         >
-                          {comment.isCompleted ? (
-                            <CheckSquare color="#10B981" size={24} />
-                          ) : (
-                            <Square color="#6B7280" size={24} />
-                          )}
-                        </TouchableOpacity>
-                        {editingCommentId === comment.id ? (
-                          <TextInput
-                            style={styles.commentEditInput}
-                            value={editingCommentText}
-                            onChangeText={setEditingCommentText}
-                            multiline
-                            autoFocus
-                          />
-                        ) : (
-                          <Text style={[
-                            styles.commentText,
-                            comment.isCompleted && styles.commentTextCompleted
+                          <ThemedText style={[
+                            styles.partNumberButtonText,
+                            isUsed && styles.partNumberButtonTextUsed,
+                            manualPartNumber === num && styles.partNumberButtonTextSelected,
                           ]}>
-                            {comment.text}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.commentFooter}>
-                        <View style={styles.commentMetadata}>
-                          <Text style={styles.commentAuthor}>{comment.author}</Text>
-                          <Text style={styles.commentSeparator}>•</Text>
-                          <Text style={styles.commentDate}>
-                            {new Date(comment.createdAt).toLocaleDateString()} {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                          {comment.venueName && (
-                            <>
-                              <Text style={styles.commentSeparator}>•</Text>
-                              <Text style={styles.commentVenue}>{comment.venueName}</Text>
-                            </>
-                          )}
-                        </View>
-                        <View style={styles.commentActions}>
-                          {editingCommentId === comment.id ? (
-                            <>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={() => {
-                                  setEditingCommentId(null);
-                                  setEditingCommentText('');
-                                }}
-                              >
-                                <Text style={styles.commentCancelText}>Cancel</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={async () => {
-                                  if (editingCommentText.trim()) {
-                                    await updateComment(comment.id, { text: editingCommentText.trim() });
-                                    setEditingCommentId(null);
-                                    setEditingCommentText('');
-                                    if (selectedPart) {
-                                      await loadPartComments(selectedPart.id);
-                                    }
-                                  }
-                                }}
-                              >
-                                <Text style={styles.commentSaveText}>Save</Text>
-                              </TouchableOpacity>
-                            </>
-                          ) : (
-                            <>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={() => {
-                                  setEditingCommentId(comment.id);
-                                  setEditingCommentText(comment.text);
-                                }}
-                              >
-                                <Edit2 color="#2563EB" size={16} />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={() => {
-                                  Alert.alert(
-                                    'Delete Comment',
-                                    'Are you sure you want to delete this comment?',
-                                    [
-                                      { text: 'Cancel', style: 'cancel' },
-                                      {
-                                        text: 'Delete',
-                                        style: 'destructive',
-                                        onPress: async () => {
-                                          await deleteComment(comment.id);
-                                          if (selectedPart) {
-                                            await loadPartComments(selectedPart.id);
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  );
-                                }}
-                              >
-                                <Text style={styles.commentDeleteText}>Delete</Text>
-                              </TouchableOpacity>
-                            </>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.noContentText}>No comments yet</Text>
-                )}
-              </View>
-            </ScrollView>
+                            {num}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </SafeAreaView>
+            </View>
           )}
         </SafeAreaView>
       </Modal>
-      <Modal
+      <PartDetailModal
+        visible={showPartDetailModal}
+        selectedPart={selectedPart}
+        comments={selectedPartComments}
+        onClose={() => {
+          console.log('Closing part detail modal');
+          setShowPartDetailModal(false);
+          setSelectedPart(null);
+        }}
+        onCommentsChange={(updatedComments) => {
+          setSelectedPartComments(updatedComments);
+          if (selectedPart) {
+            setAllComments(prev => ({
+              ...prev,
+              [selectedPart.id]: updatedComments
+            }));
+          }
+        }}
+      />
+      <EditPartModal
         visible={showEditPartModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Part</Text>
-            <TouchableOpacity onPress={() => {
-              console.log('Closing edit part modal');
-              setShowEditPartModal(false);
-              setSelectedPart(null);
-            }}>
-              <Text style={styles.modalClose}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            {renderEditDimensionInputs()}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description *</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={editingPart.description}
-                onChangeText={(text) => setEditingPart(prev => ({ ...prev, description: text }))}
-                placeholder="Enter part description"
-                placeholderTextColor="#6B728080"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Designer</Text>
-              <TextInput
-                style={styles.input}
-                value={editingPart.designer}
-                onChangeText={(text) => setEditingPart(prev => ({ ...prev, designer: text }))}
-                placeholder="Enter designer name (optional)"
-                placeholderTextColor="#6B728080"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>CAD Drawing (Optional)</Text>
-              <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectCADDrawing(true)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Change CAD Drawing</Text>
-              </TouchableOpacity>
-              {editingPart.cadDrawing && (
-                <View style={styles.previewContainer}>
-                  <Image source={{ uri: editingPart.cadDrawing }} style={styles.thumbnailPreview} />
-                  <TouchableOpacity
-                    style={styles.removePreviewButton}
-                    onPress={() => setEditingPart(prev => ({ ...prev, cadDrawing: '' }))}
-                  >
-                    <X color="#FFFFFF" size={16} />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Pictures (1-6)</Text>
-              <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectPictures(true)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Add Pictures</Text>
-              </TouchableOpacity>
-              <FlatList
-                data={editingPart.pictures}
-                keyExtractor={(item) => item}
-                horizontal
-                style={styles.previewList}
-                renderItem={({ item }) => (
-                  <View style={styles.previewContainer}>
-                    <Image source={{ uri: item }} style={styles.thumbnailPreview} />
-                    <TouchableOpacity
-                      style={styles.removePreviewButton}
-                      onPress={() => handleRemovePicture(item, true)}
-                    >
-                      <X color="#FFFFFF" size={16} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={handleEditPart}
-            >
-              <Text style={styles.createButtonText}>Save Changes</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        editingPart={editingPart}
+        selectedPart={selectedPart}
+        profiles={profiles}
+        onClose={() => {
+          console.log('Closing edit part modal');
+          setShowEditPartModal(false);
+          setSelectedPart(null);
+        }}
+        onSave={async (part) => {
+          if (!selectedPart) return;
+          try {
+            await updatePart(selectedPart.id, {
+              type: part.type,
+              description: part.description,
+              pictures: part.pictures,
+              cadDrawing: part.cadDrawing || undefined,
+              dimensions: part.dimensions,
+              designer: part.designer || undefined,
+            });
+            setShowEditPartModal(false);
+            setSelectedPart(null);
+          } catch (error) {
+            console.error('Error updating part:', error);
+            Alert.alert('Error', 'Failed to update part');
+          }
+        }}
+        onEditingPartChange={(updates) => {
+          setEditingPart(prev => ({ ...prev, ...updates }));
+        }}
+      />
       <Modal
         visible={showStatusModal}
         animationType="fade"
@@ -1774,14 +1642,14 @@ export default function VenueDetailScreen() {
             activeOpacity={1}
           />
           <View style={styles.actionModal}>
-            <Text style={styles.actionModalTitle}>Change Status</Text>
+            <ThemedText style={styles.actionModalTitle}>Change Status</ThemedText>
             {['measured', 'designed', 'tested', 'printed', 'installed'].map((status) => (
               <TouchableOpacity
                 key={status}
                 style={styles.actionButton}
                 onPress={() => handleModelStatusChange(status)}
               >
-                <Text style={styles.actionButtonText}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
+                <ThemedText style={styles.actionButtonText}>{status.charAt(0).toUpperCase() + status.slice(1)}</ThemedText>
               </TouchableOpacity>
             ))}
           </View>
@@ -1812,36 +1680,64 @@ export default function VenueDetailScreen() {
               style={styles.actionButton}
               onPress={() => handlePartAction('view')}
             >
-              <Text style={styles.actionButtonText}>View Details</Text>
+              <ThemedText style={styles.actionButtonText}>View Details</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => handlePartAction('edit')}
             >
-              <Text style={styles.actionButtonText}>Edit Part</Text>
+              <ThemedText style={styles.actionButtonText}>Edit Part</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => handlePartAction('status')}
             >
-              <Text style={styles.actionButtonText}>Change Status</Text>
+              <ThemedText style={styles.actionButtonText}>Change Status</ThemedText>
             </TouchableOpacity>
             {selectedPart && !selectedPart.parentPartId && (
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => handlePartAction('subpart')}
               >
-                <Text style={styles.actionButtonText}>Create Sub-part</Text>
+                <ThemedText style={styles.actionButtonText}>Create Sub-part</ThemedText>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={[styles.actionButton, { borderBottomWidth: 0 }]}
               onPress={() => handlePartAction('delete')}
             >
-              <Text style={[styles.actionButtonText, { color: '#EF4444' }]}>Delete Part</Text>
+              <ThemedText style={[styles.actionButtonText, { color: '#EF4444' }]}>Delete Part</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+      <Modal
+        visible={showFullImageModal}
+        animationType="fade"
+        transparent={false}
+        onRequestClose={() => setShowFullImageModal(false)}
+      >
+        <SafeAreaView style={styles.fullImageModalContainer}>
+          <View style={styles.fullImageHeader}>
+            <TouchableOpacity
+              style={styles.fullImageCloseButton}
+              onPress={() => setShowFullImageModal(false)}
+            >
+              <X color="#FFFFFF" size={28} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.fullImageContent}>
+            {fullImageUri ? (
+              <Image 
+                source={{ uri: fullImageUri }} 
+                style={styles.fullImage}
+                onError={(error) => console.log('Image load error:', error)}
+              />
+            ) : (
+              <ThemedText style={styles.noImageText}>Loading image...</ThemedText>
+            )}
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -1874,6 +1770,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  disabledSimilarPartButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  disabledSimilarPartButtonText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  sameProjectWarning: {
+    fontSize: 12,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginTop: 8,
+    fontWeight: '500',
   },
   container: {
     flex: 1,
@@ -2020,6 +1929,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2563EB',
   },
+  lockedFieldBox: {
+    backgroundColor: '#FEF3C7',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+  },
+  lockedPartNumber: {
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+  disabledInput: {
+    backgroundColor: '#F3F4F6',
+    color: '#9CA3AF',
+  },
+  lockedIndicator: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  generateNewPartButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  generateNewPartButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  createPartUsingExistingButton: {
+    backgroundColor: '#DC2626',
+  },
   textArea: {
     height: 100,
   },
@@ -2043,6 +1986,16 @@ const styles = StyleSheet.create({
   selectedTypeButtonText: {
     color: '#FFFFFF',
   },
+  disabledTypeContainer: {
+    opacity: 0.6,
+  },
+  disabledTypeButton: {
+    opacity: 0.6,
+    backgroundColor: '#E5E7EB',
+  },
+  disabledTypeButtonText: {
+    color: '#9CA3AF',
+  },
   buttonShapeContainer: {
     flexDirection: 'row',
   },
@@ -2062,6 +2015,9 @@ const styles = StyleSheet.create({
   },
   selectedShapeButtonText: {
     color: '#FFFFFF',
+  },
+  disabledShapeButton: {
+    opacity: 0.5,
   },
   pictureButton: {
     flexDirection: 'row',
@@ -2160,10 +2116,51 @@ const styles = StyleSheet.create({
   descriptionSection: {
     marginTop: 8,
   },
+  descriptionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 8,
+  },
   descriptionValue: {
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,
+  },
+  fullImageModalContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  fullImageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  fullImageContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 16,
+  },
+  fullImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
+  fullImageCloseButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noImageText: {
+    color: '#FFFFFF',
+    fontSize: 16,
   },
   imagePreview: {
     width: 200,
@@ -2364,5 +2361,79 @@ const styles = StyleSheet.create({
     color: '#92400E',
     fontWeight: '600',
   },
-});
- 
+  partNumberPickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    zIndex: 1000,
+  },
+  partNumberPickerContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  partNumberContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  partNumberPickerInfo: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F3F4F6',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  partNumberPickerInfoText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  partNumberPickerSubtext: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  partNumberPickerContent: {
+    flex: 1,
+    padding: 12,
+  },
+  partNumberGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  partNumberButton: {
+    width: '18%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    margin: '1%',
+  },
+  partNumberButtonUsed: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#F3F4F6',
+    opacity: 0.5,
+  },
+  partNumberButtonSelected: {
+    backgroundColor: '#FBBF24',
+    borderColor: '#F59E0B',
+  },
+  partNumberButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  partNumberButtonTextUsed: {
+    color: '#9CA3AF',
+  },
+  partNumberButtonTextSelected: {
+    color: '#78350F',
+    fontWeight: '700',
+  },}); 

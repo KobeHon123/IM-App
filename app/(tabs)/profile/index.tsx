@@ -5,21 +5,29 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  SafeAreaView,
   Modal,
   TextInput,
   ActivityIndicator,
   Animated,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+  Keyboard,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Edit2, LogOut, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import PublicProfile from '@/components/PublicProfile';
 import ContactList from '@/components/ContactList';
+import { useEasterEgg } from '@/context/EasterEggContext';
+import { ThemedText } from '@/components/ThemedText';
 
 const ProfileScreen = () => {
   const { profile, signOut, refreshProfile, user } = useAuth();
+  const { showOffWorkCounter, setShowOffWorkCounter, handleBioTap, timeLeft, isOffTime } = useEasterEgg();
   const [userName, setUserName] = useState('');
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -39,22 +47,80 @@ const ProfileScreen = () => {
   const [showContactListModal, setShowContactListModal] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [checkingEmail, setCheckingEmail] = useState(false);
-  const emailValidationTimer = useRef<NodeJS.Timeout | null>(null);
+  const [bioTapCount, setBioTapCount] = useState(0);
+  const [showOffWorkCounterLocal, setShowOffWorkCounterLocal] = useState(false);
+  const [offWorkCount, setOffWorkCount] = useState(0);
+  const [timeLeftLocal, setTimeLeftLocal] = useState<string>('');
+  const [isOffTimeLocal, setIsOffTimeLocal] = useState(false);
+  const emailValidationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const successOpacityAnim = useRef(new Animated.Value(1)).current;
   const errorOpacityAnim = useRef(new Animated.Value(1)).current;
+  const modalTransformAnim = useRef(new Animated.Value(0)).current;
+  const slideUpAnim = useRef(new Animated.Value(1000)).current;
 
   useEffect(() => {
     if (profile) {
       console.log('Profile loaded:', profile);
       setUserName(profile.full_name || 'User');
       setUserPhoto(profile.avatar_url);
-      setPhone(profile.phone_number || '');
-      setBio(profile.bio || '');
+      setPhone('');
+      setBio('');
       setEmail(profile.email || '');
     } else {
       console.log('No profile loaded');
     }
   }, [profile]);
+
+  // Slide in from right animation when edit screen opens
+  useEffect(() => {
+    if (showEditModal) {
+      slideUpAnim.setValue(800);
+      Animated.timing(slideUpAnim, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      slideUpAnim.setValue(0);
+      Animated.timing(slideUpAnim, {
+        toValue: 800,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showEditModal, slideUpAnim]);
+
+  // Keyboard animation for edit modal
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        Animated.spring(modalTransformAnim, {
+          toValue: -30,
+          useNativeDriver: true,
+          speed: 12,
+          bounciness: 4,
+        }).start();
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        Animated.spring(modalTransformAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          speed: 12,
+          bounciness: 4,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, [modalTransformAnim]);
 
   useEffect(() => {
     if (successMessage) {
@@ -74,6 +140,81 @@ const ProfileScreen = () => {
       }).start(() => setErrorMessage(null));
     }
   }, [successMessage, errorMessage]);
+
+  const handlePhotoUpload = async (uri: string, profile: any) => {
+    try {
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
+
+      console.log('Starting upload for:', fileName);
+      console.log('File URI:', uri);
+
+      // Read file as base64 using FileSystem
+      console.log('Reading file from URI...');
+      const base64Data = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      console.log('Base64 data length:', base64Data.length);
+      
+      if (!base64Data || base64Data.length === 0) {
+        throw new Error('Failed to read image file');
+      }
+
+      // Upload base64 data directly to Supabase
+      console.log('Uploading to Supabase storage...');
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, decode(base64Data), {
+          contentType: `image/${fileExt}`,
+          upsert: true,
+        });
+
+      console.log('Upload response:', { uploadData, uploadError });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      console.log('File uploaded successfully:', uploadData?.path);
+
+      // Generate public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      const publicUrl = publicUrlData.publicUrl;
+      console.log('Generated public URL:', publicUrl);
+
+      // Update profile with avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', profile.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      console.log('Profile updated successfully');
+      setUserPhoto(publicUrl);
+      await refreshProfile();
+      setSuccessMessage('Profile photo updated successfully');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      throw error;
+    }
+  };
+
+  // Helper function to decode base64 to Uint8Array
+  const decode = (base64: string): Uint8Array => {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
 
   const handleSelectPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -95,49 +236,8 @@ const ProfileScreen = () => {
       setIsUploadingPhoto(true);
 
       try {
-        console.log('Uploading photo for user:', profile.id);
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const fileExt = uri.split('.').pop();
-        const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
-        const filePath = `avatars/${fileName}`;
-
-        console.log('Uploading to storage:', filePath);
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, blob, {
-            contentType: `image/${fileExt}`,
-            upsert: true,
-          });
-
-        if (uploadError) {
-          console.error('Storage upload error:', uploadError);
-          throw uploadError;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath);
-
-        console.log('Public URL:', publicUrl);
-        console.log('Updating profile with avatar URL');
-
-        const { data, error: updateError } = await supabase
-          .from('profiles')
-          .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-          .eq('id', profile.id)
-          .select();
-
-        console.log('Profile update response:', { data, error: updateError });
-
-        if (updateError) {
-          console.error('Profile update error:', updateError);
-          throw updateError;
-        }
-
-        setUserPhoto(publicUrl);
-        await refreshProfile();
-        setSuccessMessage('Profile photo updated successfully');
+        console.log('User selected photo:', uri);
+        await handlePhotoUpload(uri, profile);
       } catch (error: any) {
         console.error('Error uploading photo:', error);
         setErrorMessage(error.message || 'Failed to upload photo. Please try again.');
@@ -154,6 +254,14 @@ const ProfileScreen = () => {
     setEditEmail(email);
     setEmailError(null);
     setShowEditModal(true);
+  };
+
+  const handleBioTapLocal = () => {
+    handleBioTap();
+  };
+
+  const incrementOffWorkCounter = () => {
+    setOffWorkCount(prev => prev + 1);
   };
 
   const validateEmail = async (emailToCheck: string) => {
@@ -268,13 +376,13 @@ const ProfileScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <ThemedText style={styles.headerTitle}>Profile</ThemedText>
       </View>
 
       {successMessage && (
         <View style={styles.messageOverlay}>
           <Animated.View style={[styles.successMessageBox, { opacity: successOpacityAnim }]}>
-            <Text style={styles.successMessageText}>{successMessage}</Text>
+            <ThemedText style={styles.successMessageText}>{successMessage}</ThemedText>
           </Animated.View>
         </View>
       )}
@@ -282,7 +390,7 @@ const ProfileScreen = () => {
       {errorMessage && (
         <View style={styles.messageOverlay}>
           <Animated.View style={[styles.errorMessageBox, { opacity: errorOpacityAnim }]}>
-            <Text style={styles.errorMessageText}>{errorMessage}</Text>
+            <ThemedText style={styles.errorMessageText}>{errorMessage}</ThemedText>
           </Animated.View>
         </View>
       )}
@@ -311,18 +419,18 @@ const ProfileScreen = () => {
           </View>
 
          <View style={styles.nameSection}>
-  <Text style={styles.userName}>{userName}</Text>
-  {email ? <Text style={styles.userEmail}>{email}</Text> : null}
+  <ThemedText style={styles.userName}>{userName}</ThemedText>
+  {email ? <ThemedText style={styles.userEmail}>{email}</ThemedText> : null}
   
   {/* Added display for Phone and Bio */}
-  {phone ? <Text style={styles.infoText}>📞 {phone}</Text> : null}
-  {bio ? <Text style={styles.bioText}>"{bio}"</Text> : null}
+  {phone ? <ThemedText style={styles.infoText}>📞 {phone}</ThemedText> : null}
+  {bio ? <ThemedText style={styles.bioText}>"{bio}"</ThemedText> : null}
 
   {/* New Row for Edit and Preview Buttons */}
   <View style={styles.buttonRow}>
     <TouchableOpacity style={styles.editButton} onPress={handleEditName}>
       <Edit2 color="#2563EB" size={18} />
-      <Text style={styles.editButtonText}>Edit</Text>
+      <ThemedText style={styles.editButtonText}>Edit</ThemedText>
     </TouchableOpacity>
 
     <TouchableOpacity 
@@ -330,7 +438,7 @@ const ProfileScreen = () => {
       onPress={() => setShowPreviewModal(true)}
     >
       <User color="#4B5563" size={18} />
-      <Text style={styles.previewButtonText}>Preview</Text>
+      <ThemedText style={styles.previewButtonText}>Preview</ThemedText>
     </TouchableOpacity>
   </View>
 </View>
@@ -342,7 +450,7 @@ const ProfileScreen = () => {
             onPress={() => setShowContactListModal(true)}
           >
             <User color="#2563EB" size={20} />
-            <Text style={styles.contactListButtonText}>View Contacts</Text>
+            <ThemedText style={styles.contactListButtonText}>View Contacts</ThemedText>
           </TouchableOpacity>
         </View>
 
@@ -352,87 +460,102 @@ const ProfileScreen = () => {
             onPress={handleLogout}
           >
             <LogOut color="#EF4444" size={20} />
-            <Text style={styles.logoutButtonText}>Logout</Text>
+            <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
           </TouchableOpacity>
         </View>
       </View>
 
-      <Modal
-        visible={showEditModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowEditModal(false)}
+      <Animated.View
+        style={[
+          styles.editScreenOverlay,
+          {
+            transform: [{ translateX: slideUpAnim }],
+          },
+        ]}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowEditModal(false)}
-            activeOpacity={1}
-          />
-          <View style={styles.editModal}>
-            <Text style={styles.modalTitle}>Edit Profile</Text>
-            
-            <Text style={styles.inputLabel}>Name</Text>
-            <TextInput
-              style={styles.nameInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Enter your name"
-              placeholderTextColor="#6B728080"
-              autoFocus
-            />
-
-            <Text style={styles.inputLabel}>Email</Text>
-            <TextInput
-              style={[styles.nameInput, emailError && styles.inputError]}
-              value={editEmail}
-              onChangeText={handleEmailChange}
-              placeholder="Enter email"
-              keyboardType="email-address"
-              editable={!checkingEmail}
-            />
-            {emailError && <Text style={styles.errorText}>{emailError}</Text>}
-
-            <Text style={styles.inputLabel}>Phone Number</Text>
-            <TextInput
-              style={styles.nameInput}
-              value={editPhone}
-              onChangeText={setEditPhone}
-              placeholder="Enter phone number"
-              keyboardType="phone-pad"
-            />
-
-            <Text style={styles.inputLabel}>About You</Text>
-            <TextInput
-              style={[styles.nameInput, { height: 80 }]}
-              value={editBio}
-              onChangeText={setEditBio}
-              placeholder="Describe yourself..."
-              multiline
-            />
-
-            <View style={styles.modalButtons}>
+        <SafeAreaView style={styles.editScreenContainer}>
+          <KeyboardAvoidingView
+            style={styles.keyboardAvoidingView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+          >
+            <View style={styles.editScreenHeader}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={styles.closeButtonTop}
                 onPress={() => setShowEditModal(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <ThemedText style={styles.closeButtonText}>✕</ThemedText>
               </TouchableOpacity>
+              <ThemedText style={styles.editScreenTitle}>Edit Profile</ThemedText>
               <TouchableOpacity
-                style={[styles.saveButton, (isUpdating || emailError) && { opacity: 0.6 }]}
+                style={[styles.saveButtonTop, (isUpdating || emailError) && { opacity: 0.6 }]}
                 onPress={handleSaveName}
                 disabled={isUpdating || !!emailError}
               >
                 {isUpdating ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color="#2563EB" size="small" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Save</Text>
+                  <ThemedText style={styles.saveButtonTopText}>Save</ThemedText>
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
+
+            <ScrollView
+              contentContainerStyle={styles.editScreenContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View>
+                <ThemedText style={styles.inputLabel}>Name</ThemedText>
+                <TextInput
+                  style={styles.nameInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Enter your name"
+                  placeholderTextColor="#6B728080"
+                />
+              </View>
+
+              <View>
+                <ThemedText style={styles.inputLabel}>Email</ThemedText>
+                <TextInput
+                  style={[styles.nameInput, emailError && styles.inputError]}
+                  value={editEmail}
+                  onChangeText={handleEmailChange}
+                  placeholder="Enter email"
+                  keyboardType="email-address"
+                  editable={!checkingEmail}
+                />
+                {emailError && <ThemedText style={styles.errorText}>{emailError}</ThemedText>}
+              </View>
+
+              <View>
+                <ThemedText style={styles.inputLabel}>Phone Number</ThemedText>
+                <TextInput
+                  style={styles.nameInput}
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  placeholder="Enter phone number"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View>
+                <ThemedText style={styles.inputLabel}>About You</ThemedText>
+                <TextInput
+                  style={[styles.nameInput, { height: 90, paddingTop: 12, textAlignVertical: 'top' }]}
+                  value={editBio}
+                  onChangeText={setEditBio}
+                  placeholder="Describe yourself..."
+                  multiline
+                  maxLength={150}
+                />
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Animated.View>
 
       <Modal
         visible={showLogoutModal}
@@ -446,21 +569,24 @@ const ProfileScreen = () => {
             onPress={() => setShowLogoutModal(false)}
             activeOpacity={1}
           />
-          <View style={styles.editModal}>
-            <Text style={styles.modalTitle}>Logout</Text>
-            <Text style={styles.confirmText}>Are you sure you want to logout?</Text>
-            <View style={styles.modalButtons}>
+          <View style={styles.logoutModal}>
+            <View style={styles.logoutModalIcon}>
+              <LogOut color="#DC2626" size={32} />
+            </View>
+            <ThemedText style={styles.logoutModalTitle}>Logout?</ThemedText>
+            <ThemedText style={styles.confirmText}>Are you sure you want to logout?</ThemedText>
+            <View style={styles.logoutModalButtons}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={styles.logoutCancelButton}
                 onPress={() => setShowLogoutModal(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <ThemedText style={styles.logoutCancelButtonText}>Cancel</ThemedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.logoutConfirmButton}
                 onPress={confirmLogout}
               >
-                <Text style={styles.logoutConfirmButtonText}>Logout</Text>
+                <ThemedText style={styles.logoutConfirmButtonText}>Logout</ThemedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -475,7 +601,8 @@ const ProfileScreen = () => {
 >
   <PublicProfile 
     profile={profile} 
-    onClose={() => setShowPreviewModal(false)} 
+    onClose={() => setShowPreviewModal(false)}
+    onBioTap={handleBioTapLocal}
   />
 </Modal>
 
@@ -598,21 +725,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    gap: 12,
+    paddingVertical: 14,
+    backgroundColor: '#FEF2F2',
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#FEE2E2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
   },
   logoutButtonText: {
     fontSize: 16,
-    color: '#EF4444',
+    color: '#DC2626',
     fontWeight: '600',
   },
   modalOverlay: {
@@ -620,64 +742,148 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
-  editModal: {
+  logoutModal: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
-    width: '85%',
-    maxWidth: 400,
+    width: '100%',
+    maxWidth: 300,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10,
+    alignItems: 'center',
   },
-  modalTitle: {
+  logoutModalIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  logoutModalTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 20,
+    marginBottom: 8,
     textAlign: 'center',
   },
-  nameInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
-    marginBottom: 20,
+  confirmText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 21,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
+  logoutModalButtons: {
+    flexDirection: 'column',
+    gap: 10,
+    width: '100%',
   },
-  cancelButton: {
-    flex: 1,
+  logoutCancelButton: {
     paddingVertical: 12,
     backgroundColor: '#F3F4F6',
-    borderRadius: 8,
+    borderRadius: 9,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#6B7280',
+  logoutCancelButtonText: {
+    fontSize: 14,
+    color: '#374151',
     fontWeight: '600',
   },
-  saveButton: {
-    flex: 1,
+  logoutConfirmButton: {
     paddingVertical: 12,
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
+    backgroundColor: '#DC2626',
+    borderRadius: 9,
     alignItems: 'center',
   },
-  saveButtonText: {
-    fontSize: 16,
+  logoutConfirmButtonText: {
+    fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  editScreenOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    zIndex: 100,
+  },
+  editScreenContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  editScreenHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  editScreenTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  closeButtonTop: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  closeButtonText: {
+    fontSize: 20,
+    color: '#6B7280',
+    fontWeight: '300',
+  },
+  saveButtonTop: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#2563EB',
+    borderRadius: 8,
+  },
+  saveButtonTopText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  editScreenContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    paddingBottom: 40,
+  },
+  nameInput: {
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#111827',
+    backgroundColor: '#F9FAFB',
+    marginBottom: 22,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
   },
   successBanner: {
     backgroundColor: '#D1FAE5',
@@ -750,40 +956,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  confirmText: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  logoutConfirmButton: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  logoutConfirmButtonText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 4,
+    marginBottom: 8,
+    textTransform: 'capitalize',
+    letterSpacing: 0.3,
   },
   inputError: {
     borderColor: '#EF4444',
   },
-  errorText: {
+  formErrorText: {
     fontSize: 12,
     color: '#EF4444',
     fontWeight: '500',
-    marginTop: -16,
-    marginBottom: 16,
+    marginTop: -14,
+    marginBottom: 14,
   },
   infoText: {
     fontSize: 14,

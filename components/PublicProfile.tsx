@@ -1,15 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Linking, ScrollView, Clipboard, Alert, Animated } from 'react-native';
 import { User, Phone, Mail, X } from 'lucide-react-native';
+import { ThemedText } from '@/components/ThemedText';
 
 interface PublicProfileProps {
   profile: any;
   onClose: () => void;
+  onBioTap?: () => void;
 }
 
-const PublicProfile = ({ profile, onClose }: PublicProfileProps) => {
+const PublicProfile = ({ profile, onClose, onBioTap }: PublicProfileProps) => {
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const opacityAnim = useRef(new Animated.Value(1)).current;
+  const isAdmin = profile?.role === 'admin';
 
   if (!profile) return null;
 
@@ -54,7 +57,7 @@ const PublicProfile = ({ profile, onClose }: PublicProfileProps) => {
       {copiedMessage && (
         <View style={styles.messageOverlay}>
           <Animated.View style={[styles.messageBox, { opacity: opacityAnim }]}>
-            <Text style={styles.messageText}>{copiedMessage}</Text>
+            <ThemedText style={styles.messageText}>{copiedMessage}</ThemedText>
           </Animated.View>
         </View>
       )}
@@ -62,19 +65,30 @@ const PublicProfile = ({ profile, onClose }: PublicProfileProps) => {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.photoContainer}>
           {profile.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={styles.profilePhoto} />
+            <Image
+              source={{ uri: profile.avatar_url }}
+              style={[styles.profilePhoto, { borderColor: isAdmin ? '#2563EB' : '#E5E7EB' }]}
+            />
           ) : (
-            <View style={styles.placeholderPhoto}>
+            <View style={[styles.placeholderPhoto, { borderColor: isAdmin ? '#2563EB' : '#E5E7EB' }]}>
               <User color="#6B7280" size={60} />
             </View>
           )}
         </View>
 
-        <Text style={styles.userName}>{profile.full_name || 'User'}</Text>
-        {profile.bio ? <Text style={styles.bioText}>"{profile.bio}"</Text> : null}
+        <ThemedText style={styles.userName}>{profile.full_name || 'User'}</ThemedText>
+        {profile.bio ? (
+          profile.full_name?.includes('Kobe') ? (
+            <TouchableOpacity onPress={onBioTap}>
+              <ThemedText style={styles.bioText}>"{profile.bio}"</ThemedText>
+            </TouchableOpacity>
+          ) : (
+            <ThemedText style={styles.bioText}>"{profile.bio}"</ThemedText>
+          )
+        ) : null}
 
         <View style={styles.contactSection}>
-          <Text style={styles.sectionTitle}>Contact Information</Text>
+          <ThemedText style={styles.sectionTitle}>Contact Information</ThemedText>
           
           {profile.email ? (
             <TouchableOpacity
@@ -86,8 +100,8 @@ const PublicProfile = ({ profile, onClose }: PublicProfileProps) => {
                 <Mail color="#D97706" size={20} />
               </View>
               <View>
-                <Text style={styles.contactLabel}>Email</Text>
-                <Text style={styles.contactValue}>{profile.email}</Text>
+                <ThemedText style={styles.contactLabel}>Email</ThemedText>
+                <ThemedText style={styles.contactValue}>{profile.email}</ThemedText>
               </View>
             </TouchableOpacity>
           ) : null}
@@ -102,14 +116,14 @@ const PublicProfile = ({ profile, onClose }: PublicProfileProps) => {
                 <Phone color="#2563EB" size={20} />
               </View>
               <View>
-                <Text style={styles.contactLabel}>Phone</Text>
-                <Text style={styles.contactValue}>{profile.phone_number}</Text>
+                <ThemedText style={styles.contactLabel}>Phone</ThemedText>
+                <ThemedText style={styles.contactValue}>{profile.phone_number}</ThemedText>
               </View>
             </TouchableOpacity>
           ) : null}
 
           {!profile.email && !profile.phone_number && (
-            <Text style={styles.noInfo}>No contact information provided.</Text>
+            <ThemedText style={styles.noInfo}>No contact information provided.</ThemedText>
           )}
         </View>
       </ScrollView>
@@ -150,8 +164,8 @@ const styles = StyleSheet.create({
   },
   content: { alignItems: 'center', paddingTop: 60, paddingBottom: 40 },
   photoContainer: { marginBottom: 20 },
-  profilePhoto: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#2563EB' },
-  placeholderPhoto: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  profilePhoto: { width: 120, height: 120, borderRadius: 60, borderWidth: 3 },
+  placeholderPhoto: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderWidth: 3 },
   userName: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 8 },
   bioText: { fontSize: 16, fontStyle: 'italic', color: '#4B5563', textAlign: 'center', marginHorizontal: 40, marginBottom: 30 },
   contactSection: { width: '100%', paddingHorizontal: 24 },

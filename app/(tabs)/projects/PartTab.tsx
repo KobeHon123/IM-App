@@ -1,17 +1,20 @@
 import { PartCard } from '@/components/PartCard';
 import { useData } from '@/hooks/useData';
-import { Part, PartType } from '@/types';
+import { DesignerSelector } from '@/components/DesignerSelector';
+import { EditPartModal } from '@/components/EditPartModal';
+import { PartDetailModal } from '@/components/PartDetailModal';
+import { Part, PartType, Comment } from '@/types';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, CheckSquare, ChevronDown, ChevronRight, Edit2, FileText, Image as ImageIcon, Info, MessageCircle, Package, Ruler, Square, User, X } from 'lucide-react-native';
+import { Camera, ChevronDown, ChevronRight, X, Check } from 'lucide-react-native';
 import React, { useState, useCallback } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { findSimilarPart } from '@/lib/similarityDetection';
 import {
   Alert,
   Dimensions,
   FlatList,
   Image,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +22,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ThemedText } from '@/components/ThemedText';
 
 const { width: screenWidth } = Dimensions.get('window');
 const statusList = ['measured', 'designed', 'tested', 'printed', 'installed'];
@@ -37,16 +42,80 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     toggleCommentCompletion,
     deleteComment,
     getUnfinishedCommentsCountByPart,
+    profiles,
+    parts: globalParts,
   } = useData();
 
   const [activeStatus, setActiveStatus] = useState<
     'measured' | 'designed' | 'tested' | 'printed' | 'installed'
   >('measured');
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editingCommentText, setEditingCommentText] = useState('');
+  const [selectedPartComments, setSelectedPartComments] = useState<Comment[]>([]);
+  const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
 
   const handleCommentSend = (partId: string, commentText: string) => {
     createComment({ partId, author: 'User', text: commentText });
+  };
+
+  const handlePartLongPress = (partId: string) => {
+    setIsSelectionMode(true);
+    const newSelected = new Set(selectedPartIds);
+    if (newSelected.has(partId)) {
+      newSelected.delete(partId);
+    } else {
+      newSelected.add(partId);
+    }
+    setSelectedPartIds(newSelected);
+    if (newSelected.size === 0) {
+      setIsSelectionMode(false);
+    }
+  };
+
+  const handlePartPress = (partId: string) => {
+    if (isSelectionMode) {
+      handlePartLongPress(partId);
+    }
+  };
+
+  const handleDeleteSelectedParts = () => {
+    Alert.alert(
+      'Delete Parts',
+      `Are you sure you want to delete ${selectedPartIds.size} selected part(s)?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            selectedPartIds.forEach(partId => {
+              deletePart(partId);
+            });
+            setSelectedPartIds(new Set());
+            setIsSelectionMode(false);
+            Alert.alert('Success', 'Selected parts have been deleted.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBulkStatusChange = (newStatus: string) => {
+    selectedPartIds.forEach(partId => {
+      const part = projectParts.find(p => p.id === partId);
+      if (part) {
+        updatePart(partId, { status: newStatus as any });
+      }
+    });
+    setSelectedPartIds(new Set());
+    setIsSelectionMode(false);
+    setShowBulkStatusModal(false);
+    Alert.alert('Success', `${selectedPartIds.size} part(s) status updated to "${newStatus}".`);
+  };
+
+  const exitSelectionMode = () => {
+    setSelectedPartIds(new Set());
+    setIsSelectionMode(false);
   };
   const [showPartActionModal, setShowPartActionModal] = useState(false);
   const [showPartDetailModal, setShowPartDetailModal] = useState(false);
@@ -67,12 +136,31 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     type: 'U shape' as PartType,
     description: '',
     pictures: [] as string[],
+    cadDrawing: '',
     dimensions: {} as any,
     designer: '',
   });
+  const [similarPart, setSimilarPart] = useState<{ part: Part; similarity: number } | null>(null);
+  const [usingSimilarPart, setUsingSimilarPart] = useState(false);
 
   const projectParts = getPartsByProject(projectId);
   const venues = getVenuesByProject(projectId);
+
+  // Check for similar parts in real-time (search across ALL projects using globalParts)
+  React.useEffect(() => {
+    const similar = findSimilarPart(newSubPart.type, newSubPart.dimensions, globalParts);
+    setSimilarPart(similar);
+  }, [newSubPart.dimensions, newSubPart.type, globalParts]);
+
+  // Keep selectedPart in sync with global state changes (e.g., after image upload)
+  React.useEffect(() => {
+    if (selectedPart) {
+      const updatedPart = projectParts.find(p => p.id === selectedPart.id);
+      if (updatedPart && JSON.stringify(updatedPart) !== JSON.stringify(selectedPart)) {
+        setSelectedPart(updatedPart);
+      }
+    }
+  }, [projectParts, selectedPart?.id]);
 
   const statusCounts = projectParts.reduce((acc, part) => {
     acc[part.status] = (acc[part.status] || 0) + 1;
@@ -87,6 +175,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     console.log('Part action:', action, 'for part ID:', selectedPart.id);
     switch (action) {
       case 'view':
+        setSelectedPartComments(getCommentsByPart(selectedPart.id));
         setShowPartDetailModal(true);
         break;
       case 'edit':
@@ -108,6 +197,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
           type: selectedPart.type,
           description: `Sub-part of ${selectedPart.name}`,
           pictures: [],
+          cadDrawing: '',
           dimensions: { ...selectedPart.dimensions },
           designer: selectedPart.designer || '',
         });
@@ -120,7 +210,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     setShowPartActionModal(false);
   };
 
-  const handleEditPart = () => {
+  const handleEditPart = async () => {
     if (!selectedPart || !editingPart.description.trim()) {
       Alert.alert('Error', 'Please fill in the description');
       return;
@@ -134,7 +224,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
       return;
     }
     console.log('Editing part ID:', selectedPart.id, editingPart);
-    updatePart(selectedPart.id, {
+    const updatedPart = await updatePart(selectedPart.id, {
       type: editingPart.type,
       description: editingPart.description,
       pictures: editingPart.pictures,
@@ -143,7 +233,12 @@ const PartTab = ({ projectId }: { projectId: string }) => {
       designer: editingPart.designer || undefined,
     });
     setShowEditPartModal(false);
-    setSelectedPart(null);
+    // Update selected part with the result from updatePart (which has cloud URLs)
+    if (updatedPart) {
+      setSelectedPart(updatedPart as Part);
+    } else {
+      setSelectedPart(null);
+    }
   };
 
   const handleDeletePart = () => {
@@ -287,10 +382,40 @@ const PartTab = ({ projectId }: { projectId: string }) => {
       type: 'U shape',
       description: '',
       pictures: [],
+      cadDrawing: '',
       dimensions: {},
       designer: '',
     });
+    setUsingSimilarPart(false);
+    setSimilarPart(null);
     setShowCreateSubPartModal(false);
+  };
+
+  const handleUseSimilarPart = () => {
+    if (similarPart) {
+      setNewSubPart(prev => ({
+        ...prev,
+        description: similarPart.part.description,
+        designer: similarPart.part.designer || '',
+        cadDrawing: similarPart.part.cadDrawing || '',
+        pictures: similarPart.part.pictures,
+        dimensions: { ...similarPart.part.dimensions }
+      }));
+      setUsingSimilarPart(true);
+    }
+  };
+
+  const handleGenerateNewPart = () => {
+    setUsingSimilarPart(false);
+    setSimilarPart(null);
+    setNewSubPart({
+      type: 'U shape' as PartType,
+      description: '',
+      pictures: [] as string[],
+      cadDrawing: '',
+      dimensions: {},
+      designer: '',
+    });
   };
 
   const getRequiredFields = (type: PartType): string[] => {
@@ -343,7 +468,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Shape *</Text>
+              <ThemedText style={styles.inputLabel}>Shape *</ThemedText>
               <View style={styles.buttonShapeContainer}>
                 {['Circle', 'Rectangular', 'Slot'].map((shape) => (
                   <TouchableOpacity
@@ -357,12 +482,12 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                       dimensions: { ...prev.dimensions, shape }
                     }))}
                   >
-                    <Text style={[
+                    <ThemedText style={[
                       styles.shapeButtonText,
                       newSubPart.dimensions.shape === shape && styles.selectedShapeButtonText
                     ]}>
                       {shape}
-                    </Text>
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -411,7 +536,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
 
     return (
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>{label}</Text>
+        <ThemedText style={styles.inputLabel}>{label}</ThemedText>
         <TextInput
           style={styles.input}
           value={newSubPart.dimensions[field] || ''}
@@ -442,7 +567,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
 
     return (
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>{label}</Text>
+        <ThemedText style={styles.inputLabel}>{label}</ThemedText>
         <TextInput
           style={styles.input}
           value={editingPart.dimensions[field] || ''}
@@ -488,7 +613,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
         return (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Shape *</Text>
+              <ThemedText style={styles.inputLabel}>Shape *</ThemedText>
               <View style={styles.buttonShapeContainer}>
                 {['Circle', 'Rectangular', 'Slot'].map((shape) => (
                   <TouchableOpacity
@@ -502,12 +627,12 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                       dimensions: { ...prev.dimensions, shape }
                     }))}
                   >
-                    <Text style={[
+                    <ThemedText style={[
                       styles.shapeButtonText,
                       editingPart.dimensions.shape === shape && styles.selectedShapeButtonText
                     ]}>
                       {shape}
-                    </Text>
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -552,24 +677,24 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     <View style={styles.tabContent}>
       <View style={styles.statusSummaryCard}>
         <View style={styles.statusSummaryItem}>
-          <Text style={styles.statusSummaryLabel}>Measured</Text>
-          <Text style={styles.statusSummaryValue}>{statusCounts.measured || 0}</Text>
+          <ThemedText style={styles.statusSummaryLabel}>Measured</ThemedText>
+          <ThemedText style={styles.statusSummaryValue}>{statusCounts.measured || 0}</ThemedText>
         </View>
         <View style={styles.statusSummaryItem}>
-          <Text style={styles.statusSummaryLabel}>Designed</Text>
-          <Text style={styles.statusSummaryValue}>{statusCounts.designed || 0}</Text>
+          <ThemedText style={styles.statusSummaryLabel}>Designed</ThemedText>
+          <ThemedText style={styles.statusSummaryValue}>{statusCounts.designed || 0}</ThemedText>
         </View>
         <View style={styles.statusSummaryItem}>
-          <Text style={styles.statusSummaryLabel}>Tested</Text>
-          <Text style={styles.statusSummaryValue}>{statusCounts.tested || 0}</Text>
+          <ThemedText style={styles.statusSummaryLabel}>Tested</ThemedText>
+          <ThemedText style={styles.statusSummaryValue}>{statusCounts.tested || 0}</ThemedText>
         </View>
         <View style={styles.statusSummaryItem}>
-          <Text style={styles.statusSummaryLabel}>Printed</Text>
-          <Text style={styles.statusSummaryValue}>{statusCounts.printed || 0}</Text>
+          <ThemedText style={styles.statusSummaryLabel}>Printed</ThemedText>
+          <ThemedText style={styles.statusSummaryValue}>{statusCounts.printed || 0}</ThemedText>
         </View>
         <View style={styles.statusSummaryItem}>
-          <Text style={styles.statusSummaryLabel}>Installed</Text>
-          <Text style={styles.statusSummaryValue}>{statusCounts.installed || 0}</Text>
+          <ThemedText style={styles.statusSummaryLabel}>Installed</ThemedText>
+          <ThemedText style={styles.statusSummaryValue}>{statusCounts.installed || 0}</ThemedText>
         </View>
       </View>
       <View 
@@ -585,13 +710,40 @@ const PartTab = ({ projectId }: { projectId: string }) => {
             onPress={() => setActiveStatus(status as typeof activeStatus)}
           >
             <View style={styles.statusTabContent}>
-              <Text style={[styles.statusTabText, activeStatus === status && styles.activeStatusTabText]}>
+              <ThemedText style={[styles.statusTabText, activeStatus === status && styles.activeStatusTabText]}>
                 {status.charAt(0).toUpperCase() + status.slice(1)}
-              </Text>
+              </ThemedText>
             </View>
           </TouchableOpacity>
         ))}
       </View>
+      {isSelectionMode && (
+        <View style={styles.bulkActionHeader}>
+          <ThemedText style={styles.selectionCountText}>
+            {selectedPartIds.size} part{selectedPartIds.size !== 1 ? 's' : ''} selected
+          </ThemedText>
+          <View style={styles.bulkActionButtons}>
+            <TouchableOpacity
+              style={styles.bulkActionButton}
+              onPress={() => setShowBulkStatusModal(true)}
+            >
+              <ThemedText style={styles.bulkActionButtonText}>Change To</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.bulkActionButton, styles.deleteActionButton]}
+              onPress={handleDeleteSelectedParts}
+            >
+              <ThemedText style={[styles.bulkActionButtonText, styles.deleteActionButtonText]}>Delete All</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={exitSelectionMode}
+            >
+              <X color="#78350F" size={20} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
       <ScrollView style={styles.partsList} showsVerticalScrollIndicator={false}>
         {Object.entries(getGroupedPartsByStatus(activeStatus)).map(([type, parts]) => (
           <React.Fragment key={type}>
@@ -605,7 +757,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                 ) : (
                   <ChevronDown color="#6B7280" size={20} />
                 )}
-                <Text style={styles.categoryTitle}>{type} ({parts.length})</Text>
+                <ThemedText style={styles.categoryTitle}>{type} ({parts.length})</ThemedText>
               </TouchableOpacity>
               {!collapsedCategories[type] && (
                 <View>
@@ -619,16 +771,25 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                         quantity={totalQuantity}
                         showQuantity={true}
                         hasComments={hasComments}
+                        isSelected={selectedPartIds.has(part.id)}
                         onPress={() => {
-                          console.log('Opening part detail modal for ID:', part.id);
-                          setSelectedPart(part);
-                          setShowPartDetailModal(true);
+                          if (isSelectionMode) {
+                            handlePartPress(part.id);
+                          } else {
+                            console.log('Opening part detail modal for ID:', part.id);
+                            console.log('Part cadDrawing:', part.cadDrawing);
+                            setSelectedPart(part);
+                            setSelectedPartComments(getCommentsByPart(part.id));
+                            setShowPartDetailModal(true);
+                          }
                         }}
+                        onLongPress={() => handlePartLongPress(part.id)}
                         onMorePress={() => {
-                          console.log('Opening part action modal for ID:', part.id);
-                          setSelectedPart(part);
-                          setShowPartActionModal(true);
-
+                          if (!isSelectionMode) {
+                            console.log('Opening part action modal for ID:', part.id);
+                            setSelectedPart(part);
+                            setShowPartActionModal(true);
+                          }
                         }}
                         onCommentSend={(text) => handleCommentSend(part.id, text)}
                       />
@@ -641,6 +802,60 @@ const PartTab = ({ projectId }: { projectId: string }) => {
         ))}
       </ScrollView>
       
+      {/* Bulk Status Modal */}
+      <Modal
+        visible={showBulkStatusModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowBulkStatusModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.bulkStatusModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowBulkStatusModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.bulkStatusModal}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.bulkStatusModalHeader}>
+              <ThemedText style={styles.bulkStatusModalTitle}>Update Status</ThemedText>
+              <ThemedText style={styles.bulkStatusModalSubtitle}>
+                {selectedPartIds.size} part{selectedPartIds.size !== 1 ? 's' : ''} selected
+              </ThemedText>
+            </View>
+            <View style={styles.bulkStatusOptionsContainer}>
+              {statusList.map((status, index) => {
+                const statusColors: Record<string, string> = {
+                  measured: '#EF4444',
+                  designed: '#F59E0B',
+                  tested: '#3B82F6',
+                  printed: '#F97316',
+                  installed: '#10B981',
+                };
+                return (
+                  <TouchableOpacity
+                    key={status}
+                    style={styles.bulkStatusOption}
+                    onPress={() => handleBulkStatusChange(status)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.bulkStatusOptionLeft}>
+                      <View style={[styles.bulkStatusDot, { backgroundColor: statusColors[status] }]} />
+                      <ThemedText style={styles.bulkStatusOptionText}>
+                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                      </ThemedText>
+                    </View>
+                    <View style={[styles.bulkStatusProgressBar, { width: `${(index + 1) * 20}%`, backgroundColor: statusColors[status] + '30' }]} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
   {/* Drag and drop overlays removed */}
 
       <Modal
@@ -668,372 +883,82 @@ const PartTab = ({ projectId }: { projectId: string }) => {
               style={styles.actionButton}
               onPress={() => handlePartAction('view')}
             >
-              <Text style={styles.actionButtonText}>View Details</Text>
+              <ThemedText style={styles.actionButtonText}>View Details</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => handlePartAction('edit')}
             >
-              <Text style={styles.actionButtonText}>Edit Part</Text>
+              <ThemedText style={styles.actionButtonText}>Edit Part</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => handlePartAction('status')}
             >
-              <Text style={styles.actionButtonText}>Change Status</Text>
+              <ThemedText style={styles.actionButtonText}>Change Status</ThemedText>
             </TouchableOpacity>
             {selectedPart && !selectedPart.parentPartId && (
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => handlePartAction('subpart')}
               >
-                <Text style={styles.actionButtonText}>Create Sub-part</Text>
+                <ThemedText style={styles.actionButtonText}>Create Sub-part</ThemedText>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={[styles.actionButton, styles.deleteButton]}
               onPress={() => handlePartAction('delete')}
             >
-              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Part</Text>
+              <ThemedText style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Part</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-      <Modal
+      <PartDetailModal
         visible={showPartDetailModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Part Details</Text>
-            <TouchableOpacity
-              onPress={() => {
-                console.log('Closing part detail modal');
-                setShowPartDetailModal(false);
-                setSelectedPart(null);
-              }}
-            >
-              <Text style={styles.modalClose}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          {selectedPart && (
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <ImageIcon color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Pictures</Text>
-                </View>
-                {selectedPart.pictures?.length ? (
-                  <FlatList
-                    data={selectedPart.pictures}
-                    keyExtractor={(item) => item}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity onPress={() => { /* Optional: Open full-screen image modal */ }}>
-                        <Image source={{ uri: item }} style={styles.imagePreview} />
-                      </TouchableOpacity>
-                    )}
-                  />
-                ) : (
-                  <Text style={styles.noContentText}>No pictures added</Text>
-                )}
-              </View>
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <FileText color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>CAD Drawing</Text>
-                </View>
-                {selectedPart.cadDrawing ? (
-                  <TouchableOpacity onPress={() => { /* Optional: Open full-screen image modal */ }}>
-                    <Image source={{ uri: selectedPart.cadDrawing }} style={styles.imagePreview} />
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.noContentText}>No CAD drawing added</Text>
-                )}
-              </View>
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Info color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Basic Info</Text>
-                </View>
-                <View style={styles.fieldRow}>
-                  <Package color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Name:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.name}</Text>
-                </View>
-                <View style={styles.fieldRow}>
-                  <FileText color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Type:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.type}</Text>
-                </View>
-                <View style={styles.fieldRow}>
-                  <Text style={styles.fieldLabel}>Status:</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: {
-                    measured: '#EF4444',
-                    designed: '#F59E0B',
-                    tested: '#3B82F6',
-                    printed: '#F97316',
-                    installed: '#10B981',
-                  }[selectedPart.status] || '#6B7280' }]}>
-                    <Text style={styles.statusText}>
-                      {selectedPart.status ? selectedPart.status.charAt(0).toUpperCase() + selectedPart.status.slice(1) : 'Unknown'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.fieldRow}>
-                  <User color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Designer:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.designer || 'Not assigned'}</Text>
-                </View>
-                <View style={styles.descriptionSection}>
-                  <Text style={styles.fieldLabel}>Description:</Text>
-                  <Text style={styles.descriptionValue}>{selectedPart.description || 'No description available'}</Text>
-                </View>
-              </View>
-              {Object.keys(selectedPart.dimensions).length > 0 && (
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Ruler color="#6B7280" size={20} />
-                    <Text style={styles.sectionTitle}>Dimensions</Text>
-                  </View>
-                  <FlatList
-                    data={Object.entries(selectedPart.dimensions)}
-                    keyExtractor={([key]) => key}
-                    renderItem={({ item: [key, value] }) => (
-                      <View style={styles.dimensionRow}>
-                        <Text style={styles.dimensionKey}>{key.charAt(0).toUpperCase() + key.slice(1)}:</Text>
-                        <Text style={styles.dimensionValue}>{String(value)}</Text>
-                      </View>
-                    )}
-                    scrollEnabled={false}
-                  />
-                </View>
-              )}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <MessageCircle color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Comments</Text>
-                </View>
-                {(() => {
-                  const comments = getCommentsByPart(selectedPart.id);
-                  console.log('Comments in Part Detail:', comments.length, 'comments');
-                  if (comments.length === 0) {
-                    return <Text style={styles.noContentText}>No comments yet</Text>;
-                  }
-                  return comments.map((comment) => (
-                    <View key={comment.id} style={[
-                      styles.commentItem,
-                      comment.isCompleted && styles.commentItemCompleted
-                    ]}>
-                      <View style={styles.commentHeader}>
-                        <TouchableOpacity
-                          style={styles.commentCheckbox}
-                          onPress={() => toggleCommentCompletion(comment.id)}
-                        >
-                          {comment.isCompleted ? (
-                            <CheckSquare color="#10B981" size={24} />
-                          ) : (
-                            <Square color="#6B7280" size={24} />
-                          )}
-                        </TouchableOpacity>
-                        {editingCommentId === comment.id ? (
-                          <TextInput
-                            style={styles.commentEditInput}
-                            value={editingCommentText}
-                            onChangeText={setEditingCommentText}
-                            multiline
-                            autoFocus
-                          />
-                        ) : (
-                          <Text style={[
-                            styles.commentText,
-                            comment.isCompleted && styles.commentTextCompleted
-                          ]}>
-                            {comment.text}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.commentFooter}>
-                        <View style={styles.commentMetadata}>
-                          <Text style={styles.commentDate}>
-                            {comment.createdAt.toLocaleDateString()} {comment.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                          {comment.venueName && (
-                            <>
-                              <Text style={styles.commentSeparator}>•</Text>
-                              <Text style={styles.commentVenue}>{comment.venueName}</Text>
-                            </>
-                          )}
-                        </View>
-                        <View style={styles.commentActions}>
-                          {editingCommentId === comment.id ? (
-                            <>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={() => {
-                                  setEditingCommentId(null);
-                                  setEditingCommentText('');
-                                }}
-                              >
-                                <Text style={styles.commentCancelText}>Cancel</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={async () => {
-                                  if (editingCommentText.trim()) {
-                                    await updateComment(comment.id, { text: editingCommentText.trim() });
-                                    setEditingCommentId(null);
-                                    setEditingCommentText('');
-                                  }
-                                }}
-                              >
-                                <Text style={styles.commentSaveText}>Save</Text>
-                              </TouchableOpacity>
-                            </>
-                          ) : (
-                            <>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={() => {
-                                  setEditingCommentId(comment.id);
-                                  setEditingCommentText(comment.text);
-                                }}
-                              >
-                                <Edit2 color="#2563EB" size={16} />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.commentActionButton}
-                                onPress={() => {
-                                  Alert.alert(
-                                    'Delete Comment',
-                                    'Are you sure you want to delete this comment?',
-                                    [
-                                      { text: 'Cancel', style: 'cancel' },
-                                      {
-                                        text: 'Delete',
-                                        style: 'destructive',
-                                        onPress: () => deleteComment(comment.id)
-                                      }
-                                    ]
-                                  );
-                                }}
-                              >
-                                <Text style={styles.commentDeleteText}>Delete</Text>
-                              </TouchableOpacity>
-                            </>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-                  ));
-                })()}
-              </View>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
-      <Modal
+        selectedPart={selectedPart}
+        comments={selectedPartComments}
+        onClose={() => {
+          console.log('Closing part detail modal');
+          setShowPartDetailModal(false);
+          setSelectedPart(null);
+        }}
+        onCommentsChange={(updatedComments) => {
+          setSelectedPartComments(updatedComments);
+        }}
+      />
+      <EditPartModal
         visible={showEditPartModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Part</Text>
-            <TouchableOpacity
-              onPress={() => {
-                console.log('Closing edit part modal');
-                setShowEditPartModal(false);
-                setSelectedPart(null);
-              }}
-            >
-              <Text style={styles.modalClose}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            {renderEditDimensionInputs()}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description *</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={editingPart.description}
-                onChangeText={(text) => setEditingPart((prev) => ({ ...prev, description: text }))}
-                placeholder="Enter part description"
-                placeholderTextColor="#6B728080"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Designer</Text>
-              <TextInput
-                style={styles.input}
-                value={editingPart.designer}
-                onChangeText={(text) => setEditingPart((prev) => ({ ...prev, designer: text }))}
-                placeholder="Enter designer name (optional)"
-                placeholderTextColor="#6B728080"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>CAD Drawing (Optional)</Text>
-              <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectCADDrawing(true)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Change CAD Drawing</Text>
-              </TouchableOpacity>
-              {editingPart.cadDrawing && (
-                <View style={styles.previewContainer}>
-                  <Image source={{ uri: editingPart.cadDrawing }} style={styles.thumbnailPreview} />
-                  <TouchableOpacity
-                    style={styles.removePreviewButton}
-                    onPress={() => setEditingPart(prev => ({ ...prev, cadDrawing: '' }))}
-                  >
-                    <X color="#FFFFFF" size={16} />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Pictures (1-6)</Text>
-              <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectPictures(true)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Add Pictures</Text>
-              </TouchableOpacity>
-              <FlatList
-                data={editingPart.pictures}
-                keyExtractor={(item) => item}
-                horizontal
-                style={styles.previewList}
-                renderItem={({ item }) => (
-                  <View style={styles.previewContainer}>
-                    <Image source={{ uri: item }} style={styles.thumbnailPreview} />
-                    <TouchableOpacity
-                      style={styles.removePreviewButton}
-                      onPress={() => handleRemovePicture(item, true)}
-                    >
-                      <X color="#FFFFFF" size={16} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={handleEditPart}
-            >
-              <Text style={styles.createButtonText}>Save Changes</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        editingPart={editingPart}
+        selectedPart={selectedPart}
+        profiles={profiles}
+        onClose={() => {
+          console.log('Closing edit part modal');
+          setShowEditPartModal(false);
+          setSelectedPart(null);
+        }}
+        onSave={async (part) => {
+          if (!selectedPart) return;
+          try {
+            await updatePart(selectedPart.id, {
+              type: part.type,
+              description: part.description,
+              pictures: part.pictures,
+              cadDrawing: part.cadDrawing || undefined,
+              dimensions: part.dimensions,
+              designer: part.designer || undefined,
+            });
+            setShowEditPartModal(false);
+            setSelectedPart(null);
+          } catch (error) {
+            console.error('Error updating part:', error);
+            Alert.alert('Error', 'Failed to update part');
+          }
+        }}
+        onEditingPartChange={(updates) => {
+          setEditingPart(prev => ({ ...prev, ...updates }));
+        }}
+      />
       <Modal
         visible={showStatusModal}
         animationType="fade"
@@ -1055,14 +980,14 @@ const PartTab = ({ projectId }: { projectId: string }) => {
             activeOpacity={1}
           />
           <View style={styles.actionModal}>
-            <Text style={styles.actionModalTitle}>Change Status</Text>
+            <ThemedText style={styles.actionModalTitle}>Change Status</ThemedText>
             {['measured', 'designed', 'tested', 'printed', 'installed'].map((status) => (
               <TouchableOpacity
                 key={status}
                 style={styles.statusButton}
                 onPress={() => handleStatusChange(status)}
               >
-                <Text style={styles.actionButtonText}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
+                <ThemedText style={styles.actionButtonText}>{status.charAt(0).toUpperCase() + status.slice(1)}</ThemedText>
               </TouchableOpacity>
             ))}
           </View>
@@ -1075,21 +1000,23 @@ const PartTab = ({ projectId }: { projectId: string }) => {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create Sub-part</Text>
+            <ThemedText style={styles.modalTitle}>Create Sub-part</ThemedText>
             <TouchableOpacity
               onPress={() => {
                 console.log('Closing create sub-part modal');
                 setShowCreateSubPartModal(false);
-                setNewSubPart({ type: 'U shape', description: '', pictures: [], dimensions: {}, designer: '' });
+                setNewSubPart({ type: 'U shape', description: '', pictures: [], cadDrawing: '', dimensions: {}, designer: '' });
+                setUsingSimilarPart(false);
+                setSimilarPart(null);
               }}
             >
-              <Text style={styles.modalClose}>Cancel</Text>
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Part Type *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeContainer}>
+              <ThemedText style={styles.inputLabel}>Part Type *</ThemedText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.typeContainer, usingSimilarPart && styles.disabledTypeContainer]}>
                 {[
                   'U shape', 'Straight', 'Knob', 'Button', 'Push Pad',
                   'Cover', 'X - Special Design', 'Gadget'
@@ -1098,27 +1025,33 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                     key={type}
                     style={[
                       styles.typeButton,
-                      newSubPart.type === type && styles.selectedTypeButton
+                      newSubPart.type === type && styles.selectedTypeButton,
+                      usingSimilarPart && styles.disabledTypeButton
                     ]}
-                    onPress={() => setNewSubPart(prev => ({
+                    onPress={() => !usingSimilarPart && setNewSubPart(prev => ({
                       ...prev,
                       type: type as PartType,
                       dimensions: {}
                     }))}
+                    disabled={usingSimilarPart}
                   >
-                    <Text style={[
+                    <ThemedText style={[
                       styles.typeButtonText,
-                      newSubPart.type === type && styles.selectedTypeButtonText
+                      newSubPart.type === type && styles.selectedTypeButtonText,
+                      usingSimilarPart && styles.disabledTypeButtonText
                     ]}>
                       {type}
-                    </Text>
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              {usingSimilarPart && (
+                <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>
+              )}
             </View>
             {renderDimensionInputs()}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description *</Text>
+              <ThemedText style={styles.inputLabel}>Description *</ThemedText>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={newSubPart.description}
@@ -1131,7 +1064,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Designer</Text>
+              <ThemedText style={styles.inputLabel}>Designer</ThemedText>
               <TextInput
                 style={styles.input}
                 value={newSubPart.designer}
@@ -1141,13 +1074,13 @@ const PartTab = ({ projectId }: { projectId: string }) => {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Pictures (1-6)</Text>
+              <ThemedText style={styles.inputLabel}>Pictures (1-6)</ThemedText>
               <TouchableOpacity
                 style={styles.pictureButton}
                 onPress={() => handleSelectPictures(false)}
               >
                 <Camera color="#6B7280" size={24} />
-                <Text style={styles.pictureButtonText}>Add Pictures</Text>
+                <ThemedText style={styles.pictureButtonText}>Add Pictures</ThemedText>
               </TouchableOpacity>
               <FlatList
                 data={newSubPart.pictures}
@@ -1167,11 +1100,49 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                 )}
               />
             </View>
+            {similarPart && !usingSimilarPart && (
+              <View style={styles.similarPartContainer}>
+                <View style={styles.similarPartMessageBox}>
+                  <ThemedText style={styles.similarPartMessage}>
+                    This part has {similarPart.similarity.toFixed(1)}% similarity with {similarPart.part.name}
+                  </ThemedText>
+                </View>
+                {similarPart.part.projectId === projectId ? (
+                  <View>
+                    <View style={[styles.useSimilarPartButton, styles.disabledSimilarPartButton]}>
+                      <ThemedText style={[styles.useSimilarPartButtonText, styles.disabledSimilarPartButtonText]}>
+                        Use {similarPart.part.name}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.sameProjectWarning}>
+                      {similarPart.part.name} already exists in this project
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.useSimilarPartButton}
+                    onPress={handleUseSimilarPart}
+                  >
+                    <ThemedText style={styles.useSimilarPartButtonText}>Use {similarPart.part.name}</ThemedText>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            {usingSimilarPart && (
+              <TouchableOpacity
+                style={styles.generateNewPartButton}
+                onPress={handleGenerateNewPart}
+              >
+                <ThemedText style={styles.generateNewPartButtonText}>Generate New Part</ThemedText>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={styles.createButton}
+              style={[styles.createButton, usingSimilarPart && styles.createPartUsingExistingButton]}
               onPress={handleCreateSubPart}
             >
-              <Text style={styles.createButtonText}>Create Sub-part</Text>
+              <ThemedText style={styles.createButtonText}>
+                {usingSimilarPart ? 'Create Existing Part' : 'Create Sub-part'}
+              </ThemedText>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
@@ -1271,6 +1242,58 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginLeft: 8,
   },
+  bulkActionHeader: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FBBF24',
+  },
+  selectionCountText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400E',
+    letterSpacing: 0.3,
+  },
+  bulkActionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  bulkActionButton: {
+    backgroundColor: '#FBBF24',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+    shadowColor: '#FBBF24',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bulkActionButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#78350F',
+    letterSpacing: 0.2,
+  },
+  deleteActionButton: {
+    backgroundColor: '#EF4444',
+    shadowColor: '#EF4444',
+  },
+  deleteActionButtonText: {
+    color: '#FFFFFF',
+  },
+  closeButton: {
+    padding: 8,
+    backgroundColor: 'rgba(120, 53, 15, 0.1)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -1296,6 +1319,105 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 16,
+  },
+  statusSelectionLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  statusOptionsContainer: {
+    gap: 8,
+  },
+  statusOption: {
+    borderLeftWidth: 4,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
+  },
+  statusOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  // Modern Bulk Status Modal Styles
+  bulkStatusModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bulkStatusModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 0,
+    minWidth: 300,
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  bulkStatusModalHeader: {
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  bulkStatusModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  bulkStatusModalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  bulkStatusOptionsContainer: {
+    padding: 16,
+  },
+  bulkStatusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  bulkStatusOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  bulkStatusDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bulkStatusOptionText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  bulkStatusProgressBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 14,
   },
   inputGroup: {
     marginBottom: 20,
@@ -1329,6 +1451,68 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  createPartUsingExistingButton: {
+    backgroundColor: '#DC2626',
+  },
+  similarPartContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+  },
+  similarPartMessageBox: {
+    marginBottom: 12,
+  },
+  similarPartMessage: {
+    fontSize: 14,
+    color: '#7F1D1D',
+    fontWeight: '500',
+  },
+  useSimilarPartButton: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  useSimilarPartButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  disabledSimilarPartButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  disabledSimilarPartButtonText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  sameProjectWarning: {
+    fontSize: 12,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  generateNewPartButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  generateNewPartButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  lockedIndicator: {
+    fontSize: 12,
+    color: '#FCD34D',
+    marginTop: 8,
     fontWeight: '600',
   },
   modalOverlay: {
@@ -1482,6 +1666,16 @@ const styles = StyleSheet.create({
   selectedTypeButtonText: {
     color: '#FFFFFF',
   },
+  disabledTypeContainer: {
+    opacity: 0.6,
+  },
+  disabledTypeButton: {
+    opacity: 0.6,
+    backgroundColor: '#E5E7EB',
+  },
+  disabledTypeButtonText: {
+    color: '#9CA3AF',
+  },
   buttonShapeContainer: {
     flexDirection: 'row',
   },
@@ -1519,7 +1713,6 @@ const styles = StyleSheet.create({
   },
   previewList: {
     marginTop: 10,
-    showsHorizontalScrollIndicator: false,
   },
   previewContainer: {
     position: 'relative',

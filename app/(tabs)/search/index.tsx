@@ -7,18 +7,20 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  SafeAreaView,
   FlatList,
   Image,
 } from 'react-native';
-import { Search, Filter, X, Package, FileText, Info, Ruler, MessageCircle, User, CheckSquare, Square, Image as ImageIcon } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Search, Filter, X, Package } from 'lucide-react-native';
 import { useData } from '@/hooks/useData';
 import { Alert } from 'react-native';
 import { PartCard } from '@/components/PartCard';
-import { PartType, Part, Project } from '@/types';
+import { PartDetailModal } from '@/components/PartDetailModal';
+import { PartType, Part, Project, Comment } from '@/types';
+import { ThemedText } from '@/components/ThemedText';
 
 export default function SearchScreen() {
-  const { getAllPartsWithProjects, getCommentsByPart, updateCommentStatus, deleteComment, getPendingCommentsCountByPart } = useData();
+  const { getAllPartsWithProjects, getCommentsByPart, deleteComment, getPendingCommentsCountByPart } = useData();
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchFilters, setSearchFilters] = useState({
     type: '' as PartType | '',
@@ -28,22 +30,69 @@ export default function SearchScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [showPartDetailModal, setShowPartDetailModal] = useState(false);
   const [selectedPart, setSelectedPart] = useState<Part | null>(null);
+  const [selectedPartComments, setSelectedPartComments] = useState<Comment[]>([]);
 
   const allPartsWithProjects = getAllPartsWithProjects();
 
-  // Group parts by type and get latest 10 with CAD drawings for each type
+  // Helper function to create a unique key for a part based on type and dimensions
+  const getPartUniqueKey = (part: Part) => {
+    const dimensionStr = JSON.stringify(part.dimensions, Object.keys(part.dimensions).sort());
+    return `${part.type}_${dimensionStr}`;
+  };
+
+  // Helper function to get all project names that contain a part with same type and dimensions
+  const getProjectNamesForPart = (part: Part) => {
+    const key = getPartUniqueKey(part);
+    const matchingParts = allPartsWithProjects.filter(p => getPartUniqueKey(p) === key);
+    const projectNames = matchingParts
+      .map(p => p.project?.name)
+      .filter((name): name is string => !!name);
+    // Remove duplicates
+    return [...new Set(projectNames)];
+  };
+
+  // Helper function to deduplicate parts - keep the one with CAD drawing if available, or the newest
+  const deduplicateParts = (parts: Array<Part & { project?: Project }>) => {
+    const uniquePartsMap = new Map<string, Part & { project?: Project }>();
+    
+    parts.forEach(part => {
+      const key = getPartUniqueKey(part);
+      const existing = uniquePartsMap.get(key);
+      
+      if (!existing) {
+        uniquePartsMap.set(key, part);
+      } else {
+        // Prefer part with CAD drawing, then prefer newer part
+        if (part.cadDrawing && !existing.cadDrawing) {
+          uniquePartsMap.set(key, part);
+        } else if (part.cadDrawing === existing.cadDrawing) {
+          // Both have or don't have CAD, keep newer one
+          if (new Date(part.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
+            uniquePartsMap.set(key, part);
+          }
+        }
+      }
+    });
+    
+    return Array.from(uniquePartsMap.values());
+  };
+
+  // Group parts by type and get latest 10 with CAD drawings for each type (deduplicated)
   const getPartsByType = () => {
-    const partTypes: PartType[] = ['U shape', 'Straight', 'Knob', 'Button', 'Push Pad', 'Cover', 'X - Special Design', 'Custom'];
+    const partTypes: PartType[] = ['U shape', 'Straight', 'Knob', 'Button', 'Push Pad', 'Cover', 'X - Special Design', 'Gadget'];
 
     return partTypes.map(type => {
       const partsOfType = allPartsWithProjects
-        .filter(part => part.type === type && part.cadDrawing)
+        .filter(part => part.type === type && part.cadDrawing);
+      
+      // Deduplicate parts with same dimensions
+      const uniqueParts = deduplicateParts(partsOfType)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 10);
 
       return {
         type,
-        parts: partsOfType,
+        parts: uniqueParts,
       };
     }).filter(group => group.parts.length > 0);
   };
@@ -65,14 +114,17 @@ export default function SearchScreen() {
         const filterValue = searchFilters.dimensions[key];
         if (!filterValue) return true;
 
-        const partValue = part.dimensions[key];
+        const partValue = (part.dimensions as Record<string, any>)[key];
         if (partValue === undefined) return false;
 
         return parseFloat(partValue.toString()) === parseFloat(filterValue);
       });
     });
 
-    setFilteredParts(filtered);
+    // Deduplicate search results
+    const uniqueFiltered = deduplicateParts(filtered);
+    
+    setFilteredParts(uniqueFiltered);
     setIsSearchActive(true);
     setShowFilterModal(false);
   };
@@ -100,36 +152,36 @@ export default function SearchScreen() {
     }
   };
 
+  const handleDimensionChange = useCallback((fieldName: string, text: string) => {
+    if (fieldName === 'shape') {
+      setSearchFilters(prev => ({
+        ...prev,
+        dimensions: { ...prev.dimensions, [fieldName]: text }
+      }));
+    } else {
+      // Allow only numbers and one decimal point
+      const validText = text.replace(/[^0-9.]/g, '');
+      // Ensure only one decimal place
+      const parts = validText.split('.');
+      let formattedText = parts[0];
+      if (parts.length > 1) {
+        formattedText += '.' + parts[1].substring(0, 1);
+      }
+      setSearchFilters(prev => ({
+        ...prev,
+        dimensions: { ...prev.dimensions, [fieldName]: formattedText }
+      }));
+    }
+  }, []);
+
   const renderDimensionInputs = () => {
     if (!searchFilters.type) return null;
 
     const fields = getRequiredDimensionFields(searchFilters.type);
     
-    const handleDimensionChange = useCallback((fieldName: string, text: string) => {
-      if (fieldName === 'shape') {
-        setSearchFilters(prev => ({
-          ...prev,
-          dimensions: { ...prev.dimensions, [fieldName]: text }
-        }));
-      } else {
-        // Allow only numbers and one decimal point
-        const validText = text.replace(/[^0-9.]/g, '');
-        // Ensure only one decimal place
-        const parts = validText.split('.');
-        let formattedText = parts[0];
-        if (parts.length > 1) {
-          formattedText += '.' + parts[1].substring(0, 1);
-        }
-        setSearchFilters(prev => ({
-          ...prev,
-          dimensions: { ...prev.dimensions, [fieldName]: formattedText }
-        }));
-      }
-    }, []);
-    
     return fields.map(field => (
       <View key={field} style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>{field.charAt(0).toUpperCase() + field.slice(1)}</Text>
+        <ThemedText style={styles.inputLabel}>{field.charAt(0).toUpperCase() + field.slice(1)}</ThemedText>
         <TextInput
           style={styles.input}
           value={searchFilters.dimensions[field] || ''}
@@ -149,24 +201,31 @@ export default function SearchScreen() {
       <ScrollView style={styles.galleryContainer} showsVerticalScrollIndicator={false}>
         {partGroups.map(group => (
           <View key={group.type} style={styles.typeSection}>
-            <Text style={styles.typeSectionTitle}>{group.type}</Text>
+            <ThemedText style={styles.typeSectionTitle}>{group.type}</ThemedText>
             <FlatList
               data={group.parts}
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
               renderItem={({ item }) => (
-                <TouchableOpacity style={styles.cadImageContainer}>
+                <TouchableOpacity 
+                  style={styles.cadImageContainer}
+                  onPress={() => {
+                    setSelectedPart(item);
+                    setSelectedPartComments(getCommentsByPart(item.id));
+                    setShowPartDetailModal(true);
+                  }}
+                >
                   {item.cadDrawing ? (
-                    <Image source={{ uri: item.cadDrawing }} style={styles.cadImage} />
+                    <Image key={item.cadDrawing} source={{ uri: item.cadDrawing }} style={styles.cadImage} />
                   ) : (
                     <View style={styles.placeholderCAD}>
                       <Package color="#6B7280" size={32} />
                     </View>
                   )}
-                  <Text style={styles.cadImageLabel}>
-                    {item.project ? `${item.name} - ${item.project.name}` : item.name}
-                  </Text>
+                  <ThemedText style={styles.cadImageLabel}>
+                    {item.name}
+                  </ThemedText>
                 </TouchableOpacity>
               )}
               contentContainerStyle={styles.horizontalList}
@@ -180,7 +239,7 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Search Parts</Text>
+        <ThemedText style={styles.title}>Search Parts</ThemedText>
       </View>
 
       <View style={styles.searchContainer}>
@@ -189,9 +248,9 @@ export default function SearchScreen() {
           onPress={() => setShowFilterModal(true)}
         >
           <Search color="#6B7280" size={20} />
-          <Text style={styles.searchPlaceholder}>
+          <ThemedText style={styles.searchPlaceholder}>
             {isSearchActive ? `Searching ${searchFilters.type}` : 'Search parts by type and dimensions...'}
-          </Text>
+          </ThemedText>
           <Filter color="#6B7280" size={20} />
         </TouchableOpacity>
         
@@ -204,7 +263,7 @@ export default function SearchScreen() {
 
       {isSearchActive ? (
         <View style={styles.searchResults}>
-          <Text style={styles.resultsTitle}>Search Results ({filteredParts.length})</Text>
+          <ThemedText style={styles.resultsTitle}>Search Results ({filteredParts.length})</ThemedText>
           <FlatList
             data={filteredParts}
             keyExtractor={(item) => item.id}
@@ -215,6 +274,7 @@ export default function SearchScreen() {
                 showCommentButton={false}
                 onPress={() => {
                   setSelectedPart(item);
+                  setSelectedPartComments(getCommentsByPart(item.id));
                   setShowPartDetailModal(true);
                 }}
               />
@@ -233,15 +293,15 @@ export default function SearchScreen() {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter Parts</Text>
+            <ThemedText style={styles.modalTitle}>Filter Parts</ThemedText>
             <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-              <Text style={styles.modalClose}>Cancel</Text>
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Part Type *</Text>
+              <ThemedText style={styles.inputLabel}>Part Type *</ThemedText>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeContainer}>
                 {[
                   'U shape', 'Straight', 'Knob', 'Button', 'Push Pad', 
@@ -259,12 +319,12 @@ export default function SearchScreen() {
                       dimensions: {} 
                     }))}
                   >
-                    <Text style={[
+                    <ThemedText style={[
                       styles.typeButtonText,
                       searchFilters.type === type && styles.selectedTypeButtonText
                     ]}>
                       {type}
-                    </Text>
+                    </ThemedText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -277,192 +337,25 @@ export default function SearchScreen() {
               onPress={handleSearch}
               disabled={!searchFilters.type}
             >
-              <Text style={styles.searchButtonText}>Search Parts</Text>
+              <ThemedText style={styles.searchButtonText}>Search Parts</ThemedText>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      <Modal
+      <PartDetailModal
         visible={showPartDetailModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Part Details</Text>
-            <TouchableOpacity onPress={() => {
-              setShowPartDetailModal(false);
-              setSelectedPart(null);
-            }}>
-              <Text style={styles.modalClose}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          {selectedPart && (
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <ImageIcon color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Pictures</Text>
-                </View>
-                {selectedPart.pictures?.length ? (
-                  <FlatList
-                    data={selectedPart.pictures}
-                    keyExtractor={(item) => item}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity onPress={() => { }}>
-                        <Image source={{ uri: item }} style={styles.imagePreview} />
-                      </TouchableOpacity>
-                    )}
-                  />
-                ) : (
-                  <Text style={styles.noContentText}>No pictures added</Text>
-                )}
-              </View>
-
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <FileText color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>CAD Drawing</Text>
-                </View>
-                {selectedPart.cadDrawing ? (
-                  <TouchableOpacity onPress={() => { }}>
-                    <Image source={{ uri: selectedPart.cadDrawing }} style={styles.imagePreview} />
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.noContentText}>No CAD drawing added</Text>
-                )}
-              </View>
-
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Info color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Basic Info</Text>
-                </View>
-                <View style={styles.fieldRow}>
-                  <Package color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Name:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.name}</Text>
-                </View>
-                <View style={styles.fieldRow}>
-                  <FileText color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Type:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.type}</Text>
-                </View>
-                <View style={styles.fieldRow}>
-                  <Text style={styles.fieldLabel}>Status:</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: {
-                    measured: '#EF4444',
-                    designed: '#F59E0B',
-                    tested: '#3B82F6',
-                    printed: '#F97316',
-                    installed: '#10B981',
-                  }[selectedPart.status] || '#6B7280' }]}>
-                    <Text style={styles.statusText}>
-                      {selectedPart.status ? selectedPart.status.charAt(0).toUpperCase() + selectedPart.status.slice(1) : 'Unknown'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.fieldRow}>
-                  <User color="#6B7280" size={18} />
-                  <Text style={styles.fieldLabel}>Designer:</Text>
-                  <Text style={styles.fieldValue}>{selectedPart.designer || 'Not assigned'}</Text>
-                </View>
-                <View style={styles.descriptionSection}>
-                  <Text style={styles.fieldLabel}>Description:</Text>
-                  <Text style={styles.descriptionValue}>{selectedPart.description || 'No description available'}</Text>
-                </View>
-              </View>
-
-              {Object.keys(selectedPart.dimensions).length > 0 && (
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Ruler color="#6B7280" size={20} />
-                    <Text style={styles.sectionTitle}>Dimensions</Text>
-                  </View>
-                  <FlatList
-                    data={Object.entries(selectedPart.dimensions)}
-                    keyExtractor={([key]) => key}
-                    renderItem={({ item: [key, value] }) => (
-                      <View style={styles.dimensionRow}>
-                        <Text style={styles.dimensionKey}>{key.charAt(0).toUpperCase() + key.slice(1)}:</Text>
-                        <Text style={styles.dimensionValue}>{String(value)}</Text>
-                      </View>
-                    )}
-                    scrollEnabled={false}
-                  />
-                </View>
-              )}
-
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <MessageCircle color="#6B7280" size={20} />
-                  <Text style={styles.sectionTitle}>Comments</Text>
-                </View>
-                {(() => {
-                  const comments = getCommentsByPart(selectedPart.id);
-                  if (comments.length === 0) {
-                    return <Text style={styles.noContentText}>No comments yet</Text>;
-                  }
-                  return comments.map((comment) => (
-                    <View key={comment.id} style={styles.commentItem}>
-                      <View style={styles.commentHeader}>
-                        <Text style={styles.commentText}>{comment.text}</Text>
-                        <TouchableOpacity
-                          style={styles.commentStatusButton}
-                          onPress={() => {
-                            const newStatus = !comment.isPending;
-                            updateCommentStatus(comment.id, newStatus);
-                          }}
-                        >
-                          {!comment.isPending ? (
-                            <CheckSquare color="#10B981" size={20} />
-                          ) : (
-                            <Square color="#6B7280" size={20} />
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.commentFooter}>
-                        <View style={styles.commentMetadata}>
-                          <Text style={styles.commentDate}>
-                            {comment.createdAt.toLocaleDateString()} {comment.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                          {comment.venueName && (
-                            <>
-                              <Text style={styles.commentSeparator}>•</Text>
-                              <Text style={styles.commentVenue}>{comment.venueName}</Text>
-                            </>
-                          )}
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => {
-                            Alert.alert(
-                              'Delete Comment',
-                              'Are you sure you want to delete this comment?',
-                              [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                  text: 'Delete',
-                                  style: 'destructive',
-                                  onPress: () => deleteComment(comment.id)
-                                }
-                              ]
-                            );
-                          }}
-                        >
-                          <Text style={styles.commentDeleteText}>Delete</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ));
-                })()}
-              </View>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
+        selectedPart={selectedPart}
+        comments={selectedPartComments}
+        projectNames={selectedPart ? getProjectNamesForPart(selectedPart) : []}
+        onClose={() => {
+          setShowPartDetailModal(false);
+          setSelectedPart(null);
+        }}
+        onCommentsChange={(updatedComments) => {
+          setSelectedPartComments(updatedComments);
+        }}
+      />
     </SafeAreaView>
   );
 }

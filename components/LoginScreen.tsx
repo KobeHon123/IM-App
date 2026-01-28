@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, Lock } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { ThemedText } from '@/components/ThemedText';
 
 export function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -52,20 +54,20 @@ export function LoginScreen() {
       >
         <View style={styles.headerSection}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>Immune Manager</Text>
+            <ThemedText style={styles.logoText}>Immune Manager</ThemedText>
           </View>
-          <Text style={styles.title}>
+          <ThemedText style={styles.title}>
             {isSignUp ? 'Create Account' : 'Welcome Back'}
-          </Text>
-          <Text style={styles.subtitle}>
+          </ThemedText>
+          <ThemedText style={styles.subtitle}>
             {isSignUp ? 'Sign up to get started' : 'Sign in to continue'}
-          </Text>
+          </ThemedText>
         </View>
 
         <View style={styles.loginSection}>
           {error && (
             <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
             </View>
           )}
 
@@ -116,9 +118,9 @@ export function LoginScreen() {
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.loginButtonText}>
+              <ThemedText style={styles.loginButtonText}>
                 {isSignUp ? 'Sign Up' : 'Sign In'}
-              </Text>
+              </ThemedText>
             )}
           </TouchableOpacity>
 
@@ -130,9 +132,9 @@ export function LoginScreen() {
             }}
             disabled={isLoading}
           >
-            <Text style={styles.switchButtonText}>
+            <ThemedText style={styles.switchButtonText}>
               {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-            </Text>
+            </ThemedText>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -233,6 +235,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   switchButton: {
     paddingVertical: 12,
@@ -243,5 +247,7 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
 });

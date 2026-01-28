@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "bolt-expo-nativewind",
+    "name": "IM-App",
     "slug": "bolt-expo-nativewind",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -29,6 +29,16 @@
     },
     "android": {
       "package": "com.anonymous.boltexponativewind"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "88c0fd38-d5e2-4c16-ab67-99098765c7da"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/88c0fd38-d5e2-4c16-ab67-99098765c7da"
+    },
+    "runtimeVersion": "1.0.0"
   }
 }

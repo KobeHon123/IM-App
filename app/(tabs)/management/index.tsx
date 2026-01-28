@@ -1,6 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clipboard } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { ThemedText } from '@/components/ThemedText';
 
 export default function ManagementTab() {
   const router = useRouter();
@@ -17,7 +19,7 @@ export default function ManagementTab() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Management</Text>
+        <ThemedText style={styles.headerTitle}>Management</ThemedText>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         <View style={styles.grid}>
@@ -34,7 +36,7 @@ export default function ManagementTab() {
                 <View style={styles.iconContainer}>
                   <IconComponent size={48} color="#2563EB" strokeWidth={1.5} />
                 </View>
-                <Text style={styles.programName}>{program.name}</Text>
+                <ThemedText style={styles.programName}>{program.name}</ThemedText>
               </TouchableOpacity>
             );
           })}

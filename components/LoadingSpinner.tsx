@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { ThemedText } from '@/components/ThemedText';
 
 interface LoadingSpinnerProps {
   size?: number;

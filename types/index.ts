@@ -2,6 +2,18 @@ export type PartStatus = 'measured' | 'designed' | 'tested' | 'printed' | 'insta
 
 export type PartType = 'U shape' | 'Straight' | 'Knob' | 'Button' | 'Push Pad' | 'Cover' | 'X - Special Design' | 'Gadget';
 
+export interface Profile {
+  id: string;
+  email: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+  isAuthorized: boolean;
+  phoneNumber?: string | null;
+  bio?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface BasePart {
   id: string;
   name: string;
@@ -14,6 +26,7 @@ export interface BasePart {
   designer?: string;
   projectId: string;
   parentPartId?: string; // For sub-parts
+  comments?: any[]; // Comments associated with this part (Comment type defined below)
 }
 
 export interface UShapePart extends BasePart {
@@ -102,7 +115,7 @@ export interface VenuePartQuantity {
 export interface Event {
   id: string;
   date: string;
-  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Meeting' | 'Other';
+  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Meeting' | 'Other' | 'Delivery';
   parts: string[];
   description: string;
   projectId: string;
@@ -114,6 +127,7 @@ export interface Comment {
   author: string;
   text: string;
   isPending: boolean;
+  isCompleted: boolean;
   createdAt: Date;
   venueId?: string;
   venueName?: string;

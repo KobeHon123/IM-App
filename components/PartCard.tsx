@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Modal, Animated, Platform } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Part, Project } from '@/types';
-import { EllipsisVertical, Package, MessageCircle, Send } from 'lucide-react-native';
+import { EllipsisVertical, Package, MessageCircle, Send, Check, Minus, Plus, ChevronRight } from 'lucide-react-native';
+import { ThemedText } from '@/components/ThemedText';
 
 interface PartCardProps {
   part: Part;
@@ -13,8 +15,10 @@ interface PartCardProps {
   hasComments?: boolean;
   venueName?: string;
   showCommentButton?: boolean;
+  isSelected?: boolean;
   onPress?: () => void;
   onMorePress?: () => void;
+  onLongPress?: () => void;
   onQuantityChange?: (delta: number) => void;
   onStatusChange?: (newStatus: string) => void;
   onCommentSend?: (text: string) => void;
@@ -30,8 +34,10 @@ export function PartCard({
   hasComments = false,
   venueName,
   showCommentButton = true,
+  isSelected = false,
   onPress,
   onMorePress,
+  onLongPress,
   onQuantityChange,
   onStatusChange,
   onCommentSend
@@ -46,14 +52,31 @@ export function PartCard({
 
   const [isEditing, setIsEditing] = useState(false);
   const [tempQuantity, setTempQuantity] = useState(quantity.toString());
+  const [localQuantity, setLocalQuantity] = useState(quantity);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
 
+  // Sync local quantity with prop when it changes from parent
+  React.useEffect(() => {
+    setLocalQuantity(quantity);
+  }, [quantity]);
+
+  const handleQuantityChange = (delta: number) => {
+    // Optimistic update - update local state immediately
+    const newQuantity = Math.max(0, localQuantity + delta);
+    setLocalQuantity(newQuantity);
+    // Then call parent handler
+    if (onQuantityChange) {
+      onQuantityChange(delta);
+    }
+  };
+
   const handleQuantityEdit = () => {
     const newQuantity = parseInt(tempQuantity) || 0;
+    const delta = newQuantity - localQuantity;
+    setLocalQuantity(newQuantity);
     if (onQuantityChange) {
-      const delta = newQuantity - quantity;
       onQuantityChange(delta);
     }
     setIsEditing(false);
@@ -61,7 +84,7 @@ export function PartCard({
 
   const handleQuantityPress = () => {
     if (countingMode && onQuantityChange) {
-      setTempQuantity(quantity.toString());
+      setTempQuantity(localQuantity.toString());
       setIsEditing(true);
     }
   };
@@ -93,17 +116,24 @@ export function PartCard({
 
   return (
     <TouchableOpacity
-      style={styles.card}
-      onPress={handleCardPress}
-      disabled={shouldDisablePress}
+      style={[styles.card, isSelected && styles.cardSelected]}
+      onPress={() => {
+        if (!shouldDisablePress) {
+          handleCardPress();
+          if (onPress) onPress();
+        }
+      }}
+      onLongPress={onLongPress}
+      delayLongPress={500}
+      disabled={shouldDisablePress && !onLongPress}
       activeOpacity={shouldDisablePress ? 1 : 0.7}
     >
       <View style={styles.content}>
         <View style={styles.imageContainer}>
           {part.cadDrawing ? (
-            <Image source={{ uri: part.cadDrawing }} style={styles.thumbnail} />
+            <Image key={part.cadDrawing} source={{ uri: part.cadDrawing }} style={styles.thumbnail} />
           ) : part.pictures.length > 0 ? (
-            <Image source={{ uri: part.pictures[0] }} style={styles.thumbnail} />
+            <Image key={part.pictures[0]} source={{ uri: part.pictures[0] }} style={styles.thumbnail} />
           ) : (
             <View style={styles.placeholderImage}>
               <Package color="#6B7280" size={24} />
@@ -112,45 +142,54 @@ export function PartCard({
         </View>
         
         <View style={styles.details}>
-          <Text style={styles.name}>{displayName}</Text>
-          {!countingMode && <Text style={styles.type}>{part.type}</Text>}
+          <ThemedText style={styles.name}>{displayName}</ThemedText>
+          {!countingMode && <ThemedText style={styles.type}>{part.type}</ThemedText>}
           
           {!countingMode && (
             <View style={styles.statusContainer}>
               <View style={[styles.statusBadge, { backgroundColor: statusColors[part.status] || '#6B7280' }]}>
-                <Text style={styles.statusText}>
+                <ThemedText style={styles.statusText}>
                   {part.status ? part.status.charAt(0).toUpperCase() + part.status.slice(1) : 'Unknown'}
-                </Text>
+                </ThemedText>
               </View>
             </View>
           )}
           
           {!countingMode && showQuantity && (
-            <Text style={styles.quantity}>Qty: {quantity}</Text>
+            <ThemedText style={styles.quantity}>Qty: {quantity}</ThemedText>
           )}
         </View>
 
         <View style={styles.actions}>
           {statusMode && onStatusChange ? (
             <TouchableOpacity
-              style={[styles.statusButton, { backgroundColor: statusColors[part.status] || '#6B7280' }]}
+              style={styles.statusModeContainer}
               onPress={() => setShowStatusModal(true)}
+              activeOpacity={0.7}
             >
-              <Text style={styles.statusButtonText}>
+              <View style={[styles.statusIndicator, { backgroundColor: statusColors[part.status] || '#6B7280' }]} />
+              <ThemedText style={styles.statusModeText}>
                 {part.status ? part.status.charAt(0).toUpperCase() + part.status.slice(1) : 'Set'}
-              </Text>
+              </ThemedText>
+              <ChevronRight color="#9CA3AF" size={14} />
             </TouchableOpacity>
           ) : countingMode && onQuantityChange ? (
-            <View style={styles.quantityControls}>
+            <View style={styles.countingModeContainer}>
               <TouchableOpacity
-                style={styles.quantityButtonLarge}
-                onPress={() => onQuantityChange(-1)}
+                style={[styles.countButton, styles.countButtonMinus]}
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  handleQuantityChange(-1);
+                }}
+                activeOpacity={0.7}
               >
-                <Text style={styles.quantityButtonTextLarge}>-</Text>
+                <Minus color="#EF4444" size={20} strokeWidth={2.5} />
               </TouchableOpacity>
               {isEditing ? (
                 <TextInput
-                  style={styles.quantityInput}
+                  style={styles.countInput}
                   value={tempQuantity}
                   onChangeText={setTempQuantity}
                   onBlur={handleQuantityEdit}
@@ -160,15 +199,25 @@ export function PartCard({
                   autoFocus
                 />
               ) : (
-                <TouchableOpacity onPress={handleQuantityPress}>
-                  <Text style={styles.quantityValue}>{quantity}</Text>
+                <TouchableOpacity 
+                  style={styles.countDisplay}
+                  onPress={handleQuantityPress}
+                  activeOpacity={0.7}
+                >
+                  <ThemedText style={styles.countValue}>{localQuantity}</ThemedText>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={styles.quantityButtonLarge}
-                onPress={() => onQuantityChange(1)}
+                style={[styles.countButton, styles.countButtonPlus]}
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  handleQuantityChange(1);
+                }}
+                activeOpacity={0.7}
               >
-                <Text style={styles.quantityButtonTextLarge}>+</Text>
+                <Plus color="#3B82F6" size={20} strokeWidth={2.5} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -210,7 +259,7 @@ export function PartCard({
                 setCommentText('');
               }}
             >
-              <Text style={styles.commentCancelText}>Cancel</Text>
+              <ThemedText style={styles.commentCancelText}>Cancel</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.commentSendButton, !commentText.trim() && styles.commentSendButtonDisabled]}
@@ -218,7 +267,7 @@ export function PartCard({
               disabled={!commentText.trim()}
             >
               <Send color="#FFFFFF" size={16} />
-              <Text style={styles.commentSendText}>Send</Text>
+              <ThemedText style={styles.commentSendText}>Send</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -240,22 +289,38 @@ export function PartCard({
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text style={styles.statusModalTitle}>Change Status</Text>
-            {(['measured', 'designed', 'tested', 'printed', 'installed'] as const).map((status) => (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.statusOption,
-                  part.status === status && styles.statusOptionSelected
-                ]}
-                onPress={() => handleStatusSelect(status)}
-              >
-                <View style={[styles.statusDot, { backgroundColor: statusColors[status] }]} />
-                <Text style={styles.statusOptionText}>
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.statusModalHeader}>
+              <ThemedText style={styles.statusModalTitle}>Update Status</ThemedText>
+              <ThemedText style={styles.statusModalSubtitle}>{part.name}</ThemedText>
+            </View>
+            <View style={styles.statusOptionsContainer}>
+              {(['measured', 'designed', 'tested', 'printed', 'installed'] as const).map((status, index) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.statusOption,
+                    part.status === status && styles.statusOptionSelected
+                  ]}
+                  onPress={() => handleStatusSelect(status)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.statusOptionLeft}>
+                    <View style={[styles.statusDot, { backgroundColor: statusColors[status] }]}>
+                      {part.status === status && (
+                        <Check color="#FFFFFF" size={12} strokeWidth={3} />
+                      )}
+                    </View>
+                    <ThemedText style={[
+                      styles.statusOptionText,
+                      part.status === status && styles.statusOptionTextSelected
+                    ]}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.statusProgressBar, { width: `${(index + 1) * 20}%`, backgroundColor: statusColors[status] + '30' }]} />
+                </TouchableOpacity>
+              ))}
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -341,6 +406,87 @@ const styles = StyleSheet.create({
   moreButton: {
     padding: 8,
   },
+  // Modern Counting Mode Styles
+  countingModeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 24,
+    padding: 4,
+    gap: 8,
+  },
+  countButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
+    borderWidth: 2,
+  },
+  countButtonMinus: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  countButtonPlus: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  countDisplay: {
+    minWidth: 52,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+  },
+  countValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+  },
+  countInput: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    minWidth: 48,
+    height: 40,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#6366F1',
+    paddingHorizontal: 8,
+  },
+  // Modern Status Mode Styles
+  statusModeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  statusIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusModeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    textTransform: 'capitalize',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+  },
+  // Legacy styles kept for compatibility
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -356,7 +502,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
     padding: 8,
-    position: 'relative',  // NEW: Enables relative shifts
+    position: 'relative',
     left: 8,
   },
   quantityButton: {
@@ -372,6 +518,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   quantityButtonLarge: {
     width: 36,
@@ -436,57 +584,93 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'capitalize',
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   statusModal: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    minWidth: 280,
-    maxWidth: 320,
+    borderRadius: 24,
+    padding: 0,
+    minWidth: 300,
+    maxWidth: 340,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  statusModalHeader: {
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   statusModalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 20,
-    textAlign: 'center',
+    marginBottom: 4,
+  },
+  statusModalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  statusOptionsContainer: {
+    padding: 16,
   },
   statusOption: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 10,
+    borderRadius: 14,
     marginBottom: 8,
     backgroundColor: '#F9FAFB',
+    position: 'relative',
+    overflow: 'hidden',
   },
   statusOptionSelected: {
     backgroundColor: '#EEF2FF',
     borderWidth: 2,
     borderColor: '#6366F1',
   },
+  statusOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
+  },
   statusDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statusOptionText: {
     fontSize: 16,
-    color: '#111827',
+    color: '#374151',
     fontWeight: '500',
     textTransform: 'capitalize',
+  },
+  statusOptionTextSelected: {
+    color: '#4338CA',
+    fontWeight: '600',
+  },
+  statusProgressBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 14,
   },
   normalActions: {
     flexDirection: 'row',
@@ -560,5 +744,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  cardSelected: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#9CA3AF',
+    borderWidth: 2,
+  },
+  selectedCheckmark: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
 });

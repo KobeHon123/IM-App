@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Project } from '@/types';
 import { FolderOpen, User, EllipsisVertical } from 'lucide-react-native';
+import { ThemedText } from '@/components/ThemedText';
 
 interface ProjectCardProps {
   project: Project;
@@ -23,13 +24,15 @@ export function ProjectCard({ project, onPress, onMorePress }: ProjectCardProps)
           )}
         </View>
         <View style={styles.content}>
-          <Text style={styles.title}>{project.name}</Text>
-          <Text style={styles.description} numberOfLines={2}>
-            {project.description}
-          </Text>
+          <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
+          {project.description ? (
+            <ThemedText style={styles.description} numberOfLines={2}>
+              {project.description}
+            </ThemedText>
+          ) : null}
           <View style={styles.footer}>
             <User color="#6B7280" size={16} />
-            <Text style={styles.pic}>PIC: {project.pic}</Text>
+            <ThemedText style={styles.pic}>PIC: {project.pic}</ThemedText>
           </View>
         </View>
         {onMorePress && (
@@ -86,6 +89,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 4,
+  },
+  titleNoDescription: {
+    marginBottom: 8,
   },
   description: {
     fontSize: 14,
