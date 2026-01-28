@@ -17,6 +17,8 @@ interface DesignerSelectorProps {
   value: string;
   onChangeText: (text: string) => void;
   profiles: Profile[];
+  // called when user selects a suggestion (profile or custom) from the list
+  onSelectProfile?: (name: string) => void;
   placeholder?: string;
   placeholderTextColor?: string;
   inputStyle?: any;
@@ -27,6 +29,7 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
   value,
   onChangeText,
   profiles,
+  onSelectProfile,
   placeholder = 'Enter designer name (optional)',
   placeholderTextColor = '#6B728080',
   inputStyle,
@@ -70,15 +73,23 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
           p.email.toLowerCase().includes(value.toLowerCase())
       );
       setFilteredProfiles(filtered);
-      setShowSuggestions(filtered.length > 0);
+      // Show suggestions if there are matching profiles OR if user typed custom text
+      setShowSuggestions(true);
     }
   }, [value, profiles, isSelected]);
 
   const handleSelectProfile = (profile: Profile) => {
     const displayName = profile.fullName || profile.email;
-    onChangeText(displayName);
-    setShowSuggestions(false);
-    setIsSelected(true);
+    if (typeof (onSelectProfile as any) === 'function') {
+      // parent will handle selection (e.g. add tag and clear input)
+      onSelectProfile!(displayName);
+      setShowSuggestions(false);
+    } else {
+      // fallback: update input value and mark selected
+      onChangeText(displayName);
+      setShowSuggestions(false);
+      setIsSelected(true);
+    }
   };
 
   const handleClearSelection = () => {
@@ -123,7 +134,7 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
             }
           }}
         />
-        {editable && showSuggestions && filteredProfiles.length > 0 && (
+        {editable && showSuggestions && value && value.trim() !== '' && (
           <View style={styles.suggestionsContainer}>
             <FlatList
               data={filteredProfiles}
@@ -140,6 +151,27 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
                   </View>
                 </TouchableOpacity>
               )}
+              ListFooterComponent={
+                filteredProfiles.length === 0 ? (
+                  <TouchableOpacity
+                    style={styles.customSuggestionItem}
+                    onPress={() => {
+                      if (typeof (onSelectProfile as any) === 'function') {
+                        onSelectProfile!(value);
+                        setShowSuggestions(false);
+                      } else {
+                        onChangeText(value);
+                        setShowSuggestions(false);
+                        setIsSelected(true);
+                      }
+                    }}
+                  >
+                    <ThemedText style={styles.customSuggestionText}>
+                      "{value}" (custom)
+                    </ThemedText>
+                  </TouchableOpacity>
+                ) : null
+              }
             />
           </View>
         )}
@@ -214,5 +246,18 @@ const styles = StyleSheet.create({
   suggestionEmail: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  customSuggestionItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
+  },
+  customSuggestionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+    fontStyle: 'italic',
   },
 });

@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { FolderOpen, Search, User, LayoutGrid } from 'lucide-react-native';
-import { View, TouchableOpacity, Text, StyleSheet, Animated } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEasterEgg } from '@/context/EasterEggContext';
 import { useEffect, useRef, useState } from 'react';
@@ -158,7 +158,7 @@ function TabsContent() {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, Platform.OS === 'web' && { display: 'flex', flexDirection: 'column' }]}>
       <Tabs
         screenOptions={{
           headerShown: false,

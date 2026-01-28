@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Camera, ChevronDown, ChevronRight, ChevronRightIcon, FileText, Hash, Image as ImageIcon, Plus, Tag, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
+import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
@@ -30,6 +30,7 @@ import { ThemedText } from '@/components/ThemedText';
 export default function VenueDetailScreen() {
   const { id } = useLocalSearchParams();
   const { updatePart, parts: globalParts, profiles } = useData();
+  const { impactAsync, notificationAsync } = usePlatformHaptics();
   const [venue, setVenue] = useState<any>(null);
   const [project, setProject] = useState<any>(null);
   const [projectParts, setProjectParts] = useState<Part[]>([]);
@@ -125,16 +126,16 @@ export default function VenueDetailScreen() {
   const [showFullImageModal, setShowFullImageModal] = useState(false);
   const [fullImageUri, setFullImageUri] = useState<string>('');
 
-  // Check for similar parts in real-time (search across ALL projects using globalParts)
+  // Check for similar parts in real-time (search in current project only)
   useEffect(() => {
     console.log('=== Similarity Detection ===');
     console.log('newPart.type:', newPart.type);
     console.log('newPart.dimensions:', JSON.stringify(newPart.dimensions));
-    console.log('globalParts count:', globalParts.length);
-    const similar = findSimilarPart(newPart.type, newPart.dimensions, globalParts);
+    console.log('projectParts count:', projectParts.length);
+    const similar = findSimilarPart(newPart.type, newPart.dimensions, projectParts);
     console.log('Similar part found:', similar ? `${similar.part.name} (${similar.similarity}%)` : 'None');
     setSimilarPart(similar);
-  }, [newPart.dimensions, newPart.type, globalParts]);
+  }, [newPart.dimensions, newPart.type, projectParts]);
 
   // Keep selectedPart in sync with global state changes (e.g., after image upload)
   useEffect(() => {
@@ -278,9 +279,7 @@ export default function VenueDetailScreen() {
     return projectParts.filter(part => part.parentPartId === parentPartId);
   };
   const handleQuantityChange = async (partId: string, delta: number) => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
+    await impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const currentQuantity = partQuantities[partId] || 0;
@@ -296,9 +295,7 @@ export default function VenueDetailScreen() {
     try {
       await updatePart(partId, { status: newStatus as any });
       await loadVenueData();
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
+      await notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error updating status:', error);
     }
@@ -1481,9 +1478,9 @@ export default function VenueDetailScreen() {
                     This part has {similarPart.similarity.toFixed(1)}% similarity with {similarPart.part.name}
                   </ThemedText>
                 </View>
-                {similarPart.part.projectId === project.id ? (
+                {projectParts.some(part => part.id === similarPart.part.id) ? (
                   <View>
-                    <View style={[styles.useSimilarPartButton, styles.disabledSimilarPartButton]}>
+                    <View style={[styles.useSimilarPartButton, styles.disabledSimilarPartButton]} pointerEvents="none">
                       <ThemedText style={[styles.useSimilarPartButtonText, styles.disabledSimilarPartButtonText]}>
                         Use {similarPart.part.name}
                       </ThemedText>
@@ -1496,6 +1493,7 @@ export default function VenueDetailScreen() {
                   <TouchableOpacity
                     style={styles.useSimilarPartButton}
                     onPress={handleUseSimilarPart}
+                    activeOpacity={0.7}
                   >
                     <ThemedText style={styles.useSimilarPartButtonText}>
                       Use {similarPart.part.name}

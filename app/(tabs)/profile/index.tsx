@@ -15,8 +15,8 @@ import {
   Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Edit2, LogOut, Camera } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { User, Edit2, LogOut, Camera, Phone } from 'lucide-react-native';
+import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -28,6 +28,7 @@ import { ThemedText } from '@/components/ThemedText';
 const ProfileScreen = () => {
   const { profile, signOut, refreshProfile, user } = useAuth();
   const { showOffWorkCounter, setShowOffWorkCounter, handleBioTap, timeLeft, isOffTime } = useEasterEgg();
+  const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [userName, setUserName] = useState('');
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -63,8 +64,8 @@ const ProfileScreen = () => {
       console.log('Profile loaded:', profile);
       setUserName(profile.full_name || 'User');
       setUserPhoto(profile.avatar_url);
-      setPhone('');
-      setBio('');
+      setPhone(profile.phone_number || '');
+      setBio(profile.bio || '');
       setEmail(profile.email || '');
     } else {
       console.log('No profile loaded');
@@ -217,22 +218,22 @@ const ProfileScreen = () => {
   };
 
   const handleSelectPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       setErrorMessage('We need access to your gallery to select a photo.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: false,
       quality: 0.7,
       aspect: [1, 1],
       allowsEditing: true,
     });
 
-    if (!result.canceled && profile) {
-      const uri = result.assets[0].uri;
+    if (result && profile) {
+      const uri = result.uri;
       setIsUploadingPhoto(true);
 
       try {
@@ -423,7 +424,12 @@ const ProfileScreen = () => {
   {email ? <ThemedText style={styles.userEmail}>{email}</ThemedText> : null}
   
   {/* Added display for Phone and Bio */}
-  {phone ? <ThemedText style={styles.infoText}>📞 {phone}</ThemedText> : null}
+  {phone ? (
+    <View style={styles.infoRow}>
+      <Phone color="#4B5563" size={16} />
+      <ThemedText style={styles.infoText}>{phone}</ThemedText>
+    </View>
+  ) : null}
   {bio ? <ThemedText style={styles.bioText}>"{bio}"</ThemedText> : null}
 
   {/* New Row for Edit and Preview Buttons */}
@@ -699,7 +705,7 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   editButton: {
     flexDirection: 'row',
@@ -977,17 +983,23 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 14,
     color: '#4B5563',
-    marginTop: 4,
-    marginBottom: 4,
+    marginTop: 2,
+    marginBottom: 2,
   },
   bioText: {
     fontSize: 14,
     fontStyle: 'italic',
     color: '#6B7280',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 6,
     paddingHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
   },
   buttonRow: {
     flexDirection: 'row',

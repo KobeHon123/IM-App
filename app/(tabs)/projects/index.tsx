@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, X, Camera, } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { Plus, X, Camera, ArrowUpDown } from 'lucide-react-native';
+import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
 import { SearchBar } from '@/components/SearchBar';
@@ -23,11 +23,15 @@ import { ThemedText } from '@/components/ThemedText';
 
 export default function ProjectsScreen() {
   const { projects, createProject, updateProject, deleteProject, profiles } = useData();
+  const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortAsc, setSortAsc] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showProjectActionModal, setShowProjectActionModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [newProject, setNewProject] = useState({
     name: '',
     description: '',
@@ -40,68 +44,90 @@ export default function ProjectsScreen() {
     pic: '',
     thumbnail: '',
   });
+  const [newProjectPics, setNewProjectPics] = useState<string[]>([]);
+  const [editingProjectPics, setEditingProjectPics] = useState<string[]>([]);
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.pic.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = [...projects]
+    .filter(project =>
+      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.pic.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortAsc) {
+        // Alphabetical (A → Z) by full name
+        return a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase());
+      }
+
+      // When toggle is off: sort by created_at, newest first
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
 
   // Check if project name already exists
   const isProjectNameDuplicate = newProject.name.trim() !== '' && 
     projects.some(p => p.name.toLowerCase() === newProject.name.trim().toLowerCase());
 
   const handleCreateProject = async () => {
-    if (!newProject.name.trim() || !newProject.pic.trim()) {
-      Alert.alert('Error', 'Please fill in project name and Measurer');
+    if (!newProject.name.trim() || newProjectPics.length === 0) {
+      Alert.alert('Error', 'Please fill in project name and at least one PIC');
       return;
     }
 
-    console.log('Creating project:', newProject);
-    await createProject(newProject);
+    const projectToCreate = {
+      ...newProject,
+      pic: newProjectPics.join(', '),
+    };
+    console.log('Creating project:', projectToCreate);
+    await createProject(projectToCreate);
     setNewProject({ name: '', description: '', pic: '', thumbnail: '' });
+    setNewProjectPics([]);
     setShowCreateModal(false);
   };
 
   const handleEditProject = async () => {
-    if (!selectedProject || !editingProject.name.trim() || !editingProject.pic.trim()) {
-      Alert.alert('Error', 'Please fill in project name and Measurer');
+    if (!selectedProject || !editingProject.name.trim() || editingProjectPics.length === 0) {
+      Alert.alert('Error', 'Please fill in project name and at least one PIC');
       return;
     }
 
-    console.log('Editing project ID:', selectedProject.id, editingProject);
-    await updateProject(selectedProject.id, editingProject);
+    const projectToUpdate = {
+      ...editingProject,
+      pic: editingProjectPics.join(', '),
+    };
+    console.log('Editing project ID:', selectedProject.id, projectToUpdate);
+    await updateProject(selectedProject.id, projectToUpdate);
     setShowEditModal(false);
     setSelectedProject(null);
   };
 
   const handleDeleteProject = () => {
+    // Open typed-confirm modal instead of simple alert
     if (!selectedProject) {
       console.log('No project selected for deletion');
       return;
     }
+    setDeleteConfirmText('');
+    setShowDeleteConfirmModal(true);
+  };
 
-    console.log('Showing delete project alert for ID:', selectedProject.id);
-    Alert.alert(
-      'Delete Project',
-      `Are you sure you want to delete "${selectedProject.name}"? This will also delete all venues and parts in this project.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('Deleting project ID:', selectedProject.id);
-            const success = await deleteProject(selectedProject.id);
-            setShowProjectActionModal(false);
-            setSelectedProject(null);
-            if (success) {
-              console.log('Project deleted successfully');
-            }
-          }
-        }
-      ]
-    );
+  const confirmDeleteProject = async () => {
+    if (!selectedProject) return;
+    if (deleteConfirmText.trim() !== selectedProject.name.trim()) {
+      Alert.alert('Name mismatch', 'The name you typed does not match the project name.');
+      return;
+    }
+
+    console.log('Deleting project ID:', selectedProject.id);
+    const success = await deleteProject(selectedProject.id);
+    setShowDeleteConfirmModal(false);
+    setShowProjectActionModal(false);
+    setSelectedProject(null);
+    setDeleteConfirmText('');
+    if (success) {
+      console.log('Project deleted successfully');
+    }
   };
 
   const handleProjectAction = (action: string) => {
@@ -116,9 +142,10 @@ export default function ProjectsScreen() {
         setEditingProject({
           name: selectedProject.name,
           description: selectedProject.description,
-          pic: selectedProject.pic,
+          pic: '',
           thumbnail: selectedProject.thumbnail || '',
         });
+        setEditingProjectPics(selectedProject.pic.split(', ').filter(p => p.trim()));
         setShowEditModal(true);
         break;
       case 'delete':
@@ -129,20 +156,20 @@ export default function ProjectsScreen() {
   };
 
   const handleSelectThumbnail = async (isEdit = false) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select a thumbnail.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: false,
       quality: 1,
     });
 
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
+    if (result) {
+      const uri = result.uri;
       console.log('Selected thumbnail:', uri);
       if (isEdit) {
         setEditingProject(prev => ({ ...prev, thumbnail: uri }));
@@ -152,17 +179,35 @@ export default function ProjectsScreen() {
     }
   };
 
+  const handleRemovePicFromCreate = (pic: string) => {
+    setNewProjectPics(prev => prev.filter(p => p !== pic));
+  };
+
+  const handleRemovePicFromEdit = (pic: string) => {
+    setEditingProjectPics(prev => prev.filter(p => p !== pic));
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <ThemedText style={styles.title}>Projects</ThemedText>
       </View>
 
-      <SearchBar
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        placeholder="Search projects..."
-      />
+      <View style={styles.searchRow}>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search projects..."
+          containerStyle={{ flex: 1, marginHorizontal: 0 }}
+        />
+        <TouchableOpacity
+          style={styles.sortButton}
+          onPress={() => setSortAsc(prev => !prev)}
+          accessibilityLabel="Toggle sort order"
+        >
+          <ArrowUpDown color={sortAsc ? '#2563EB' : '#374151'} size={20} />
+        </TouchableOpacity>
+      </View>
 
       <FlatList
         data={filteredProjects}
@@ -226,15 +271,37 @@ export default function ProjectsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Measurer *</ThemedText>
+              <ThemedText style={styles.inputLabel}>PIC (up to 2) *</ThemedText>
               <DesignerSelector
                 value={newProject.pic}
-                onChangeText={(text) => setNewProject(prev => ({ ...prev, pic: text }))}
+                onChangeText={(text) => {
+                  // only update the input while typing
+                  setNewProject(prev => ({ ...prev, pic: text }));
+                }}
+                onSelectProfile={(name) => {
+                  if (!newProjectPics.includes(name) && newProjectPics.length < 2) {
+                    setNewProjectPics(prev => [...prev, name]);
+                    setNewProject(prev => ({ ...prev, pic: '' }));
+                  }
+                }}
                 profiles={profiles}
-                placeholder="Enter Measurer name"
+                placeholder="Select PIC"
                 placeholderTextColor="#6B728080"
-                inputStyle={styles.input}
+                inputStyle={[styles.input, newProjectPics.length >= 2 && styles.disabledInput]}
+                editable={newProjectPics.length < 2}
               />
+              {newProjectPics.length > 0 && (
+                <View style={styles.selectedPicsContainer}>
+                  {newProjectPics.map((pic) => (
+                    <View key={pic} style={styles.picTag}>
+                      <ThemedText style={styles.picTagText}>{pic}</ThemedText>
+                      <TouchableOpacity onPress={() => handleRemovePicFromCreate(pic)}>
+                        <ThemedText style={styles.picRemoveText}>×</ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -312,15 +379,37 @@ export default function ProjectsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Measurer *</ThemedText>
+              <ThemedText style={styles.inputLabel}>PIC (up to 2) *</ThemedText>
               <DesignerSelector
                 value={editingProject.pic}
-                onChangeText={(text) => setEditingProject(prev => ({ ...prev, pic: text }))}
+                onChangeText={(text) => {
+                  // only update the input while typing
+                  setEditingProject(prev => ({ ...prev, pic: text }));
+                }}
+                onSelectProfile={(name) => {
+                  if (!editingProjectPics.includes(name) && editingProjectPics.length < 2) {
+                    setEditingProjectPics(prev => [...prev, name]);
+                    setEditingProject(prev => ({ ...prev, pic: '' }));
+                  }
+                }}
                 profiles={profiles}
-                placeholder="Enter Measurer name"
+                placeholder="Select PIC"
                 placeholderTextColor="#6B728080"
-                inputStyle={styles.input}
+                inputStyle={[styles.input, editingProjectPics.length >= 2 && styles.disabledInput]}
+                editable={editingProjectPics.length < 2}
               />
+              {editingProjectPics.length > 0 && (
+                <View style={styles.selectedPicsContainer}>
+                  {editingProjectPics.map((pic) => (
+                    <View key={pic} style={styles.picTag}>
+                      <ThemedText style={styles.picTagText}>{pic}</ThemedText>
+                      <TouchableOpacity onPress={() => handleRemovePicFromEdit(pic)}>
+                        <ThemedText style={styles.picRemoveText}>×</ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -397,6 +486,51 @@ export default function ProjectsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showDeleteConfirmModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>Confirm Delete</ThemedText>
+            <TouchableOpacity 
+              onPress={() => {
+                setShowDeleteConfirmModal(false);
+                setSelectedProject(null);
+                setDeleteConfirmText('');
+              }}
+            >
+              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalContent}>
+            <ThemedText style={styles.inputLabel}>Type the project name to confirm deletion:</ThemedText>
+            <ThemedText style={{ marginBottom: 12, color: '#111827', fontWeight: '700' }}>{selectedProject?.name}</ThemedText>
+            <TextInput
+              style={styles.input}
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder="Type project name"
+              placeholderTextColor="#6B728080"
+            />
+
+            <TouchableOpacity
+              style={[
+                deleteConfirmText.trim() !== (selectedProject?.name || '').trim() ? styles.disabledPrimaryButton : styles.deleteConfirmButton,
+              ]}
+              onPress={confirmDeleteProject}
+              disabled={deleteConfirmText.trim() !== (selectedProject?.name || '').trim()}
+            >
+              <ThemedText style={[
+                deleteConfirmText.trim() !== (selectedProject?.name || '').trim() ? styles.disabledPrimaryButtonText : styles.deleteConfirmButtonText,
+              ]}>Delete Project</ThemedText>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -422,7 +556,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   listContent: {
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   modalContainer: {
     flex: 1,
@@ -552,6 +686,35 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: '#EF4444',
   },
+  disabledInput: {
+    backgroundColor: '#F3F4F6',
+    color: '#9CA3AF',
+  },
+  selectedPicsContainer: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  picTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DBEAFE',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  picTagText: {
+    fontSize: 14,
+    color: '#1E40AF',
+    fontWeight: '500',
+  },
+  picRemoveText: {
+    fontSize: 18,
+    color: '#1E40AF',
+    fontWeight: 'bold',
+  },
   floatingAddButton: {
     position: 'absolute',
     bottom: 32,
@@ -567,5 +730,42 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginVertical: 4,
+  },
+  sortButton: {
+    marginLeft: 8,
+    padding: 8,
+    borderRadius: 8,
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  deleteConfirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disabledPrimaryButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  disabledPrimaryButtonText: {
+    color: '#9CA3AF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Plus, MapPin, Camera, EllipsisVertical} from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { getVenuesByProject, createVenue, updateVenue, deleteVenue } from '@/lib/supabaseHelpers';
 import { Venue } from '@/types';
 import { useData } from '@/hooks/useData';
@@ -23,6 +23,7 @@ import { ThemedText } from '@/components/ThemedText';
 
 const VenueTab = ({ projectId }: { projectId: string }) => {
   const { profiles } = useData();
+  const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [venues, setVenues] = React.useState<Venue[]>([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -158,18 +159,18 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
   };
 
   const handleSelectThumbnail = async (isEdit = false) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select a thumbnail.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: false,
       quality: 1,
     });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
+    if (result) {
+      const uri = result.uri;
       console.log('Selected thumbnail:', uri);
       if (isEdit) {
         setEditingVenue((prev) => ({ ...prev, thumbnail: uri }));

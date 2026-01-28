@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info, Download } from 'lucide-react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -18,6 +18,7 @@ interface TimesheetEntry {
   work_date: string;
   period: Period;
   location: string | null;
+  site_name?: string | null;
   custom_start_time: string | null;
   custom_end_time: string | null;
   duty?: string | null;
@@ -247,6 +248,10 @@ export default function PartTimeTimesheet() {
       duty: inputDuty.trim() || null,
     };
 
+    if (selectedVenue === 'Site') {
+      timesheetData.site_name = siteName.trim();
+    }
+
     if (selectedPeriod === 'other') {
       timesheetData.custom_start_time = customStartTime.toTimeString().split(' ')[0];
       timesheetData.custom_end_time = customEndTime.toTimeString().split(' ')[0];
@@ -290,7 +295,19 @@ export default function PartTimeTimesheet() {
     setEditingEntry(entry);
     setSelectedMember(entry.worker_name);
     setSelectedPeriod(entry.period);
-    setSelectedVenue(entry.location || '');
+    
+    // Capitalize the location to match the venue button labels
+    const location = entry.location || '';
+    const capitalizedLocation = location.charAt(0).toUpperCase() + location.slice(1);
+    setSelectedVenue(capitalizedLocation);
+    
+    // Load site name if it's a site location
+    if (entry.location === 'site' && entry.site_name) {
+      setSiteName(entry.site_name);
+    } else {
+      setSiteName('');
+    }
+    
     setInputDuty(entry.duty || '');
 
     const dateObj = new Date(entry.work_date + 'T00:00:00');
@@ -327,6 +344,12 @@ export default function PartTimeTimesheet() {
       location: selectedVenue.toLowerCase(),
       duty: inputDuty.trim() || null,
     };
+
+    if (selectedVenue === 'Site') {
+      timesheetData.site_name = siteName.trim();
+    } else {
+      timesheetData.site_name = null;
+    }
 
     if (selectedPeriod === 'other') {
       timesheetData.custom_start_time = customStartTime.toTimeString().split(' ')[0];
@@ -458,6 +481,58 @@ export default function PartTimeTimesheet() {
   const calculateSalary = () => {
     const hours = calculateWorkerHours(selectedWorkerForSalary, salaryCalculationType);
     return hours * 70; // HKD 70 per hour
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      const entries = timesheets
+        .filter(entry => entry.worker_name === selectedWorkerForSalary)
+        .filter(entry => salaryCalculationType === 'total' || entry.confirmed);
+      
+      const totalHours = calculateWorkerHours(selectedWorkerForSalary, salaryCalculationType);
+      const totalSalary = calculateSalary();
+      
+      // Create a formatted text representation of the data
+      let content = '';
+      content += `${selectedWorkerForSalary} - Salary Breakdown\n`;
+      content += `Period: ${currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}\n`;
+      content += `Generated: ${new Date().toLocaleDateString('en-US')}\n\n`;
+      content += '═══════════════════════════════════════════\n';
+      content += 'Date            Hours    Amount      Duty\n';
+      content += '───────────────────────────────────────────\n';
+      
+      entries.forEach(entry => {
+        const date = new Date(entry.work_date).toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        });
+        const hours = calculateWorkedHours(entry).toFixed(1);
+        const amount = (calculateWorkedHours(entry) * 70).toFixed(2);
+        const duty = entry.duty || '-';
+        const dateStr = date.padEnd(16);
+        const hoursStr = hours.padEnd(9);
+        const amountStr = `HKD $${amount}`.padEnd(12);
+        content += `${dateStr}${hoursStr}${amountStr}${duty}\n`;
+      });
+      
+      content += '═══════════════════════════════════════════\n';
+      content += `Total Hours:      ${totalHours.toFixed(1)} hrs\n`;
+      content += `Total Salary:     HKD $${totalSalary.toFixed(2)}\n`;
+      content += '═══════════════════════════════════════════\n';
+      
+      // Use Share API to share the content
+      await Share.share({
+        message: content,
+        title: `${selectedWorkerForSalary} Salary Breakdown - ${currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
+        url: undefined, // No URL needed for text sharing
+      });
+    } catch (error: any) {
+      if (error.message !== 'Share cancelled') {
+        console.error('Share error:', error);
+        Alert.alert('Error', 'Failed to share salary breakdown');
+      }
+    }
   };
 
   if (loading) {
@@ -640,25 +715,24 @@ export default function PartTimeTimesheet() {
                       <View style={styles.detailCardContent}>
                         <View style={styles.detailRow}>
                           <ThemedText style={styles.detailLabel}>Period:</ThemedText>
-                          <ThemedText style={styles.detailValue}>{getPeriodLabel(entry.period, entry)}</ThemedText>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <ThemedText style={styles.detailLabel}>Site:</ThemedText>
                           <ThemedText style={styles.detailValue}>
-                            {entry.location === 'site' 
-                              ? (siteName || 'Site')
-                              : formatLocation(entry.location)
+                            {entry.period === 'other' && entry.custom_start_time && entry.custom_end_time
+                              ? `${entry.custom_start_time.substring(0, 5)} - ${entry.custom_end_time.substring(0, 5)}`
+                              : getPeriodLabel(entry.period, entry)
                             }
                           </ThemedText>
                         </View>
-                        {entry.period === 'other' && entry.custom_start_time && entry.custom_end_time && (
+                        {entry.location === 'site' && entry.site_name ? (
                           <View style={styles.detailRow}>
-                            <ThemedText style={styles.detailLabel}>Time:</ThemedText>
-                            <ThemedText style={styles.detailValue}>
-                              {entry.custom_start_time.substring(0, 5)} - {entry.custom_end_time.substring(0, 5)}
-                            </ThemedText>
+                            <ThemedText style={styles.detailLabel}>Site:</ThemedText>
+                            <ThemedText style={styles.detailValue}>{entry.site_name}</ThemedText>
                           </View>
-                        )}
+                        ) : entry.location !== 'site' ? (
+                          <View style={styles.detailRow}>
+                            <ThemedText style={styles.detailLabel}>Site:</ThemedText>
+                            <ThemedText style={styles.detailValue}>{formatLocation(entry.location)}</ThemedText>
+                          </View>
+                        ) : null}
                         {entry.duty && (
                           <View style={styles.detailRow}>
                             <ThemedText style={styles.detailLabel}>Duty:</ThemedText>
@@ -865,7 +939,15 @@ export default function PartTimeTimesheet() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>Add Work Time</ThemedText>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
+            <TouchableOpacity onPress={() => {
+              setShowAddModal(false);
+              setSelectedMember('');
+              setSelectedDate(selectedCalendarDate || new Date());
+              setSelectedPeriod('full');
+              setSelectedVenue('');
+              setInputDuty('');
+              setSiteName('');
+            }}>
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
@@ -1095,6 +1177,12 @@ export default function PartTimeTimesheet() {
             <TouchableOpacity onPress={() => {
               setShowEditModal(false);
               setEditingEntry(null);
+              setSelectedMember('');
+              setSelectedDate(new Date());
+              setSelectedPeriod('full');
+              setSelectedVenue('');
+              setInputDuty('');
+              setSiteName('');
             }}>
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
@@ -1304,9 +1392,14 @@ export default function PartTimeTimesheet() {
             <ThemedText style={styles.salaryDetailTitle}>
               {selectedWorkerForSalary} - Salary Breakdown
             </ThemedText>
-            <TouchableOpacity onPress={() => toggleSalaryDetail(false)}>
-              <X size={24} color="#6B7280" />
-            </TouchableOpacity>
+            <View style={styles.salaryDetailHeaderActions}>
+              <TouchableOpacity onPress={handleDownloadPDF} style={styles.downloadButton}>
+                <Download size={20} color="#2563EB" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => toggleSalaryDetail(false)}>
+                <X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView style={styles.salaryDetailContent} showsVerticalScrollIndicator={false}>
@@ -1314,33 +1407,45 @@ export default function PartTimeTimesheet() {
               .filter(entry => entry.worker_name === selectedWorkerForSalary)
               .filter(entry => salaryCalculationType === 'total' || entry.confirmed)
               .map((entry, index) => (
-                <View key={entry.id} style={styles.salaryDetailRow}>
-                  <View style={styles.salaryDetailDateSection}>
-                    <ThemedText style={styles.salaryDetailDate}>
-                      {new Date(entry.work_date).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </ThemedText>
+                <View key={entry.id} style={styles.salaryDetailEntryContainer}>
+                  <View style={styles.salaryDetailRow}>
+                    <View style={styles.salaryDetailDateSection}>
+                      <ThemedText style={styles.salaryDetailDate}>
+                        {new Date(entry.work_date).toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.salaryDetailHourSection}>
+                      <ThemedText style={styles.salaryDetailHours}>
+                        {calculateWorkedHours(entry).toFixed(1)} hrs
+                      </ThemedText>
+                    </View>
+                    <View style={styles.salaryDetailAmountSection}>
+                      <ThemedText style={styles.salaryDetailAmount}>
+                        HKD ${(calculateWorkedHours(entry) * 70).toFixed(2)}
+                      </ThemedText>
+                    </View>
                   </View>
-                  <View style={styles.salaryDetailHourSection}>
-                    <ThemedText style={styles.salaryDetailHours}>
-                      {calculateWorkedHours(entry).toFixed(1)} hrs
+                  {entry.duty && (
+                    <ThemedText style={styles.salaryDetailDuty}>
+                      • {entry.duty}
                     </ThemedText>
-                  </View>
-                  <View style={styles.salaryDetailAmountSection}>
-                    <ThemedText style={styles.salaryDetailAmount}>
-                      HKD ${(calculateWorkedHours(entry) * 70).toFixed(2)}
-                    </ThemedText>
-                  </View>
+                  )}
                 </View>
               ))}
 
             <View style={styles.salaryDetailSeparator} />
 
             <View style={styles.salaryDetailTotal}>
-              <ThemedText style={styles.salaryDetailTotalLabel}>Total Salary:</ThemedText>
+              <View>
+                <ThemedText style={styles.salaryDetailTotalLabel}>Total Salary:</ThemedText>
+                <ThemedText style={styles.salaryDetailTotalHours}>
+                  {calculateWorkerHours(selectedWorkerForSalary, salaryCalculationType).toFixed(1)} hrs
+                </ThemedText>
+              </View>
               <ThemedText style={styles.salaryDetailTotalAmount}>
                 HKD ${calculateSalary().toFixed(2)}
               </ThemedText>
@@ -2109,17 +2214,19 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  salaryDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+  salaryDetailEntryContainer: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  salaryDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   salaryDetailDateSection: {
     flex: 1,
@@ -2147,6 +2254,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#10B981',
   },
+  salaryDetailDuty: {
+    fontSize: 12,
+    color: '#6B7280',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    marginTop: 8,
+  },
   salaryDetailSeparator: {
     height: 2,
     backgroundColor: '#E5E7EB',
@@ -2168,9 +2283,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
   },
+  salaryDetailTotalHours: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
   salaryDetailTotalAmount: {
     fontSize: 18,
     fontWeight: '700',
     color: '#10B981',
+  },
+  salaryDetailHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  downloadButton: {
+    padding: 8,
   },
 });

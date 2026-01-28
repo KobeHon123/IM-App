@@ -256,6 +256,22 @@ export const createPart = async (part: Omit<Part, 'id' | 'createdAt' | 'comments
     let name: string;
     if (part.existingPartName) {
         name = part.existingPartName;
+        
+        // Check if a part with this name already exists in the same project
+        const { data: existingParts, error: checkError } = await supabase
+            .from('parts')
+            .select('id')
+            .eq('project_id', part.projectId)
+            .eq('name', name)
+            .limit(1);
+        
+        if (checkError) {
+            throw new Error('Failed to check for duplicate part names');
+        }
+        
+        if (existingParts && existingParts.length > 0) {
+            throw new Error(`A part named "${name}" already exists in this project. Please choose a different name or use the existing part instead.`);
+        }
     } else {
         const nextNumber = await getNextPartNumber(part.type);
         name = generatePartName(part.type, nextNumber);

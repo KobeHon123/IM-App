@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Modal, Animated, Platform } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { Part, Project } from '@/types';
 import { EllipsisVertical, Package, MessageCircle, Send, Check, Minus, Plus, ChevronRight } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
@@ -42,6 +42,7 @@ export function PartCard({
   onStatusChange,
   onCommentSend
 }: PartCardProps) {
+  const { impactAsync, notificationAsync } = usePlatformHaptics();
   const statusColors = {
     measured: '#EF4444',
     designed: '#F59E0B',
@@ -178,9 +179,7 @@ export function PartCard({
               <TouchableOpacity
                 style={[styles.countButton, styles.countButtonMinus]}
                 onPress={() => {
-                  if (Platform.OS !== 'web') {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }
+                  impactAsync();
                   handleQuantityChange(-1);
                 }}
                 activeOpacity={0.7}
@@ -210,9 +209,7 @@ export function PartCard({
               <TouchableOpacity
                 style={[styles.countButton, styles.countButtonPlus]}
                 onPress={() => {
-                  if (Platform.OS !== 'web') {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }
+                  impactAsync();
                   handleQuantityChange(1);
                 }}
                 activeOpacity={0.7}

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, X } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { DesignerSelector } from '@/components/DesignerSelector';
 import { Part, PartType, Profile } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
@@ -44,6 +44,7 @@ export function EditPartModal({
   onSave,
   onEditingPartChange,
 }: EditPartModalProps) {
+  const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const handleEditDimensionChange = useCallback((fieldName: string, text: string) => {
     // Allow only numbers and one decimal point
     const validText = text.replace(/[^0-9.]/g, '');
@@ -59,37 +60,36 @@ export function EditPartModal({
   }, [editingPart.dimensions, onEditingPartChange]);
 
   const handleSelectCADDrawing = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select CAD drawing.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: false,
       quality: 1,
     });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
+    if (result) {
+      const uri = result.uri;
       console.log('Selected CAD drawing:', uri);
       onEditingPartChange({ cadDrawing: uri });
     }
   };
 
   const handleSelectPictures = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select pictures.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: true,
-      selectionLimit: 6,
       quality: 1,
     });
-    if (!result.canceled) {
-      const uris = result.assets.map(asset => asset.uri);
+    if (result) {
+      const uris = Array.isArray(result) ? result.map(r => r.uri) : [result.uri];
       console.log('Selected pictures:', uris);
       onEditingPartChange({
         pictures: [...(editingPart.pictures || []), ...uris].slice(0, 6)

@@ -4,7 +4,7 @@ import { DesignerSelector } from '@/components/DesignerSelector';
 import { EditPartModal } from '@/components/EditPartModal';
 import { PartDetailModal } from '@/components/PartDetailModal';
 import { Part, PartType, Comment } from '@/types';
-import * as ImagePicker from 'expo-image-picker';
+import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { Camera, ChevronDown, ChevronRight, X, Check } from 'lucide-react-native';
 import React, { useState, useCallback } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -45,6 +45,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     profiles,
     parts: globalParts,
   } = useData();
+  const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
 
   const [activeStatus, setActiveStatus] = useState<
     'measured' | 'designed' | 'tested' | 'printed' | 'installed'
@@ -295,21 +296,20 @@ const PartTab = ({ projectId }: { projectId: string }) => {
   };
 
   const handleSelectPictures = async (isEdit = false) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select pictures.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: true,
-      selectionLimit: 6,
       quality: 1,
     });
 
-    if (!result.canceled) {
-      const uris = result.assets.map(asset => asset.uri);
+    if (result) {
+      const uris = Array.isArray(result) ? result.map(r => r.uri) : [result.uri];
       console.log('Selected pictures:', uris);
       if (isEdit) {
         setEditingPart((prev: any) => ({ ...prev, pictures: [...(prev.pictures || []), ...uris].slice(0, 6) }));
@@ -328,18 +328,18 @@ const PartTab = ({ projectId }: { projectId: string }) => {
   };
 
   const handleSelectCADDrawing = async (isEdit = false) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select CAD drawing.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: false,
       quality: 1,
     });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
+    if (result) {
+      const uri = result.uri;
       console.log('Selected CAD drawing:', uri);
       if (isEdit) {
         setEditingPart(prev => ({ ...prev, cadDrawing: uri }));
@@ -1107,9 +1107,9 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                     This part has {similarPart.similarity.toFixed(1)}% similarity with {similarPart.part.name}
                   </ThemedText>
                 </View>
-                {similarPart.part.projectId === projectId ? (
+                {projectParts.some(part => part.id === similarPart.part.id) ? (
                   <View>
-                    <View style={[styles.useSimilarPartButton, styles.disabledSimilarPartButton]}>
+                    <View style={[styles.useSimilarPartButton, styles.disabledSimilarPartButton]} pointerEvents="none">
                       <ThemedText style={[styles.useSimilarPartButtonText, styles.disabledSimilarPartButtonText]}>
                         Use {similarPart.part.name}
                       </ThemedText>
@@ -1122,6 +1122,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                   <TouchableOpacity
                     style={styles.useSimilarPartButton}
                     onPress={handleUseSimilarPart}
+                    activeOpacity={0.7}
                   >
                     <ThemedText style={styles.useSimilarPartButtonText}>Use {similarPart.part.name}</ThemedText>
                   </TouchableOpacity>
