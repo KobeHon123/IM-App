@@ -722,17 +722,15 @@ export default function PartTimeTimesheet() {
                             }
                           </ThemedText>
                         </View>
-                        {entry.location === 'site' && entry.site_name ? (
-                          <View style={styles.detailRow}>
-                            <ThemedText style={styles.detailLabel}>Site:</ThemedText>
-                            <ThemedText style={styles.detailValue}>{entry.site_name}</ThemedText>
-                          </View>
-                        ) : entry.location !== 'site' ? (
-                          <View style={styles.detailRow}>
-                            <ThemedText style={styles.detailLabel}>Site:</ThemedText>
-                            <ThemedText style={styles.detailValue}>{formatLocation(entry.location)}</ThemedText>
-                          </View>
-                        ) : null}
+                        <View style={styles.detailRow}>
+                          <ThemedText style={styles.detailLabel}>Site:</ThemedText>
+                          <ThemedText style={styles.detailValue}>
+                            {entry.location === 'site' 
+                              ? (entry.site_name || 'Site')
+                              : formatLocation(entry.location)
+                            }
+                          </ThemedText>
+                        </View>
                         {entry.duty && (
                           <View style={styles.detailRow}>
                             <ThemedText style={styles.detailLabel}>Duty:</ThemedText>

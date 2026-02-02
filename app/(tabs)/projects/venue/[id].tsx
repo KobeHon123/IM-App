@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Camera, ChevronDown, ChevronRight, ChevronRightIcon, FileText, Hash, Image as ImageIcon, Plus, Tag, X } from 'lucide-react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers } from '@/lib/supabaseHelpers';
@@ -193,11 +194,12 @@ export default function VenueDetailScreen() {
 
   const loadNextPartNumber = async () => {
     try {
-      const nextNum = await getCurrentPartNumber(newPart.type);
-      setNextPartNumber(nextNum + 1);
-      // Also load used part numbers for the picker
+      // Load used part numbers for the picker
       const usedNumbers = await getUsedPartNumbers(newPart.type);
       setUsedPartNumbers(usedNumbers);
+      // Calculate next part number as the largest used number + 1
+      const maxUsedNumber = usedNumbers.length > 0 ? Math.max(...usedNumbers) : 0;
+      setNextPartNumber(maxUsedNumber + 1);
     } catch (error) {
       console.error('Error loading next part number:', error);
       setNextPartNumber(0);
@@ -391,6 +393,24 @@ export default function VenueDetailScreen() {
       }
     }
   };
+  const getPartNumberPrefix = (type: PartType, dimensions?: Record<string, any>): string => {
+    if (type === 'Gadget' && dimensions?.gadgetType === 'Toilet Cap Lifter') {
+      return 'TL';
+    }
+    if (type === 'Push Pad') {
+      return 'P';
+    }
+    return {'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[type];
+  };
+
+  const isToiletCapLifter = (type: PartType, dimensions?: Record<string, any>): boolean => {
+    return type === 'Gadget' && dimensions?.gadgetType === 'Toilet Cap Lifter';
+  };
+
+  const isToiletCapLifterExists = (): boolean => {
+    return isToiletCapLifter(newPart.type, newPart.dimensions) && projectParts.some(part => part.name === 'TL');
+  };
+
   const handleCreatePart = async () => {
     if (!newPart.description.trim()) {
       Alert.alert('Error', 'Please fill in the description');
@@ -407,8 +427,20 @@ export default function VenueDetailScreen() {
     
     // Generate manual part name if user selected a number
     let manualPartName: string | undefined;
-    if (manualPartNumber && !usingSimilarPart) {
-      const prefix = {'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type];
+    if (isToiletCapLifter(newPart.type, newPart.dimensions)) {
+      // For Toilet Cap Lifter, always use "TL" without a number
+      manualPartName = 'TL';
+    } else if (newPart.type === 'Push Pad') {
+      // For Push Pad, use the selected option directly
+      if (manualPartNumber === 1) {
+        manualPartName = 'P1';
+      } else if (manualPartNumber === 2) {
+        manualPartName = 'P2';
+      } else if (manualPartNumber === 3) {
+        manualPartName = 'P3';
+      }
+    } else if (manualPartNumber && !usingSimilarPart) {
+      const prefix = getPartNumberPrefix(newPart.type, newPart.dimensions);
       manualPartName = `${prefix}${manualPartNumber}`;
     }
     
@@ -575,13 +607,13 @@ export default function VenueDetailScreen() {
       case 'U shape':
         return ['length', 'radius', 'depth', 'oFillet', 'iFillet'];
       case 'Straight':
-        return ['length', 'radius'];
+        return ['length'];
       case 'Knob':
-        return ['frontRadius', 'middleRadius', 'backRadius', 'depth', 'middleToBackDepth'];
+        return ['middleRadius', 'depth', 'middleToBackDepth'];
       case 'Button':
         return ['thickness'];
       case 'Push Pad':
-        return ['length', 'width', 'radius'];
+        return [];
       default:
         return [];
     }
@@ -676,7 +708,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Radius</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['radius'] || ''}
@@ -694,7 +726,7 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Front Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Front Radius</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['frontRadius'] || ''}
@@ -707,7 +739,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Middle Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Middle/Largest Radius *</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['middleRadius'] || ''}
@@ -720,7 +752,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Back Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Back Radius</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['backRadius'] || ''}
@@ -859,49 +891,7 @@ export default function VenueDetailScreen() {
           </>
         );
       case 'Push Pad':
-        return (
-          <>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
-              <TextInput
-                style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['length'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('length', text)}
-                placeholder="mm"
-                placeholderTextColor="#6B728080"
-                keyboardType="decimal-pad"
-                editable={!usingSimilarPart}
-              />
-              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
-            </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Width *</ThemedText>
-              <TextInput
-                style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['width'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('width', text)}
-                placeholder="mm"
-                placeholderTextColor="#6B728080"
-                keyboardType="decimal-pad"
-                editable={!usingSimilarPart}
-              />
-              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
-            </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
-              <TextInput
-                style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
-                placeholder="mm"
-                placeholderTextColor="#6B728080"
-                keyboardType="decimal-pad"
-                editable={!usingSimilarPart}
-              />
-              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
-            </View>
-          </>
-        );
+        return null;
       default:
         return null;
     }
@@ -1317,7 +1307,9 @@ export default function VenueDetailScreen() {
                 {[
                   'U shape', 'Straight', 'Knob', 'Button', 'Push Pad',
                   'Cover', 'X - Special Design', 'Gadget'
-                ].map((type) => (
+                ].map((type) => {
+                  const displayType = type === 'U shape' ? 'U/Curved shape' : type === 'X - Special Design' ? 'X - Special Handle' : type === 'Push Pad' ? 'Push Plate' : type;
+                  return (
                   <TouchableOpacity
                     key={type}
                     style={[
@@ -1337,48 +1329,52 @@ export default function VenueDetailScreen() {
                       newPart.type === type && styles.selectedTypeButtonText,
                       usingSimilarPart && styles.disabledTypeButtonText
                     ]}>
-                      {type}
+                      {displayType}
                     </ThemedText>
                   </TouchableOpacity>
-                ))}
+                );
+                })}
               </ScrollView>
               {usingSimilarPart && (
                 <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>
               )}
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Part Number</ThemedText>
-              <TouchableOpacity 
-                style={[styles.autoGeneratedBox, usingSimilarPart && styles.lockedFieldBox]}
-                onPress={() => {
-                  console.log('Part number field tapped, usingSimilarPart:', usingSimilarPart);
-                  if (!usingSimilarPart) {
-                    console.log('Opening part number picker');
-                    setShowPartNumberPicker(true);
-                  }
-                }}
-                disabled={usingSimilarPart}
-                activeOpacity={0.7}
-              >
-                <View style={styles.partNumberContent}>
-                  <ThemedText style={styles.autoGeneratedLabel}>
-                    {manualPartNumber ? 'Selected:' : 'Auto-generated:'}
-                  </ThemedText>
-                  <ThemedText style={[styles.autoGeneratedValue, usingSimilarPart && styles.lockedPartNumber]}>
-                    {usingSimilarPart && similarPart
-                      ? similarPart.part.name
-                      : manualPartNumber 
-                        ? `${{'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type]}${manualPartNumber}`
-                        : nextPartNumber > 0
-                          ? `${{'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type]}${nextPartNumber}`
-                          : 'Loading...'}
-                  </ThemedText>
-                </View>
-                {!usingSimilarPart && (
-                  <ChevronRightIcon color="#6B7280" size={20} />
-                )}
-              </TouchableOpacity>
-              {!usingSimilarPart && (
+            {newPart.type !== 'Push Pad' && (
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Part Number</ThemedText>
+                <TouchableOpacity 
+                  style={[styles.autoGeneratedBox, usingSimilarPart && styles.lockedFieldBox]}
+                  onPress={() => {
+                    console.log('Part number field tapped, usingSimilarPart:', usingSimilarPart);
+                    if (!usingSimilarPart && !isToiletCapLifter(newPart.type, newPart.dimensions)) {
+                      console.log('Opening part number picker');
+                      setShowPartNumberPicker(true);
+                    }
+                  }}
+                  disabled={usingSimilarPart || isToiletCapLifter(newPart.type, newPart.dimensions)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.partNumberContent}>
+                    <ThemedText style={styles.autoGeneratedLabel}>
+                      {manualPartNumber ? 'Selected:' : 'Auto-generated:'}
+                    </ThemedText>
+                    <ThemedText style={[styles.autoGeneratedValue, usingSimilarPart && styles.lockedPartNumber]}>
+                      {usingSimilarPart && similarPart
+                        ? similarPart.part.name
+                        : isToiletCapLifter(newPart.type, newPart.dimensions)
+                          ? 'TL'
+                          : manualPartNumber 
+                            ? `${getPartNumberPrefix(newPart.type, newPart.dimensions)}${manualPartNumber}`
+                            : nextPartNumber > 0
+                              ? `${getPartNumberPrefix(newPart.type, newPart.dimensions)}${nextPartNumber}`
+                              : 'Loading...'}
+                    </ThemedText>
+                  </View>
+                  {!usingSimilarPart && !isToiletCapLifter(newPart.type, newPart.dimensions) && (
+                    <ChevronRightIcon color="#6B7280" size={20} />
+                  )}
+                </TouchableOpacity>
+                {!usingSimilarPart && !isToiletCapLifter(newPart.type, newPart.dimensions) && (
                 <ThemedText style={styles.helperText}>
                   {manualPartNumber 
                     ? 'Tap to change part number' 
@@ -1391,7 +1387,80 @@ export default function VenueDetailScreen() {
                 </ThemedText>
               )}
             </View>
+            )}
             {renderDimensionInputs()}
+            {newPart.type === 'Push Pad' ? (
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Part Number *</ThemedText>
+                <View style={styles.buttonShapeContainer}>
+                  {['P1', 'P2', 'P3'].map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.shapeButton,
+                        manualPartNumber === parseInt(option.substring(1)) && styles.selectedShapeButton,
+                        usingSimilarPart && styles.disabledShapeButton
+                      ]}
+                      onPress={() => !usingSimilarPart && setManualPartNumber(manualPartNumber === parseInt(option.substring(1)) ? null : parseInt(option.substring(1)))}
+                      disabled={usingSimilarPart}
+                    >
+                      <ThemedText style={[
+                        styles.shapeButtonText,
+                        manualPartNumber === parseInt(option.substring(1)) && styles.selectedShapeButtonText
+                      ]}>
+                        {option}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
+                {manualPartNumber && (
+                  <View style={styles.dimensionVisualizationContainer}>
+                    <View style={[styles.dimensionRectangle, {
+                      width: manualPartNumber === 3 ? 75 : 100,
+                      aspectRatio: manualPartNumber === 1 ? 1 : manualPartNumber === 2 ? (10/15) : (7.5/15)
+                    }]}>
+                      <Ionicons name="hand-right-outline" size={50} color="#3B82F6" />
+                    </View>
+                    <View style={styles.dimensionLabelContainer}>
+                      <ThemedText style={styles.dimensionText}>
+                        {manualPartNumber === 1 ? 'Length: 10cm × Width: 10cm' : manualPartNumber === 2 ? 'Length: 10cm × Width: 15cm' : 'Length: 7.5cm × Width: 15cm'}
+                      </ThemedText>
+                    </View>
+                  </View>
+                )}
+              </View>
+            ) : null}
+            {newPart.type === 'Gadget' && (
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Gadget Type</ThemedText>
+                <View style={styles.buttonShapeContainer}>
+                  {['Toilet Cap Lifter'].map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.shapeButton,
+                        newPart.dimensions.gadgetType === type && styles.selectedShapeButton,
+                        usingSimilarPart && styles.disabledShapeButton
+                      ]}
+                      onPress={() => !usingSimilarPart && setNewPart(prev => ({
+                        ...prev,
+                        dimensions: { ...prev.dimensions, gadgetType: prev.dimensions.gadgetType === type ? undefined : type }
+                      }))}
+                      disabled={usingSimilarPart}
+                    >
+                      <ThemedText style={[
+                        styles.shapeButtonText,
+                        newPart.dimensions.gadgetType === type && styles.selectedShapeButtonText
+                      ]}>
+                        {type}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
+              </View>
+            )}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Description *</ThemedText>
               <TextInput
@@ -1405,6 +1474,7 @@ export default function VenueDetailScreen() {
                 textAlignVertical="top"
               />
             </View>
+            {newPart.type !== 'Push Pad' && (
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Designer</ThemedText>
               <DesignerSelector
@@ -1418,6 +1488,8 @@ export default function VenueDetailScreen() {
               />
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
+            )}
+            {newPart.type !== 'Push Pad' && (
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>CAD Drawing (Optional)</ThemedText>
               {!usingSimilarPart && (
@@ -1444,6 +1516,7 @@ export default function VenueDetailScreen() {
               )}
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
+            )}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Pictures (1-6)</ThemedText>
               <TouchableOpacity
@@ -1511,11 +1584,15 @@ export default function VenueDetailScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.createButton, usingSimilarPart && styles.createPartUsingExistingButton]}
+              style={[styles.createButton, usingSimilarPart && styles.createPartUsingExistingButton, isToiletCapLifterExists() && styles.disabledCreateButton]}
               onPress={handleCreatePart}
+              disabled={isToiletCapLifterExists()}
             >
               <ThemedText style={styles.createButtonText}>{usingSimilarPart ? 'Create Existing Part' : 'Create Part'}</ThemedText>
             </TouchableOpacity>
+            {isToiletCapLifterExists() && (
+              <ThemedText style={styles.disabledButtonHint}>Toilet Cap Lifter (TL) already exists in this project</ThemedText>
+            )}
           </ScrollView>
 
           {/* Part Number Picker Overlay - Inside Create Part Modal */}
@@ -1530,7 +1607,7 @@ export default function VenueDetailScreen() {
                 </View>
                 <View style={styles.partNumberPickerInfo}>
                   <ThemedText style={styles.partNumberPickerInfoText}>
-                    Type: {newPart.type} ({{'U shape': 'U', 'Straight': 'S', 'Knob': 'K', 'Button': 'B', 'Push Pad': 'P', 'Cover': 'C', 'X - Special Design': 'X', 'Gadget': 'G'}[newPart.type]})
+                    Type: {newPart.type === 'U shape' ? 'U/Curved shape' : newPart.type === 'X - Special Design' ? 'X - Special Handle' : newPart.type} ({getPartNumberPrefix(newPart.type, newPart.dimensions)})
                   </ThemedText>
                   <ThemedText style={styles.partNumberPickerSubtext}>
                     Available numbers are shown. Used numbers are hidden.
@@ -2044,6 +2121,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  disabledCreateButton: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.6,
+  },
+  disabledButtonHint: {
+    color: '#EF4444',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -2434,4 +2521,34 @@ const styles = StyleSheet.create({
   partNumberButtonTextSelected: {
     color: '#78350F',
     fontWeight: '700',
-  },}); 
+  },
+  dimensionVisualizationContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  dimensionRectangle: {
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderRadius: 4,
+  },
+  dimensionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  dimensionLabelContainer: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 4,
+  },
+  dimensionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+}); 

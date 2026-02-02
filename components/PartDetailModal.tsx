@@ -229,7 +229,7 @@ export function PartDetailModal({
               <View style={styles.fieldRow}>
                 <FileText color="#6B7280" size={18} />
                 <ThemedText style={styles.fieldLabel}>Type:</ThemedText>
-                <ThemedText style={styles.fieldValue}>{selectedPart.type}</ThemedText>
+                <ThemedText style={styles.fieldValue}>{selectedPart.type === 'U shape' ? 'U/Curved shape' : selectedPart.type === 'X - Special Design' ? 'X - Special Handle' : selectedPart.type === 'Push Pad' ? 'Push Plate' : selectedPart.type}</ThemedText>
               </View>
               <View style={styles.fieldRow}>
                 <AlertCircle color="#6B7280" size={18} />
