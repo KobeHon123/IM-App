@@ -144,7 +144,7 @@ export default function SearchScreen() {
       case 'Knob':
         return ['frontRadius', 'middleRadius', 'backRadius', 'depth', 'middleToBackDepth'];
       case 'Button':
-        return ['thickness', 'shape'];
+        return ['thickness', 'shape', 'buttonType'];
       case 'Push Pad':
         return ['length', 'width', 'radius'];
       default:
@@ -153,7 +153,7 @@ export default function SearchScreen() {
   };
 
   const handleDimensionChange = useCallback((fieldName: string, text: string) => {
-    if (fieldName === 'shape') {
+    if (fieldName === 'shape' || fieldName === 'buttonType') {
       setSearchFilters(prev => ({
         ...prev,
         dimensions: { ...prev.dimensions, [fieldName]: text }
@@ -179,19 +179,73 @@ export default function SearchScreen() {
 
     const fields = getRequiredDimensionFields(searchFilters.type);
     
-    return fields.map(field => (
-      <View key={field} style={styles.inputGroup}>
-        <ThemedText style={styles.inputLabel}>{field.charAt(0).toUpperCase() + field.slice(1)}</ThemedText>
-        <TextInput
-          style={styles.input}
-          value={searchFilters.dimensions[field] || ''}
-          onChangeText={(text) => handleDimensionChange(field, text)}
-          placeholder="Enter value (optional)"
-          placeholderTextColor="#6B728080"
-          keyboardType={field === 'shape' ? 'default' : 'decimal-pad'}
-        />
-      </View>
-    ));
+    return fields.map(field => {
+      if (field === 'shape') {
+        return (
+          <View key={field} style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Shape</ThemedText>
+            <View style={styles.typeContainer}>
+              {['Circle', 'Rectangular', 'Slot'].map((shape) => (
+                <TouchableOpacity
+                  key={shape}
+                  style={[
+                    styles.typeButton,
+                    searchFilters.dimensions.shape === shape && styles.selectedTypeButton
+                  ]}
+                  onPress={() => handleDimensionChange('shape', searchFilters.dimensions.shape === shape ? '' : shape)}
+                >
+                  <ThemedText style={[
+                    styles.typeButtonText,
+                    searchFilters.dimensions.shape === shape && styles.selectedTypeButtonText
+                  ]}>
+                    {shape}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        );
+      } else if (field === 'buttonType') {
+        return (
+          <View key={field} style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Button Type</ThemedText>
+            <View style={styles.typeContainer}>
+              {['Lift', 'Toilet', 'Switch'].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.typeButton,
+                    searchFilters.dimensions.buttonType === type && styles.selectedTypeButton
+                  ]}
+                  onPress={() => handleDimensionChange('buttonType', searchFilters.dimensions.buttonType === type ? '' : type)}
+                >
+                  <ThemedText style={[
+                    styles.typeButtonText,
+                    searchFilters.dimensions.buttonType === type && styles.selectedTypeButtonText
+                  ]}>
+                    {type}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        );
+      } else {
+        return (
+          <View key={field} style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>{field.charAt(0).toUpperCase() + field.slice(1)}</ThemedText>
+            <TextInput
+              style={styles.input}
+              value={searchFilters.dimensions[field] || ''}
+              onChangeText={(text) => handleDimensionChange(field, text)}
+              placeholder="Enter value (optional)"
+              placeholderTextColor="#6B728080"
+              keyboardType="decimal-pad"
+            />
+          </View>
+        );
+      }
+    });
   };
 
   const renderCADGallery = () => {
@@ -306,7 +360,9 @@ export default function SearchScreen() {
                 {[
                   'U shape', 'Straight', 'Knob', 'Button', 'Push Pad', 
                   'Cover', 'X - Special Design', 'Gadget'
-                ].map((type) => (
+                ].map((type) => {
+                  const displayType = type === 'U shape' ? 'U/Curved shape' : type === 'X - Special Design' ? 'X - Special Handle' : type === 'Push Pad' ? 'Push Plate' : type;
+                  return (
                   <TouchableOpacity
                     key={type}
                     style={[
@@ -323,10 +379,11 @@ export default function SearchScreen() {
                       styles.typeButtonText,
                       searchFilters.type === type && styles.selectedTypeButtonText
                     ]}>
-                      {type}
+                      {displayType}
                     </ThemedText>
                   </TouchableOpacity>
-                ))}
+                );
+                })}
               </ScrollView>
             </View>
 

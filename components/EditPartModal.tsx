@@ -112,11 +112,24 @@ export function EditPartModal({
       case 'Knob':
         return ['frontRadius', 'middleRadius', 'backRadius', 'depth', 'middleToBackDepth'];
       case 'Button':
-        return ['thickness'];
+        return ['buttonType'];
       case 'Push Pad':
-        return ['length', 'width', 'radius'];
+        return [];
       default:
         return [];
+    }
+  };
+
+  const getDisplayTypeName = (type: PartType | string): string => {
+    switch (type) {
+      case 'U shape':
+        return 'U/Curved shape';
+      case 'X - Special Design':
+        return 'X - Special Handle';
+      case 'Push Pad':
+        return 'Push Plate';
+      default:
+        return type;
     }
   };
 
@@ -273,7 +286,31 @@ export function EditPartModal({
         return (
           <>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Shape *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Button Type *</ThemedText>
+              <View style={styles.buttonShapeContainer}>
+                {['Lift', 'Toilet', 'Switch'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.shapeButton,
+                      editingPart.dimensions.buttonType === type && styles.selectedShapeButton
+                    ]}
+                    onPress={() => onEditingPartChange({
+                      dimensions: { ...editingPart.dimensions, buttonType: editingPart.dimensions.buttonType === type ? undefined : type }
+                    })}
+                  >
+                    <ThemedText style={[
+                      styles.shapeButtonText,
+                      editingPart.dimensions.buttonType === type && styles.selectedShapeButtonText
+                    ]}>
+                      {type}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Shape</ThemedText>
               <View style={styles.buttonShapeContainer}>
                 {['Circle', 'Rectangular', 'Slot'].map((shape) => (
                   <TouchableOpacity
@@ -283,7 +320,7 @@ export function EditPartModal({
                       editingPart.dimensions.shape === shape && styles.selectedShapeButton
                     ]}
                     onPress={() => onEditingPartChange({
-                      dimensions: { ...editingPart.dimensions, shape }
+                      dimensions: { ...editingPart.dimensions, shape: editingPart.dimensions.shape === shape ? undefined : shape }
                     })}
                   >
                     <ThemedText style={[
@@ -297,7 +334,7 @@ export function EditPartModal({
               </View>
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Radius</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['radius'] || ''}
@@ -308,7 +345,7 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Length</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['length'] || ''}
@@ -319,7 +356,7 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Width *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Width</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['width'] || ''}
@@ -330,7 +367,7 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Fillet *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Fillet</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['fillet'] || ''}
@@ -341,7 +378,7 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Thickness *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Thickness</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['thickness'] || ''}
@@ -426,6 +463,10 @@ export function EditPartModal({
           </TouchableOpacity>
         </View>
         <ScrollView style={styles.modalContent}>
+          <View style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Part Type</ThemedText>
+            <ThemedText style={styles.typeDisplay}>{getDisplayTypeName(editingPart.type)}</ThemedText>
+          </View>
           {renderEditDimensionInputs()}
           <View style={styles.inputGroup}>
             <ThemedText style={styles.inputLabel}>Description *</ThemedText>
@@ -547,6 +588,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 8,
+  },
+  typeDisplay: {
+    fontSize: 14,
+    color: '#6B7280',
+    paddingVertical: 10,
   },
   input: {
     borderWidth: 1,
