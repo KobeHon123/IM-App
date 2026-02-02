@@ -611,7 +611,7 @@ export default function VenueDetailScreen() {
       case 'Knob':
         return ['middleRadius', 'depth', 'middleToBackDepth'];
       case 'Button':
-        return ['thickness'];
+        return ['buttonType'];
       case 'Push Pad':
         return [];
       default:
@@ -796,7 +796,35 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Shape *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Button Type *</ThemedText>
+              <View style={styles.buttonShapeContainer}>
+                {['Lift', 'Toilet', 'Switch'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.shapeButton,
+                      newPart.dimensions.buttonType === type && styles.selectedShapeButton,
+                      usingSimilarPart && styles.disabledShapeButton
+                    ]}
+                    onPress={() => !usingSimilarPart && setNewPart(prev => ({
+                      ...prev,
+                      dimensions: { ...prev.dimensions, buttonType: prev.dimensions.buttonType === type ? undefined : type }
+                    }))}
+                    disabled={usingSimilarPart}
+                  >
+                    <ThemedText style={[
+                      styles.shapeButtonText,
+                      newPart.dimensions.buttonType === type && styles.selectedShapeButtonText
+                    ]}>
+                      {type}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Shape</ThemedText>
               <View style={styles.buttonShapeContainer}>
                 {['Circle', 'Rectangular', 'Slot'].map((shape) => (
                   <TouchableOpacity
@@ -808,7 +836,7 @@ export default function VenueDetailScreen() {
                     ]}
                     onPress={() => !usingSimilarPart && setNewPart(prev => ({
                       ...prev,
-                      dimensions: { ...prev.dimensions, shape }
+                      dimensions: { ...prev.dimensions, shape: prev.dimensions.shape === shape ? undefined : shape }
                     }))}
                     disabled={usingSimilarPart}
                   >
@@ -824,7 +852,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Radius</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['radius'] || ''}
@@ -837,7 +865,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Length *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Length</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['length'] || ''}
@@ -850,7 +878,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Width *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Width</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['width'] || ''}
@@ -863,7 +891,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Fillet *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Fillet</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['fillet'] || ''}
@@ -876,7 +904,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Thickness *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Thickness</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['thickness'] || ''}
