@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Clipboard } from 'lucide-react-native';
+import { Clipboard, Calculator, History } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 
@@ -10,9 +10,21 @@ export default function ManagementTab() {
   const managementPrograms = [
     {
       id: 'part-time-timesheet',
-      name: 'Part Time TimeSheet',
+      name: 'Part Time\nTimeSheet',
       icon: Clipboard,
       route: '/(tabs)/management/part-time-timesheet',
+    },
+    {
+      id: 'resin-record',
+      name: 'Resin\nCalculator',
+      icon: Calculator,
+      route: '/(tabs)/management/resin-calculator',
+    },
+    {
+      id: 'resin-record-management',
+      name: 'Resin Record\nManagement',
+      icon: History,
+      route: '/(tabs)/management/resin-record-management',
     },
   ];
 
@@ -67,15 +79,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
+    padding: 16,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 12,
+    justifyContent: 'space-between',
   },
   programCard: {
-    width: '48%',
+    width: '47%',
     aspectRatio: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,

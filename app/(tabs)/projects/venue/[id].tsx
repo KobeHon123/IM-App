@@ -821,7 +821,7 @@ export default function VenueDetailScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
+              {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Shape</ThemedText>
