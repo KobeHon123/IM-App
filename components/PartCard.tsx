@@ -19,6 +19,7 @@ interface PartCardProps {
   simplifyDisplay?: boolean;
   allowPressInCountingMode?: boolean;
   gridLayout?: boolean;
+  isPartTab?: boolean;
   onPress?: () => void;
   onMorePress?: () => void;
   onLongPress?: () => void;
@@ -41,6 +42,7 @@ export function PartCard({
   simplifyDisplay = false,
   allowPressInCountingMode = false,
   gridLayout = false,
+  isPartTab = false,
   onPress,
   onMorePress,
   onLongPress,
@@ -165,12 +167,14 @@ export function PartCard({
         
         {/* Content */}
         <View style={styles.gridCardContent}>
-          <ThemedText style={styles.gridCardName}>{part.name}</ThemedText>
-          {showQuantity && quantity > 0 && (
-            <View style={styles.gridCardQuantityBadge}>
-              <ThemedText style={styles.gridCardQuantityText}>{quantity}</ThemedText>
-            </View>
-          )}
+          <View style={styles.gridCardFooter}>
+            <ThemedText style={styles.gridCardName}>{part.name}</ThemedText>
+            {showQuantity && (
+              <View style={styles.gridCardQuantityBadge}>
+                <ThemedText style={styles.gridCardQuantityText}>{isPartTab ? 'Total Qty:' : 'Qty:'} {quantity}</ThemedText>
+              </View>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
     ) : (
@@ -282,9 +286,9 @@ export function PartCard({
             </View>
           ) : (
             <View style={styles.normalActions}>
-              {simplifyDisplay && showQuantity && (
+              {showQuantity && (
                 <View style={styles.qtyContainer}>
-                  <ThemedText style={styles.qtyLabel}>Qty:</ThemedText>
+                  <ThemedText style={styles.qtyLabel}>{isPartTab ? 'Total Qty:' : 'Qty:'}</ThemedText>
                   <ThemedText style={styles.qtyValue}>{quantity}</ThemedText>
                 </View>
               )}
@@ -446,19 +450,25 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: 12,
   },
+  gridCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   gridCardName: {
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 8,
     letterSpacing: 0.3,
+    flex: 1,
   },
   gridCardQuantityBadge: {
-    backgroundColor: '#2563EB',
+    backgroundColor: 'rgba(37, 99, 235, 0.4)',
     borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexShrink: 0,
   },
   gridCardQuantityText: {
     fontSize: 12,
@@ -567,18 +577,19 @@ const styles = StyleSheet.create({
   qtyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 4,
+    gap: 6,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   qtyLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563EB',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   qtyValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#2563EB',
   },

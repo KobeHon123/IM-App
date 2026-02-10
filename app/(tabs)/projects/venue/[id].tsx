@@ -450,6 +450,41 @@ export default function VenueDetailScreen() {
     return isToiletCapLifter(newPart.type, newPart.dimensions) && projectParts.some(part => part.name === 'TL');
   };
 
+  // Normalize dimension field names from old names to new names (handles legacy data)
+  const normalizeDimensions = (type: PartType, dimensions: Record<string, any>): Record<string, any> => {
+    const normalized = { ...dimensions };
+    
+    // Handle radius -> Diameter conversion for old data
+    if ((type === 'U shape' || type === 'Straight' || type === 'Push Pad') && 'radius' in normalized) {
+      normalized['Diameter'] = normalized['radius'];
+      delete normalized['radius'];
+    }
+    
+    // Handle KnobPart radius -> diameter conversions
+    if (type === 'Knob') {
+      if ('frontRadius' in normalized) {
+        normalized['frontDiameter'] = normalized['frontRadius'];
+        delete normalized['frontRadius'];
+      }
+      if ('middleRadius' in normalized) {
+        normalized['middleDiameter'] = normalized['middleRadius'];
+        delete normalized['middleRadius'];
+      }
+      if ('backRadius' in normalized) {
+        normalized['backDiameter'] = normalized['backRadius'];
+        delete normalized['backRadius'];
+      }
+    }
+    
+    // Handle ButtonPart radius -> Diameter conversion
+    if (type === 'Button' && 'radius' in normalized) {
+      normalized['Diameter'] = normalized['radius'];
+      delete normalized['radius'];
+    }
+    
+    return normalized;
+  };
+
   const handleCreatePart = async () => {
     if (!newPart.description.trim()) {
       Alert.alert('Error', 'Please fill in the description');
@@ -554,7 +589,7 @@ export default function VenueDetailScreen() {
           description: selectedPart.description,
           pictures: selectedPart.pictures || [],
           cadDrawing: selectedPart.cadDrawing || '',
-          dimensions: { ...selectedPart.dimensions },
+          dimensions: normalizeDimensions(selectedPart.type, selectedPart.dimensions),
           designer: selectedPart.designer || '',
         });
         setShowEditPartModal(true);

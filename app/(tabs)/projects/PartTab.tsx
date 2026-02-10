@@ -773,6 +773,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                 <View style={viewMode === 'grid' ? styles.partsGrid : styles.partsListContainer}>
                   {parts.map((part) => {
                     const totalQuantity = venues.reduce((sum, venue) => sum + (venue.partQuantities[part.id] || 0), 0);
+                    console.log(`Part ${part.name}: totalQuantity=${totalQuantity}, venues=${venues.length}, partQuantities=`, venues.map(v => ({ name: v.name, qty: v.partQuantities[part.id] })));
                     const hasComments = getUnfinishedCommentsCountByPart(part.id) > 0;
                     return (
                       <PartCard
@@ -783,6 +784,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                         hasComments={hasComments}
                         isSelected={selectedPartIds.has(part.id)}
                         gridLayout={viewMode === 'grid'}
+                        isPartTab={true}
                         onPress={() => {
                           if (isSelectionMode) {
                             handlePartPress(part.id);
