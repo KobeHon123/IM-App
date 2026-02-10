@@ -8,13 +8,12 @@ import { useData } from '@/hooks/useData';
 import VenueTab from './VenueTab';
 import PartTab from './PartTab';
 import CalendarTabSimplified from './CalendarTabSimplified';
-import ResinRecordTab from './ResinRecordTab';
 import { ThemedText } from '@/components/ThemedText';
 
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams();
   const { projects } = useData();
-  const [activeTab, setActiveTab] = useState<'venue' | 'part' | 'calendar' | 'resin'>('venue');
+  const [activeTab, setActiveTab] = useState<'venue' | 'part' | 'calendar'>('venue');
 
   const project = projects.find((p) => p.id === id);
 
@@ -80,23 +79,10 @@ export default function ProjectDetailScreen() {
             Calendar
           </ThemedText>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'resin' && styles.activeTab]}
-          onPress={() => {
-            console.log('Switching to resin record tab');
-            setActiveTab('resin');
-          }}
-        >
-          <Ionicons name="bottle" color={activeTab === 'resin' ? '#2563EB' : '#6B7280'} size={20} />
-          <ThemedText style={[styles.tabText, activeTab === 'resin' && styles.activeTabText]}>
-            Resin
-          </ThemedText>
-        </TouchableOpacity>
       </View>
       {activeTab === 'venue' && <VenueTab projectId={id as string} />}
       {activeTab === 'part' && <PartTab projectId={id as string} />}
       {activeTab === 'calendar' && <CalendarTabSimplified projectId={id as string} />}
-      {activeTab === 'resin' && <ResinRecordTab projectId={id as string} />}
     </SafeAreaView>
   );
 }

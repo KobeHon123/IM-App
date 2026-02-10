@@ -217,8 +217,9 @@ export const updateVenuePartQuantity = async (venueId: string, partId: string, q
   return await updateVenue(venueId, { partQuantities: newQuantities });
 };
 
-export const getUsedPartNumbers = async (partType: string): Promise<number[]> => {
+export const getUsedPartNumbers = async (partType: string, projectId?: string): Promise<number[]> => {
   const prefix = partTypePrefix[partType] || 'P';
+  // Query for parts that match the prefix globally (across all projects)
   const { data, error } = await supabase
     .from('parts')
     .select('name')
@@ -227,6 +228,7 @@ export const getUsedPartNumbers = async (partType: string): Promise<number[]> =>
   if (error) throw error;
   
   // Extract numbers from part names (e.g., "U1" -> 1, "U23" -> 23)
+  // Note: projectId parameter is kept for backwards compatibility but not used
   const usedNumbers = (data || [])
     .map(part => {
       const match = part.name.match(/^[A-Z]+(\d+)$/);
@@ -234,14 +236,14 @@ export const getUsedPartNumbers = async (partType: string): Promise<number[]> =>
     })
     .filter((num): num is number => num !== null);
   
-  return usedNumbers;
+  return usedNumbers.sort((a, b) => a - b);
 };
 
-export const getNextPartNumber = async (partType: string): Promise<number> => {
-    const prefix = partTypePrefix[partType] || 'P';
-    const { data, error } = await supabase.rpc('get_next_part_number', { p_prefix: prefix });
-    if (error) throw error;
-    return data;
+export const getNextPartNumber = async (partType: string, projectId?: string): Promise<number> => {
+    // Use getUsedPartNumbers to get project-scoped used numbers
+    const usedNumbers = await getUsedPartNumbers(partType, projectId);
+    const maxUsedNumber = usedNumbers.length > 0 ? Math.max(...usedNumbers) : 0;
+    return maxUsedNumber + 1;
 };
 
 export const getCurrentPartNumber = async (partType: string): Promise<number> => {
@@ -273,7 +275,8 @@ export const createPart = async (part: Omit<Part, 'id' | 'createdAt' | 'comments
             throw new Error(`A part named "${name}" already exists in this project. Please choose a different name or use the existing part instead.`);
         }
     } else {
-        const nextNumber = await getNextPartNumber(part.type);
+        // Get next number filtered by project
+        const nextNumber = await getNextPartNumber(part.type, part.projectId);
         name = generatePartName(part.type, nextNumber);
     }
 

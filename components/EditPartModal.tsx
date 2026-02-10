@@ -46,7 +46,14 @@ export function EditPartModal({
 }: EditPartModalProps) {
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const handleEditDimensionChange = useCallback((fieldName: string, text: string) => {
-    // Allow only numbers and one decimal point
+    // For edgeType, allow string values (Seal, Cut)
+    if (fieldName === 'edgeType') {
+      onEditingPartChange({
+        dimensions: { ...editingPart.dimensions, [fieldName]: text }
+      });
+      return;
+    }
+    // Allow only numbers and one decimal point for numeric fields
     const validText = text.replace(/[^0-9.]/g, '');
     // Ensure only one decimal place
     const parts = validText.split('.');
@@ -89,6 +96,7 @@ export function EditPartModal({
       quality: 1,
     });
     if (result) {
+      // Handle both single result and array of results
       const uris = Array.isArray(result) ? result.map(r => r.uri) : [result.uri];
       console.log('Selected pictures:', uris);
       onEditingPartChange({
@@ -106,11 +114,11 @@ export function EditPartModal({
   const getRequiredFields = (type: PartType): string[] => {
     switch (type) {
       case 'U shape':
-        return ['length', 'radius', 'depth', 'oFillet', 'iFillet'];
+        return ['length', 'Diameter', 'depth', 'oFillet'];
       case 'Straight':
-        return ['length', 'radius'];
+        return ['length', 'Diameter'];
       case 'Knob':
-        return ['frontRadius', 'middleRadius', 'backRadius', 'depth', 'middleToBackDepth'];
+        return ['frontDiameter', 'middleDiameter', 'backDiameter', 'depth', 'middleToBackDepth'];
       case 'Button':
         return ['buttonType'];
       case 'Push Pad':
@@ -150,11 +158,11 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -183,7 +191,7 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>I Fillet *</ThemedText>
+              <ThemedText style={styles.inputLabel}>I Fillet</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['iFillet'] || ''}
@@ -192,6 +200,30 @@ export function EditPartModal({
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
               />
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Edge Type</ThemedText>
+              <View style={styles.selectionContainer}>
+                {['Seal', 'Cut'].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.selectionButton,
+                      editingPart.dimensions['edgeType'] === option && styles.selectionButtonActive
+                    ]}
+                    onPress={() => handleEditDimensionChange('edgeType', option)}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.selectionButtonText,
+                        editingPart.dimensions['edgeType'] === option && styles.selectionButtonTextActive
+                      ]}
+                    >
+                      {option}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </>
         );
@@ -210,11 +242,11 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -226,33 +258,33 @@ export function EditPartModal({
         return (
           <>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Front Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Front Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['frontRadius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('frontRadius', text)}
+                value={editingPart.dimensions['frontDiameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('frontDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Middle Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Middle Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['middleRadius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('middleRadius', text)}
+                value={editingPart.dimensions['middleDiameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('middleDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Back Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Back Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['backRadius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('backRadius', text)}
+                value={editingPart.dimensions['backDiameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('backDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -334,11 +366,11 @@ export function EditPartModal({
               </View>
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -416,11 +448,11 @@ export function EditPartModal({
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -679,5 +711,32 @@ const styles = StyleSheet.create({
   },
   selectedShapeButtonText: {
     color: '#3B82F6',
+  },
+  selectionContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  selectionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionButtonActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  selectionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  selectionButtonTextActive: {
+    color: '#FFFFFF',
   },
 });

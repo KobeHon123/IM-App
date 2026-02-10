@@ -5,7 +5,7 @@ import { EditPartModal } from '@/components/EditPartModal';
 import { PartDetailModal } from '@/components/PartDetailModal';
 import { Part, PartType, Comment } from '@/types';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
-import { Camera, ChevronDown, ChevronRight, X, Check } from 'lucide-react-native';
+import { Camera, ChevronDown, ChevronRight, X, Check, Grid, List } from 'lucide-react-native';
 import React, { useState, useCallback } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { findSimilarPart } from '@/lib/similarityDetection';
@@ -54,6 +54,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
   const [selectedPartIds, setSelectedPartIds] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const handleCommentSend = (partId: string, commentText: string) => {
     createComment({ partId, author: 'User', text: commentText });
@@ -284,15 +285,40 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     }));
   };
 
+  const extractPartNumber = (partName: string): number => {
+    const match = partName.match(/\d+/);
+    return match ? parseInt(match[0]) : Infinity;
+  };
+
+  const sortParts = (partsToSort: Part[]): Part[] => {
+    return [...partsToSort].sort((a, b) => {
+      const numA = extractPartNumber(a.name);
+      const numB = extractPartNumber(b.name);
+      
+      if (numA !== numB) {
+        return numA - numB;
+      }
+      
+      return a.name.localeCompare(b.name);
+    });
+  };
+
   const getGroupedPartsByStatus = (status: string) => {
     const filteredParts = projectParts.filter((part) => part.status === status);
-    return filteredParts.reduce((acc, part) => {
+    const grouped = filteredParts.reduce((acc, part) => {
       if (!acc[part.type]) {
         acc[part.type] = [];
       }
       acc[part.type].push(part);
       return acc;
     }, {} as Record<string, Part[]>);
+    
+    // Sort parts within each type
+    Object.keys(grouped).forEach((type) => {
+      grouped[type] = sortParts(grouped[type]);
+    });
+    
+    return grouped;
   };
 
   const handleSelectPictures = async (isEdit = false) => {
@@ -676,44 +702,28 @@ const PartTab = ({ projectId }: { projectId: string }) => {
   return (
     <View style={styles.tabContent}>
       <View style={styles.statusSummaryCard}>
-        <View style={styles.statusSummaryItem}>
-          <ThemedText style={styles.statusSummaryLabel}>Measured</ThemedText>
-          <ThemedText style={styles.statusSummaryValue}>{statusCounts.measured || 0}</ThemedText>
-        </View>
-        <View style={styles.statusSummaryItem}>
-          <ThemedText style={styles.statusSummaryLabel}>Designed</ThemedText>
-          <ThemedText style={styles.statusSummaryValue}>{statusCounts.designed || 0}</ThemedText>
-        </View>
-        <View style={styles.statusSummaryItem}>
-          <ThemedText style={styles.statusSummaryLabel}>Tested</ThemedText>
-          <ThemedText style={styles.statusSummaryValue}>{statusCounts.tested || 0}</ThemedText>
-        </View>
-        <View style={styles.statusSummaryItem}>
-          <ThemedText style={styles.statusSummaryLabel}>Printed</ThemedText>
-          <ThemedText style={styles.statusSummaryValue}>{statusCounts.printed || 0}</ThemedText>
-        </View>
-        <View style={styles.statusSummaryItem}>
-          <ThemedText style={styles.statusSummaryLabel}>Installed</ThemedText>
-          <ThemedText style={styles.statusSummaryValue}>{statusCounts.installed || 0}</ThemedText>
-        </View>
-      </View>
-      <View 
-        style={styles.statusTabContainer}
-      >
-        {statusList.map((status, index) => (
+        {statusList.map((status) => (
           <TouchableOpacity
             key={status}
             style={[
-              styles.statusTab, 
-              activeStatus === status && styles.activeStatusTab,
+              styles.statusSummaryItem,
+              activeStatus === status && styles.activeStatusSummaryItem,
             ]}
             onPress={() => setActiveStatus(status as typeof activeStatus)}
+            activeOpacity={0.6}
           >
-            <View style={styles.statusTabContent}>
-              <ThemedText style={[styles.statusTabText, activeStatus === status && styles.activeStatusTabText]}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </ThemedText>
-            </View>
+            <ThemedText style={[
+              styles.statusSummaryLabel,
+              activeStatus === status && styles.activeStatusSummaryLabel,
+            ]}>
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </ThemedText>
+            <ThemedText style={[
+              styles.statusSummaryValue,
+              activeStatus === status && styles.activeStatusSummaryValue,
+            ]}>
+              {statusCounts[status] || 0}
+            </ThemedText>
           </TouchableOpacity>
         ))}
       </View>
@@ -760,7 +770,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                 <ThemedText style={styles.categoryTitle}>{type} ({parts.length})</ThemedText>
               </TouchableOpacity>
               {!collapsedCategories[type] && (
-                <View>
+                <View style={viewMode === 'grid' ? styles.partsGrid : styles.partsListContainer}>
                   {parts.map((part) => {
                     const totalQuantity = venues.reduce((sum, venue) => sum + (venue.partQuantities[part.id] || 0), 0);
                     const hasComments = getUnfinishedCommentsCountByPart(part.id) > 0;
@@ -772,6 +782,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                         showQuantity={true}
                         hasComments={hasComments}
                         isSelected={selectedPartIds.has(part.id)}
+                        gridLayout={viewMode === 'grid'}
                         onPress={() => {
                           if (isSelectionMode) {
                             handlePartPress(part.id);
@@ -944,7 +955,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
               type: part.type,
               description: part.description,
               pictures: part.pictures,
-              cadDrawing: part.cadDrawing || undefined,
+              cadDrawing: part.cadDrawing === '' ? null : part.cadDrawing || undefined,
               dimensions: part.dimensions,
               designer: part.designer || undefined,
             });
@@ -1148,6 +1159,19 @@ const PartTab = ({ projectId }: { projectId: string }) => {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* View Mode Toggle Button */}
+      <TouchableOpacity
+        style={styles.viewModeToggleButton}
+        onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+        activeOpacity={0.7}
+      >
+        {viewMode === 'grid' ? (
+          <List color="#FFFFFF" size={24} />
+        ) : (
+          <Grid color="#FFFFFF" size={24} />
+        )}
+      </TouchableOpacity>
     </View>
   );
 };
@@ -1155,6 +1179,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
 const styles = StyleSheet.create({
   tabContent: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -1164,45 +1189,65 @@ const styles = StyleSheet.create({
   statusSummaryCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#FBBF24',
-    borderRadius: 8,
-    margin: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    marginHorizontal: 0,
   },
   statusSummaryItem: {
     alignItems: 'center',
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  activeStatusSummaryItem: {
+    backgroundColor: '#DBEAFE',
   },
   statusSummaryLabel: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    marginBottom: 4,
+    fontSize: 9,
+    color: '#9CA3AF',
+    marginBottom: 6,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  activeStatusSummaryLabel: {
+    color: '#1E40AF',
+    fontWeight: '600',
   },
   statusSummaryValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  activeStatusSummaryValue: {
+    color: '#1E40AF',
+    fontSize: 24,
   },
   statusTabContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    display: 'none',
   },
   statusTab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    position: 'relative',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
     borderRadius: 8,
-    marginHorizontal: 2,
+    position: 'relative',
   },
   activeStatusTab: {
-    borderBottomColor: '#FBBF24',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 12,
-    padding:2,
+    backgroundColor: '#2563EB',
+    borderBottomWidth: 0,
   },
   statusTabContent: {
     alignItems: 'center',
@@ -1210,11 +1255,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statusTabText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
+    fontWeight: '500',
   },
   activeStatusTabText: {
-    color: '#FBBF24',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   statusIndicators: {
@@ -1225,38 +1271,70 @@ const styles = StyleSheet.create({
 
   partsList: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
+    backgroundColor: '#FFFFFF',
   },
   partCategory: {
     marginTop: 4,
+  },
+  partsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    width: screenWidth - 24,
+    alignSelf: 'center',
+  },
+  partsListContainer: {
+    width: '100%',
+  },
+  viewModeToggleButton: {
+    position: 'absolute',
+    bottom: 32,
+    right: 16,
+    backgroundColor: '#2563EB',
+    borderRadius: 50,
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   categoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
     marginBottom: 2,
+    backgroundColor: '#F9FAFB',
   },
   categoryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#374151',
     marginLeft: 8,
+    letterSpacing: 0.2,
   },
   bulkActionHeader: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#FBBF24',
+    borderBottomColor: '#BFDBFE',
   },
   selectionCountText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#1E40AF',
     letterSpacing: 0.3,
   },
   bulkActionButtons: {
@@ -1265,20 +1343,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bulkActionButton: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#2563EB',
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 8,
-    shadowColor: '#FBBF24',
+    shadowColor: '#2563EB',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
   bulkActionButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#78350F',
+    color: '#FFFFFF',
     letterSpacing: 0.2,
   },
   deleteActionButton: {

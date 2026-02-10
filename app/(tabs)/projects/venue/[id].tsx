@@ -93,6 +93,8 @@ export default function VenueDetailScreen() {
   };
   const [countingMode, setCountingMode] = useState(false);
   const [statusMode, setStatusMode] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(false);
+  const [selectedPartIdForPhotos, setSelectedPartIdForPhotos] = useState<string | null>(null);
   const [showCreatePartModal, setShowCreatePartModal] = useState(false);
   const [showPartActionModal, setShowPartActionModal] = useState(false);
   const [showPartDetailModal, setShowPartDetailModal] = useState(false);
@@ -194,7 +196,7 @@ export default function VenueDetailScreen() {
 
   const loadNextPartNumber = async () => {
     try {
-      // Load used part numbers for the picker
+      // Load used part numbers globally across all projects (universal part numbering)
       const usedNumbers = await getUsedPartNumbers(newPart.type);
       setUsedPartNumbers(usedNumbers);
       // Calculate next part number as the largest used number + 1
@@ -230,7 +232,15 @@ export default function VenueDetailScreen() {
 
   // Define all hooks and callbacks BEFORE any conditional returns
   const handleDimensionChange = useCallback((fieldName: string, text: string) => {
-    // Allow only numbers and one decimal point
+    // For edgeType, allow string values (Seal, Cut)
+    if (fieldName === 'edgeType') {
+      setNewPart(prev => ({
+        ...prev,
+        dimensions: { ...prev.dimensions, [fieldName]: text }
+      }));
+      return;
+    }
+    // Allow only numbers and one decimal point for numeric fields
     const validText = text.replace(/[^0-9.]/g, '');
     // Ensure only one decimal place
     const parts = validText.split('.');
@@ -245,7 +255,15 @@ export default function VenueDetailScreen() {
   }, []);
 
   const handleEditDimensionChange = useCallback((fieldName: string, text: string) => {
-    // Allow only numbers and one decimal point
+    // For edgeType, allow string values (Seal, Cut)
+    if (fieldName === 'edgeType') {
+      setEditingPart(prev => ({
+        ...prev,
+        dimensions: { ...prev.dimensions, [fieldName]: text }
+      }));
+      return;
+    }
+    // Allow only numbers and one decimal point for numeric fields
     const validText = text.replace(/[^0-9.]/g, '');
     // Ensure only one decimal place
     const parts = validText.split('.');
@@ -266,6 +284,25 @@ export default function VenueDetailScreen() {
       </SafeAreaView>
     );
   }
+  // Helper function to extract part number from part name (e.g., "U4" -> 4)
+  const extractPartNumber = (partName: string): number => {
+    const match = partName.match(/\d+/);
+    return match ? parseInt(match[0], 10) : Infinity;
+  };
+
+  const sortParts = (partsToSort: Part[]): Part[] => {
+    return [...partsToSort].sort((a, b) => {
+      const numA = extractPartNumber(a.name);
+      const numB = extractPartNumber(b.name);
+      
+      if (numA !== numB) {
+        return numA - numB;
+      }
+      
+      return a.name.localeCompare(b.name);
+    });
+  };
+
   const groupedParts = projectParts.reduce((acc, part) => {
     if (!acc[part.type]) {
       acc[part.type] = [];
@@ -277,6 +314,11 @@ export default function VenueDetailScreen() {
   
     return acc;
   }, {} as Record<string, Part[]>);
+
+  // Sort parts within each category by part number from small to large, then alphabetically
+  Object.keys(groupedParts).forEach(type => {
+    groupedParts[type] = sortParts(groupedParts[type]);
+  });
   const getSubParts = (parentPartId: string): Part[] => {
     return projectParts.filter(part => part.parentPartId === parentPartId);
   };
@@ -311,10 +353,7 @@ export default function VenueDetailScreen() {
   };
 
   const handleStatusModeToggle = () => {
-    if (!statusMode) {
-      setCountingMode(false);
-    }
-    setStatusMode(!statusMode);
+    // Status mode removed - not used anymore
   };
 
   const handleCommentSend = async (partId: string, commentText: string) => {
@@ -567,7 +606,8 @@ export default function VenueDetailScreen() {
       });
       setShowEditPartModal(false);
       setSelectedPart(null);
-      // The global state is updated by useData().updatePart() and will sync via useEffect
+      // Reload venue data to refresh the part list immediately
+      await loadVenueData();
     } catch (error) {
       console.error('Error updating part:', error);
       Alert.alert('Error', 'Failed to update part');
@@ -593,6 +633,10 @@ export default function VenueDetailScreen() {
               setShowStatusModal(false);
               setSelectedPart(null);
               await loadVenueData();
+              // Reload used part numbers if create modal is open
+              if (showCreatePartModal) {
+                await loadNextPartNumber();
+              }
             } catch (error) {
               console.error('Error deleting part:', error);
               Alert.alert('Error', 'Failed to delete part');
@@ -605,11 +649,11 @@ export default function VenueDetailScreen() {
   const getRequiredFields = (type: PartType): string[] => {
     switch (type) {
       case 'U shape':
-        return ['length', 'radius', 'depth', 'oFillet', 'iFillet'];
+        return ['length', 'Diameter', 'depth', 'oFillet'];
       case 'Straight':
         return ['length'];
       case 'Knob':
-        return ['middleRadius', 'depth', 'middleToBackDepth'];
+        return ['middleDiameter', 'depth', 'middleToBackDepth'];
       case 'Button':
         return ['buttonType'];
       case 'Push Pad':
@@ -638,11 +682,11 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
+                value={newPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -677,7 +721,7 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>I Fillet *</ThemedText>
+              <ThemedText style={styles.inputLabel}>I Fillet</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
                 value={newPart.dimensions['iFillet'] || ''}
@@ -688,6 +732,30 @@ export default function VenueDetailScreen() {
                 editable={!usingSimilarPart}
               />
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Edge Type</ThemedText>
+              <View style={styles.selectionContainer}>
+                {['Seal', 'Cut'].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.selectionButton,
+                      newPart.dimensions['edgeType'] === option && styles.selectionButtonActive
+                    ]}
+                    onPress={() => handleDimensionChange('edgeType', option)}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.selectionButtonText,
+                        newPart.dimensions['edgeType'] === option && styles.selectionButtonTextActive
+                      ]}
+                    >
+                      {option}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </>
         );
@@ -708,11 +776,11 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
+                value={newPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -726,11 +794,11 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Front Radius</ThemedText>
+              <ThemedText style={styles.inputLabel}>Front Diameter</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['frontRadius'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('frontRadius', text)}
+                value={newPart.dimensions['frontDiameter'] || ''}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('frontDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -739,11 +807,11 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Middle/Largest Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Middle/Largest Diameter *</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['middleRadius'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('middleRadius', text)}
+                value={newPart.dimensions['middleDiameter'] || ''}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('middleDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -752,11 +820,11 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Back Radius</ThemedText>
+              <ThemedText style={styles.inputLabel}>Back Diameter</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['backRadius'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('backRadius', text)}
+                value={newPart.dimensions['backDiameter'] || ''}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('backDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -852,11 +920,11 @@ export default function VenueDetailScreen() {
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>}
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter</ThemedText>
               <TextInput
                 style={[styles.input, usingSimilarPart && styles.disabledInput]}
-                value={newPart.dimensions['radius'] || ''}
-                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('radius', text)}
+                value={newPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => !usingSimilarPart && handleDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -942,11 +1010,11 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -975,7 +1043,7 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>I Fillet *</ThemedText>
+              <ThemedText style={styles.inputLabel}>I Fillet</ThemedText>
               <TextInput
                 style={styles.input}
                 value={editingPart.dimensions['iFillet'] || ''}
@@ -984,6 +1052,30 @@ export default function VenueDetailScreen() {
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
               />
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Edge Type</ThemedText>
+              <View style={styles.selectionContainer}>
+                {['Seal', 'Cut'].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.selectionButton,
+                      editingPart.dimensions['edgeType'] === option && styles.selectionButtonActive
+                    ]}
+                    onPress={() => handleEditDimensionChange('edgeType', option)}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.selectionButtonText,
+                        editingPart.dimensions['edgeType'] === option && styles.selectionButtonTextActive
+                      ]}
+                    >
+                      {option}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </>
         );
@@ -1002,11 +1094,11 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -1018,33 +1110,33 @@ export default function VenueDetailScreen() {
         return (
           <>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Front Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Front Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['frontRadius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('frontRadius', text)}
+                value={editingPart.dimensions['frontDiameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('frontDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Middle Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Middle Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['middleRadius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('middleRadius', text)}
+                value={editingPart.dimensions['middleDiameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('middleDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Back Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Back Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['backRadius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('backRadius', text)}
+                value={editingPart.dimensions['backDiameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('backDiameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -1103,11 +1195,11 @@ export default function VenueDetailScreen() {
               </View>
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -1185,11 +1277,11 @@ export default function VenueDetailScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Radius *</ThemedText>
+              <ThemedText style={styles.inputLabel}>Diameter *</ThemedText>
               <TextInput
                 style={styles.input}
-                value={editingPart.dimensions['radius'] || ''}
-                onChangeText={(text) => handleEditDimensionChange('radius', text)}
+                value={editingPart.dimensions['Diameter'] || ''}
+                onChangeText={(text) => handleEditDimensionChange('Diameter', text)}
                 placeholder="mm"
                 placeholderTextColor="#6B728080"
                 keyboardType="decimal-pad"
@@ -1222,10 +1314,10 @@ export default function VenueDetailScreen() {
             <Hash color={countingMode ? '#FFFFFF' : '#6B7280'} size={20} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.modeButton, statusMode && styles.modeButtonActive]}
-            onPress={handleStatusModeToggle}
+            style={[styles.modeButton, showPhotos && styles.modeButtonActive]}
+            onPress={() => setShowPhotos(!showPhotos)}
           >
-            <Tag color={statusMode ? '#FFFFFF' : '#6B7280'} size={20} />
+            <ImageIcon color={showPhotos ? '#FFFFFF' : '#6B7280'} size={20} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1249,6 +1341,7 @@ export default function VenueDetailScreen() {
                 const quantity = partQuantities[part.id] || 0;
                 const subParts = getSubParts(part.id);
                 const hasComments = hasUnfinishedComments(part.id);
+                const isSelectedForPhotos = showPhotos && selectedPartIdForPhotos === part.id;
 
                 return (
                   <View key={part.id}>
@@ -1257,44 +1350,55 @@ export default function VenueDetailScreen() {
                       quantity={quantity}
                       showQuantity={true}
                       countingMode={countingMode}
-                      statusMode={statusMode}
                       hasComments={hasComments}
+                      isSelected={isSelectedForPhotos}
+                      allowPressInCountingMode={showPhotos}
                       venueName={venue.name}
+                      simplifyDisplay={true}
                       onQuantityChange={(delta) => handleQuantityChange(part.id, delta)}
-                      onStatusChange={(newStatus) => handleStatusChange(part.id, newStatus)}
                       onCommentSend={(text) => handleCommentSend(part.id, text)}
                       onMorePress={() => {
                         setSelectedPart(part);
                         setShowPartActionModal(true);
                       }}
                       onPress={() => {
-                        setSelectedPart(part);
-                        setShowPartDetailModal(true);
+                        if (showPhotos) {
+                          setSelectedPartIdForPhotos(part.id);
+                        } else {
+                          setSelectedPart(part);
+                          setShowPartDetailModal(true);
+                        }
                       }}
                     />
                     {subParts.map((subPart) => {
                       const subQuantity = partQuantities[subPart.id] || 0;
                       const subHasComments = hasUnfinishedComments(subPart.id);
+                      const isSubPartSelectedForPhotos = showPhotos && selectedPartIdForPhotos === subPart.id;
                       return (
-                        <View key={subPart.id} style={styles.subPartContainer}>
+                        <View key={subPart.id} style={[styles.subPartContainer]}>
                           <PartCard
                             part={subPart}
                             quantity={subQuantity}
                             showQuantity={true}
                             countingMode={countingMode}
-                            statusMode={statusMode}
                             hasComments={subHasComments}
+                            isSelected={isSubPartSelectedForPhotos}
+                            allowPressInCountingMode={showPhotos}
                             venueName={venue.name}
+                            simplifyDisplay={true}
                             onQuantityChange={(delta) => handleQuantityChange(subPart.id, delta)}
-                            onStatusChange={(newStatus) => handleStatusChange(subPart.id, newStatus)}
                             onCommentSend={(text) => handleCommentSend(subPart.id, text)}
                             onMorePress={() => {
                               setSelectedPart(subPart);
                               setShowPartActionModal(true);
                             }}
                             onPress={() => {
-                              setSelectedPart(subPart);
-                              setShowPartDetailModal(true);
+                              if (showPhotos) {
+                                setSelectedPartIdForPhotos(subPart.id);
+                              } else {
+                                setSelectedPart(subPart);
+                                setShowPartDetailModal(true);
+                              }
                             }}
                           />
                         </View>
@@ -1307,12 +1411,48 @@ export default function VenueDetailScreen() {
           );
         })}
       </ScrollView>
-      <TouchableOpacity
-        style={styles.floatingAddButton}
-        onPress={() => setShowCreatePartModal(true)}
-      >
-        <Plus color="#FFFFFF" size={28} />
-      </TouchableOpacity>
+      {showPhotos && selectedPartIdForPhotos && (
+        <View style={styles.photoGallerySection}>
+          <View style={styles.photoGalleryHeader}>
+            <ThemedText style={styles.photoGalleryHeaderText}>
+              {projectParts.find(p => p.id === selectedPartIdForPhotos)?.name || 'Photos'}
+            </ThemedText>
+            <TouchableOpacity onPress={() => setSelectedPartIdForPhotos(null)}>
+              <ThemedText style={styles.photoGalleryClose}>×</ThemedText>
+            </TouchableOpacity>
+          </View>
+          {projectParts.find(p => p.id === selectedPartIdForPhotos)?.pictures && projectParts.find(p => p.id === selectedPartIdForPhotos)?.pictures.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.photoGalleryContent}
+              scrollEventThrottle={16}
+            >
+              {projectParts.find(p => p.id === selectedPartIdForPhotos)?.pictures.map((photoUri, index) => (
+                <View key={`photo-${index}`} style={styles.photoGalleryItem}>
+                  <Image
+                    source={{ uri: photoUri }}
+                    style={styles.photoGalleryImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.photoNotFoundContainer}>
+              <ThemedText style={styles.photoNotFoundText}>Picture not found for this part</ThemedText>
+            </View>
+          )}
+        </View>
+      )}
+      {!countingMode && !selectedPartIdForPhotos && (
+        <TouchableOpacity
+          style={styles.floatingAddButton}
+          onPress={() => setShowCreatePartModal(true)}
+        >
+          <Plus color="#FFFFFF" size={28} />
+        </TouchableOpacity>
+      )}
       <Modal
         visible={showCreatePartModal}
         animationType="slide"
@@ -1709,7 +1849,7 @@ export default function VenueDetailScreen() {
               type: part.type,
               description: part.description,
               pictures: part.pictures,
-              cadDrawing: part.cadDrawing || undefined,
+              cadDrawing: part.cadDrawing === '' ? null : part.cadDrawing || undefined,
               dimensions: part.dimensions,
               designer: part.designer || undefined,
             });
@@ -1937,31 +2077,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   partCategory: {
-    marginBottom: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    marginBottom: 12,
+    backgroundColor: 'transparent',
   },
   categoryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+    letterSpacing: 0.3,
   },
   categoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+    backgroundColor: 'transparent',
     justifyContent: 'space-between',
+    marginBottom: 8,
   },
   modalContainer: {
     flex: 1,
@@ -2578,5 +2710,98 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
+  },
+  selectionContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  selectionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionButtonActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  selectionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  selectionButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  photoGallerySection: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    marginBottom: -32,
+  },
+  photoGalleryContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoGalleryItem: {
+    alignItems: 'center',
+    width: 150,
+  },
+  photoGalleryImage: {
+    width: 150,
+    height: 150,
+    borderRadius: 16,
+    backgroundColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  photoGalleryLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#374151',
+    textAlign: 'center',
+    numberOfLines: 2,
+  },
+  photoGalleryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 0,
+  },
+  photoGalleryHeaderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  photoGalleryClose: {
+    fontSize: 28,
+    color: '#9CA3AF',
+    fontWeight: '400',
+  },
+  photoNotFoundContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 48,
+  },
+  photoNotFoundText: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
+    textAlign: 'center',
   },
 }); 

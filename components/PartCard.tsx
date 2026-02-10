@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Modal, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Modal, Animated, Platform, Dimensions } from 'react-native';
 import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { Part, Project } from '@/types';
-import { EllipsisVertical, Package, MessageCircle, Send, Check, Minus, Plus, ChevronRight } from 'lucide-react-native';
+import { EllipsisVertical, Package, MessageCircle, Send, Check, Minus, Plus, ChevronRight, ImageIcon } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
 
 interface PartCardProps {
@@ -16,6 +16,9 @@ interface PartCardProps {
   venueName?: string;
   showCommentButton?: boolean;
   isSelected?: boolean;
+  simplifyDisplay?: boolean;
+  allowPressInCountingMode?: boolean;
+  gridLayout?: boolean;
   onPress?: () => void;
   onMorePress?: () => void;
   onLongPress?: () => void;
@@ -35,6 +38,9 @@ export function PartCard({
   venueName,
   showCommentButton = true,
   isSelected = false,
+  simplifyDisplay = false,
+  allowPressInCountingMode = false,
+  gridLayout = false,
   onPress,
   onMorePress,
   onLongPress,
@@ -107,7 +113,7 @@ export function PartCard({
 
   const displayName = project ? `${part.name} - ${project.name}` : part.name;
 
-  const shouldDisablePress = countingMode || statusMode || showCommentInput;
+  const shouldDisablePress = (countingMode && !allowPressInCountingMode) || statusMode || showCommentInput;
 
   const handleCardPress = () => {
     if (!shouldDisablePress && onPress) {
@@ -116,6 +122,58 @@ export function PartCard({
   };
 
   return (
+    gridLayout ? (
+      // Grid layout for PartTab - CAD drawing as background
+      <TouchableOpacity
+        style={[styles.gridCard, isSelected && styles.gridCardSelected]}
+        onPress={() => {
+          if (!shouldDisablePress) {
+            handleCardPress();
+            if (onPress) onPress();
+          }
+        }}
+        onLongPress={onLongPress}
+        delayLongPress={500}
+        disabled={shouldDisablePress && !onLongPress}
+        activeOpacity={shouldDisablePress ? 1 : 0.7}
+      >
+        {/* Background image from CAD drawing or placeholder */}
+        {part.cadDrawing ? (
+          <Image
+            source={{ uri: part.cadDrawing }}
+            style={styles.gridCardBackground}
+          />
+        ) : (
+          <View style={styles.gridCardPlaceholder}>
+            <ImageIcon color="#9CA3AF" size={48} />
+          </View>
+        )}
+        
+        {/* Overlay for text readability */}
+        <View style={styles.gridCardOverlay} />
+        
+        {/* More button */}
+        {onMorePress && (
+          <TouchableOpacity
+            style={styles.gridCardMoreButton}
+            onPress={onMorePress}
+            activeOpacity={0.6}
+          >
+            <EllipsisVertical color="#FFFFFF" size={20} />
+          </TouchableOpacity>
+        )}
+        
+        {/* Content */}
+        <View style={styles.gridCardContent}>
+          <ThemedText style={styles.gridCardName}>{part.name}</ThemedText>
+          {showQuantity && quantity > 0 && (
+            <View style={styles.gridCardQuantityBadge}>
+              <ThemedText style={styles.gridCardQuantityText}>{quantity}</ThemedText>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    ) : (
     <TouchableOpacity
       style={[styles.card, isSelected && styles.cardSelected]}
       onPress={() => {
@@ -130,35 +188,40 @@ export function PartCard({
       activeOpacity={shouldDisablePress ? 1 : 0.7}
     >
       <View style={styles.content}>
-        <View style={styles.imageContainer}>
-          {part.cadDrawing ? (
-            <Image key={part.cadDrawing} source={{ uri: part.cadDrawing }} style={styles.thumbnail} />
-          ) : part.pictures.length > 0 ? (
-            <Image key={part.pictures[0]} source={{ uri: part.pictures[0] }} style={styles.thumbnail} />
-          ) : (
-            <View style={styles.placeholderImage}>
-              <Package color="#6B7280" size={24} />
+        <View style={styles.mainContent}>
+          {!simplifyDisplay && (
+            <View style={styles.imageContainer}>
+              {part.cadDrawing ? (
+                <Image key={part.cadDrawing} source={{ uri: part.cadDrawing }} style={styles.thumbnail} />
+              ) : part.pictures.length > 0 ? (
+                <Image key={part.pictures[0]} source={{ uri: part.pictures[0] }} style={styles.thumbnail} />
+              ) : (
+                <View style={styles.placeholderImage}>
+                  <Package color="#6B7280" size={24} />
+                </View>
+              )}
             </View>
           )}
-        </View>
-        
-        <View style={styles.details}>
-          <ThemedText style={styles.name}>{displayName}</ThemedText>
-          {!countingMode && <ThemedText style={styles.type}>{part.type}</ThemedText>}
           
-          {!countingMode && (
-            <View style={styles.statusContainer}>
-              <View style={[styles.statusBadge, { backgroundColor: statusColors[part.status] || '#6B7280' }]}>
-                <ThemedText style={styles.statusText}>
-                  {part.status ? part.status.charAt(0).toUpperCase() + part.status.slice(1) : 'Unknown'}
-                </ThemedText>
+          <View style={styles.details}>
+            <View style={styles.header}>
+              <ThemedText style={styles.name}>{displayName}</ThemedText>
+            </View>
+            {simplifyDisplay && part.description && (
+              <ThemedText style={styles.description} numberOfLines={1}>{part.description}</ThemedText>
+            )}
+            {!countingMode && !simplifyDisplay && <ThemedText style={styles.type}>{part.type}</ThemedText>}
+            
+            {!countingMode && !simplifyDisplay && (
+              <View style={styles.statusContainer}>
+                <View style={[styles.statusBadge, { backgroundColor: statusColors[part.status] || '#6B7280' }]}>
+                  <ThemedText style={styles.statusText}>
+                    {part.status ? part.status.charAt(0).toUpperCase() + part.status.slice(1) : 'Unknown'}
+                  </ThemedText>
+                </View>
               </View>
-            </View>
-          )}
-          
-          {!countingMode && showQuantity && (
-            <ThemedText style={styles.quantity}>Qty: {quantity}</ThemedText>
-          )}
+            )}
+          </View>
         </View>
 
         <View style={styles.actions}>
@@ -219,6 +282,12 @@ export function PartCard({
             </View>
           ) : (
             <View style={styles.normalActions}>
+              {simplifyDisplay && showQuantity && (
+                <View style={styles.qtyContainer}>
+                  <ThemedText style={styles.qtyLabel}>Qty:</ThemedText>
+                  <ThemedText style={styles.qtyValue}>{quantity}</ThemedText>
+                </View>
+              )}
               {showCommentButton && (
                 <TouchableOpacity
                   style={styles.commentButton}
@@ -321,43 +390,130 @@ export function PartCard({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    )
   );
 }
 
 // ... styles remain unchanged
 
+const { width: screenWidth } = Dimensions.get('window');
+const gridCardSize = (screenWidth - 24 - 16) / 2; // (screenWidth - padding - margins) / 2 columns
+
 const styles = StyleSheet.create({
+  // Grid layout styles
+  gridCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    margin: 4,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    width: gridCardSize,
+    height: gridCardSize,
+    position: 'relative',
+  },
+  gridCardSelected: {
+    borderWidth: 2,
+    borderColor: '#2563EB',
+    backgroundColor: '#DBEAFE',
+  },
+  gridCardBackground: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  gridCardPlaceholder: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gridCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  gridCardContent: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    padding: 12,
+  },
+  gridCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    letterSpacing: 0.3,
+  },
+  gridCardQuantityBadge: {
+    backgroundColor: '#2563EB',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  gridCardQuantityText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  gridCardMoreButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     marginHorizontal: 16,
-    marginVertical: 6,
+    marginVertical: 5,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
     elevation: 2,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mainContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   imageContainer: {
     marginRight: 12,
   },
   thumbnail: {
-    width: 60,
-    height: 60,
+    width: 56,
+    height: 56,
     borderRadius: 8,
   },
   placeholderImage: {
-    width: 60,
-    height: 60,
+    width: 56,
+    height: 56,
     backgroundColor: '#F3F4F6',
     borderRadius: 8,
     justifyContent: 'center',
@@ -366,16 +522,28 @@ const styles = StyleSheet.create({
   details: {
     flex: 1,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   name: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: '700',
+    color: '#1F2937',
     marginBottom: 2,
+    letterSpacing: 0.3,
+    flex: 1,
   },
   type: {
     fontSize: 12,
     color: '#6B7280',
     marginBottom: 4,
+  },
+  description: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 0,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -395,6 +563,50 @@ const styles = StyleSheet.create({
   quantity: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  qtyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
+  },
+  qtyLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  qtyValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  rightSection: {
+    marginLeft: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  qtyBadge: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  qtyText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3B82F6',
+    minWidth: 24,
+    textAlign: 'right',
   },
   actions: {
     alignItems: 'center',
@@ -672,10 +884,11 @@ const styles = StyleSheet.create({
   normalActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    marginLeft: 8,
   },
   commentButton: {
-    padding: 8,
+    padding: 4,
     position: 'relative',
   },
   commentBadge: {
@@ -743,8 +956,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cardSelected: {
-    backgroundColor: '#E5E7EB',
-    borderColor: '#9CA3AF',
+    backgroundColor: '#DBEAFE',
+    borderColor: '#2563EB',
     borderWidth: 2,
   },
   selectedCheckmark: {
@@ -758,5 +971,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+  },
+  moreButton: {
+    padding: 4,
   },
 });

@@ -33,7 +33,7 @@ export interface UShapePart extends BasePart {
   type: 'U shape';
   dimensions: {
     length: number;
-    radius: number;
+    Diameter: number;
     depth: number;
     oFillet: number;
     iFillet: number;
@@ -44,16 +44,16 @@ export interface StraightPart extends BasePart {
   type: 'Straight';
   dimensions: {
     length: number;
-    radius: number;
+    Diameter: number;
   };
 }
 
 export interface KnobPart extends BasePart {
   type: 'Knob';
   dimensions: {
-    frontRadius: number;
-    middleRadius: number;
-    backRadius: number;
+    frontDiameter: number;
+    middleDiameter: number;
+    backDiameter: number;
     depth: number;
     middleToBackDepth: number;
   };
@@ -63,7 +63,7 @@ export interface ButtonPart extends BasePart {
   type: 'Button';
   dimensions: {
     shape: 'Circle' | 'Rectangular' | 'Slot';
-    radius?: number; // Not for Rectangular
+    Diameter?: number; // Not for Rectangular
     length?: number; // Not for Circle
     width?: number; // Not for Circle
     fillet?: number; // Not for Circle
@@ -76,7 +76,7 @@ export interface PushPadPart extends BasePart {
   dimensions: {
     length: number;
     width: number;
-    radius: number;
+    Diameter: number;
   };
 }
 

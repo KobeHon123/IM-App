@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, FlatList, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Check } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { useData } from '@/hooks/useData';
+import { supabase } from '@/lib/supabase';
 
 const getComponentNames = (material: string) => {
   switch (material) {
@@ -213,6 +214,7 @@ const getMaterialCalculator = (material: string) => {
 export default function ResinRecord() {
   const router = useRouter();
   const { projects } = useData();
+  const insets = useSafeAreaInsets();
   const [selectedMaterial, setSelectedMaterial] = useState('BK');
   const [withOil, setWithOil] = useState(true);
   const [totalGrams, setTotalGrams] = useState('');
@@ -222,6 +224,16 @@ export default function ResinRecord() {
   const [lastModified, setLastModified] = useState<string | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
+
+  // Reset modal state when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      setShowProjectModal(false);
+      return () => {
+        // Cleanup if needed
+      };
+    }, [])
+  );
 
   const handleTotalChange = (value: string) => {
     setTotalGrams(value);
@@ -365,9 +377,14 @@ export default function ResinRecord() {
 
   const handleSelectProject = async (projectId: string) => {
     try {
-      // Save resin record to database
+      const selectedProject = projects.find((p) => p.id === projectId);
+      
+      const recordId = `resin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       const resinData = {
+        id: recordId,
         project_id: projectId,
+        project_name: selectedProject?.name || '',
         material: selectedMaterial,
         with_oil: withOil,
         total_grams: parseFloat(totalGrams),
@@ -375,10 +392,18 @@ export default function ResinRecord() {
         component2_grams: parseFloat(tough74Grams) || 0,
         oil_grams: parseFloat(oilGrams) || 0,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      // Replace with your actual database call (supabase)
-      console.log('Saving resin record:', resinData);
+      const { error } = await supabase
+        .from('resin_records')
+        .insert([resinData]);
+
+      if (error) {
+        console.error('Error saving resin record:', error);
+        Alert.alert('Error', 'Failed to save resin record: ' + error.message);
+        return;
+      }
 
       Alert.alert('Success', 'Resin record saved successfully!', [
         {
@@ -393,9 +418,10 @@ export default function ResinRecord() {
         },
       ]);
     } catch (error) {
+      console.error('Error:', error);
       Alert.alert('Error', 'Failed to save resin record');
     }
-  };
+  };;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -568,12 +594,8 @@ export default function ResinRecord() {
           </View>
         )}
 
-        <View style={styles.spacer} />
-      </ScrollView>
-
-      {/* Submit Button */}
-      {(totalGrams || onyxGrams || tough74Grams || oilGrams) && (
-        <View style={styles.submitButtonContainer}>
+        {/* Submit Button */}
+        {(totalGrams || onyxGrams || tough74Grams || oilGrams) && (
           <TouchableOpacity
             style={styles.submitButton}
             onPress={handleSubmit}
@@ -581,17 +603,20 @@ export default function ResinRecord() {
             <Check size={20} color="#FFFFFF" />
             <ThemedText style={styles.submitButtonText}>Submit to Project</ThemedText>
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+
+        <View style={styles.spacer} />
+      </ScrollView>
 
       {/* Project Selection Modal */}
       <Modal
         visible={showProjectModal}
         animationType="slide"
-        transparent={false}
+        transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={() => setShowProjectModal(false)}
       >
-        <SafeAreaView style={styles.modalContainer} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.modalContainer, { paddingTop: Math.max(insets.top, 16) }]} edges={['top', 'left', 'right', 'bottom']}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowProjectModal(false)}>
               <ThemedText style={styles.modalCloseText}>Cancel</ThemedText>
@@ -787,6 +812,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
   },
   submitButtonText: {
     fontSize: 16,

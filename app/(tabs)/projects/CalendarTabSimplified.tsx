@@ -40,9 +40,52 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
   const [timeInput, setTimeInput] = useState('');
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
 
   const events = getEventsByProject(projectId);
   const projectParts: Part[] = getPartsByProject(projectId); // Fetch parts
+
+  const extractPartNumber = (partName: string): number => {
+    const match = partName.match(/\d+/);
+    return match ? parseInt(match[0], 10) : Infinity;
+  };
+
+  const sortParts = (partsToSort: Part[]): Part[] => {
+    return [...partsToSort].sort((a, b) => {
+      const numA = extractPartNumber(a.name);
+      const numB = extractPartNumber(b.name);
+      
+      if (numA !== numB) {
+        return numA - numB;
+      }
+      
+      return a.name.localeCompare(b.name);
+    });
+  };
+
+  const getGroupedAndSortedParts = () => {
+    const grouped: Record<string, Part[]> = {};
+    projectParts.forEach(part => {
+      if (!grouped[part.type]) {
+        grouped[part.type] = [];
+      }
+      grouped[part.type].push(part);
+    });
+    
+    // Sort parts within each group
+    Object.keys(grouped).forEach(type => {
+      grouped[type] = sortParts(grouped[type]);
+    });
+    
+    return grouped;
+  };
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
 
   const formatDate = (date: Date) => {
     const day = date.getDate().toString().padStart(2, '0');
@@ -246,6 +289,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
     setSelectedTime(null);
     setTimeInput('');
     setEditingEventId(null);
+    setExpandedCategories({});
   };
 
   const renderCalendarDay = (day: number, isCurrentMonth: boolean, onPress: () => void, keyParam: string) => {
@@ -467,41 +511,60 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
                 <ThemedText style={styles.noContentText}>No parts available</ThemedText>
               ) : (
                 <View style={styles.partsListCompact}>
-                  {projectParts.map((item) => {
-                    const isSelected = selectedParts.includes(item.id);
+                  {Object.entries(getGroupedAndSortedParts()).map(([category, parts]) => {
+                    const isExpanded = expandedCategories[category] !== false; // Default to expanded
                     const color = eventColors[selectedType];
                     return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.partListItem,
-                          isSelected && { backgroundColor: color },
-                        ]}
-                        onPress={() => handlePartSelection(item.id)}
-                      >
-                        <View style={styles.partListContent}>
-                          <View style={[
-                            styles.partListCheckbox,
-                            isSelected && { backgroundColor: color, borderColor: color },
-                          ]}>
-                            {isSelected && <ThemedText style={styles.partListCheckmark}>✓</ThemedText>}
+                      <View key={category}>
+                        <TouchableOpacity
+                          style={styles.categoryHeader}
+                          onPress={() => toggleCategory(category)}
+                        >
+                          <ThemedText style={styles.categoryTitle}>{category}</ThemedText>
+                          <View style={styles.categoryBadge}>
+                            <ThemedText style={styles.categoryBadgeText}>{parts.length}</ThemedText>
                           </View>
-                          <View style={styles.partListTextContent}>
-                            <ThemedText style={[
-                              styles.partListName,
-                              isSelected && { color: '#FFFFFF' },
-                            ]}>
-                              {item.name}
-                            </ThemedText>
-                            <ThemedText style={[
-                              styles.partListType,
-                              isSelected && { color: '#FFFFFF', opacity: 0.85 },
-                            ]}>
-                              {item.type}
-                            </ThemedText>
+                          {isExpanded ? (
+                            <ChevronUp color="#6B7280" size={18} />
+                          ) : (
+                            <ChevronDown color="#6B7280" size={18} />
+                          )}
+                        </TouchableOpacity>
+                        {isExpanded && (
+                          <View style={styles.categoryContent}>
+                            {parts.map((item) => {
+                              const isSelected = selectedParts.includes(item.id);
+                              return (
+                                <TouchableOpacity
+                                  key={item.id}
+                                  style={[
+                                    styles.partListItem,
+                                    isSelected && { backgroundColor: color },
+                                  ]}
+                                  onPress={() => handlePartSelection(item.id)}
+                                >
+                                  <View style={styles.partListContent}>
+                                    <View style={[
+                                      styles.partListCheckbox,
+                                      isSelected && { backgroundColor: color, borderColor: color },
+                                    ]}>
+                                      {isSelected && <ThemedText style={styles.partListCheckmark}>✓</ThemedText>}
+                                    </View>
+                                    <View style={styles.partListTextContent}>
+                                      <ThemedText style={[
+                                        styles.partListName,
+                                        isSelected && { color: '#FFFFFF' },
+                                      ]}>
+                                        {item.name}
+                                      </ThemedText>
+                                    </View>
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            })}
                           </View>
-                        </View>
-                      </TouchableOpacity>
+                        )}
+                      </View>
                     );
                   })}
                 </View>
@@ -787,7 +850,41 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   partsListCompact: {
+    gap: 4,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
     gap: 8,
+  },
+  categoryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    flex: 1,
+  },
+  categoryBadge: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryBadgeText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
+    lineHeight: 13,
+  },
+  categoryContent: {
+    paddingLeft: 12,
+    gap: 6,
+    marginBottom: 8,
   },
   partListItem: {
     paddingHorizontal: 14,

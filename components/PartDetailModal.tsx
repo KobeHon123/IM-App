@@ -265,25 +265,43 @@ export function PartDetailModal({
               </View>
             </View>
             {/* Dimensions Section */}
-            {Object.keys(selectedPart.dimensions).length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Ruler color="#6B7280" size={20} />
-                  <ThemedText style={styles.sectionTitle}>Dimensions</ThemedText>
+            {Object.keys(selectedPart.dimensions).length > 0 && (() => {
+              const entries = Object.entries(selectedPart.dimensions);
+              const orderMap: Record<string, string[]> = {
+                'U shape': ['length', 'Diameter', 'depth', 'oFillet', 'iFillet'],
+                'Straight': ['length', 'Diameter'],
+                'Knob': ['frontDiameter', 'middleDiameter', 'backDiameter', 'depth', 'middleToBackDepth'],
+                'Button': ['shape', 'Diameter', 'length', 'width', 'fillet', 'thickness'],
+                'Push Pad': ['length', 'width', 'Diameter'],
+              };
+              
+              const order = orderMap[selectedPart.type] || Object.keys(selectedPart.dimensions);
+              const sortedEntries = entries.sort(([keyA], [keyB]) => {
+                const indexA = order.indexOf(keyA);
+                const indexB = order.indexOf(keyB);
+                return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+              });
+
+              return (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Ruler color="#6B7280" size={20} />
+                    <ThemedText style={styles.sectionTitle}>Dimensions</ThemedText>
+                  </View>
+                  <FlatList
+                    data={sortedEntries}
+                    keyExtractor={([key]) => key}
+                    renderItem={({ item: [key, value] }) => (
+                      <View style={styles.dimensionRow}>
+                        <ThemedText style={styles.dimensionKey}>{key.charAt(0).toUpperCase() + key.slice(1)}:</ThemedText>
+                        <ThemedText style={styles.dimensionValue}>{value}</ThemedText>
+                      </View>
+                    )}
+                    scrollEnabled={false}
+                  />
                 </View>
-                <FlatList
-                  data={Object.entries(selectedPart.dimensions)}
-                  keyExtractor={([key]) => key}
-                  renderItem={({ item: [key, value] }) => (
-                    <View style={styles.dimensionRow}>
-                      <ThemedText style={styles.dimensionKey}>{key.charAt(0).toUpperCase() + key.slice(1)}:</ThemedText>
-                      <ThemedText style={styles.dimensionValue}>{value}</ThemedText>
-                    </View>
-                  )}
-                  scrollEnabled={false}
-                />
-              </View>
-            )}
+              );
+            })()}
             {/* Comments Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>

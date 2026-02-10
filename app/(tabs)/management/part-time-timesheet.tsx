@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info, Download } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info, Download, ArrowLeft } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import Svg, { Polygon } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -63,6 +64,7 @@ const StarShape = ({ color }: { color: string }) => {
 };
 
 export default function PartTimeTimesheet() {
+  const router = useRouter();
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([]);
@@ -550,7 +552,14 @@ export default function PartTimeTimesheet() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft color="#2563EB" size={24} />
+        </TouchableOpacity>
         <ThemedText style={styles.headerTitle}>Part Time Timesheet</ThemedText>
+        <View style={styles.headerPlaceholder} />
       </View>
 
       {/* Month Navigator */}
@@ -1466,11 +1475,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerPlaceholder: {
+    width: 40,
   },
   headerTitle: {
     fontSize: 24,
