@@ -82,6 +82,7 @@ export function useDataInternal() {
         isCompleted: c.is_completed,
         venueId: c.venue_id,
         venueName: c.venue_name,
+        userId: c.user_id,
         createdAt: new Date(c.created_at)
       })) || [];
       const typedProfiles = profilesData?.map(p => ({

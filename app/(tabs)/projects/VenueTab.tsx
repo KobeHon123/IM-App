@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, MapPin, Camera, EllipsisVertical} from 'lucide-react-native';
+import { Plus, MapPin, Camera, EllipsisVertical, ArrowUpDown } from 'lucide-react-native';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { getVenuesByProject, createVenue, updateVenue, deleteVenue } from '@/lib/supabaseHelpers';
 import { Venue } from '@/types';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
+import { SearchBar } from '@/components/SearchBar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { ThemedText } from '@/components/ThemedText';
 
@@ -47,6 +48,8 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
   const [showCreateVenueModal, setShowCreateVenueModal] = useState(false);
   const [showEditVenueModal, setShowEditVenueModal] = useState(false);
   const [showVenueActionModal, setShowVenueActionModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortAsc, setSortAsc] = useState(true);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [newVenue, setNewVenue] = useState({
     name: '',
@@ -64,6 +67,22 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
   // Check if venue name already exists in this project
   const isVenueNameDuplicate = newVenue.name.trim() !== '' && 
     venues.some(v => v.name.toLowerCase() === newVenue.name.trim().toLowerCase());
+
+  const filteredVenues = [...venues]
+    .filter((venue) =>
+      venue.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      venue.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      venue.pic.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortAsc) {
+        return a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase());
+      }
+
+      const aTime = new Date((a as any).created_at ?? a.createdAt ?? 0).getTime();
+      const bTime = new Date((b as any).created_at ?? b.createdAt ?? 0).getTime();
+      return bTime - aTime;
+    });
 
 
   const handleCreateVenue = async () => {
@@ -192,8 +211,24 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
 
   return (
     <View style={styles.tabContent}>
+      <View style={styles.searchRow}>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search venues..."
+          containerStyle={{ flex: 1, marginHorizontal: 0 }}
+        />
+        <TouchableOpacity
+          style={styles.sortButton}
+          onPress={() => setSortAsc(prev => !prev)}
+          accessibilityLabel="Toggle sort order"
+        >
+          <ArrowUpDown color={sortAsc ? '#2563EB' : '#374151'} size={20} />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.venueList} showsVerticalScrollIndicator={false}>
-        {venues.map((venue) => (
+        {filteredVenues.map((venue) => (
           <View key={venue.id} style={styles.venueCard}>
             <TouchableOpacity
               style={styles.venueCardContent}
@@ -444,6 +479,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  sortButton: {
+    height: 44,
+    width: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionHeader: {
     flexDirection: 'row',

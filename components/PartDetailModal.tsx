@@ -172,8 +172,8 @@ export function PartDetailModal({
   const getCommentAuthorName = (comment: Comment): string => {
     if (comment.userId) {
       const userProfile = profiles.find(p => p.id === comment.userId);
-      if (userProfile?.full_name) {
-        return userProfile.full_name;
+      if (userProfile?.fullName) {
+        return userProfile.fullName;
       }
     }
     return comment.author || 'Anonymous';
@@ -193,7 +193,7 @@ export function PartDetailModal({
       
       if (user) {
         const userProfile = profiles.find(p => p.id === user.id);
-        authorName = userProfile?.full_name || user.email?.split('@')[0] || 'Anonymous';
+        authorName = userProfile?.fullName || user.email?.split('@')[0] || 'Anonymous';
         userId = user.id;
       }
 

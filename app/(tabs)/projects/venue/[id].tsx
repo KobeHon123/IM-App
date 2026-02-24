@@ -358,14 +358,26 @@ export default function VenueDetailScreen() {
 
   const handleCommentSend = async (partId: string, commentText: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      let authorName = 'Anonymous';
+      let userId: string | undefined = undefined;
+
+      if (user) {
+        const userProfile = profiles.find(p => p.id === user.id);
+        authorName = userProfile?.fullName || user.email?.split('@')[0] || 'Anonymous';
+        userId = user.id;
+      }
+
       await createComment({
         partId,
-        author: 'User', // TODO: Replace with actual user name from auth
+        author: authorName,
         text: commentText,
         isPending: true,
         isCompleted: false,
         venueId: venue.id,
         venueName: venue.name,
+        userId,
       });
 
       if (Platform.OS !== 'web') {
