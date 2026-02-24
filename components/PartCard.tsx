@@ -139,10 +139,15 @@ export function PartCard({
         disabled={shouldDisablePress && !onLongPress}
         activeOpacity={shouldDisablePress ? 1 : 0.7}
       >
-        {/* Background image from CAD drawing or placeholder */}
+        {/* Background image from CAD drawing or picture or placeholder */}
         {part.cadDrawing ? (
           <Image
             source={{ uri: part.cadDrawing }}
+            style={styles.gridCardBackground}
+          />
+        ) : part.pictures.length > 0 ? (
+          <Image
+            source={{ uri: part.pictures[0] }}
             style={styles.gridCardBackground}
           />
         ) : (
@@ -580,6 +585,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 0,
     paddingVertical: 0,
+    marginRight: 8,
   },
   qtyLabel: {
     fontSize: 14,
@@ -624,7 +630,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   moreButton: {
-    padding: 8,
+    padding: 6,
   },
   // Modern Counting Mode Styles
   countingModeContainer: {
@@ -895,11 +901,11 @@ const styles = StyleSheet.create({
   normalActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginLeft: 8,
+    gap: 4,
+    marginLeft: 12,
   },
   commentButton: {
-    padding: 4,
+    padding: 6,
     position: 'relative',
   },
   commentBadge: {
@@ -984,6 +990,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   moreButton: {
-    padding: 4,
+    padding: 6,
   },
 });

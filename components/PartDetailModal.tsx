@@ -28,19 +28,23 @@ import {
   Package,
   Ruler,
   Square,
+  Trash,
   User,
   X,
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Part, Comment } from '@/types';
-import { updateComment, deleteComment, toggleCommentCompletion } from '@/lib/supabaseHelpers';
+import { updateComment, deleteComment, toggleCommentCompletion, createComment } from '@/lib/supabaseHelpers';
+import { supabase } from '@/lib/supabase';
+import { useData } from '@/hooks/useData';
 
 interface PartDetailModalProps {
   visible: boolean;
   selectedPart: Part | null;
   comments: Comment[];
   projectNames?: string[];
+  venueName?: string;
   onClose: () => void;
   onCommentsChange: (comments: Comment[]) => void;
   onImagePress?: (uri: string) => void;
@@ -51,11 +55,15 @@ export function PartDetailModal({
   selectedPart,
   comments,
   projectNames,
+  venueName,
   onClose,
   onCommentsChange,
 }: PartDetailModalProps) {
+  const { profiles } = useData();
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
+  const [newCommentText, setNewCommentText] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showFullImageModal, setShowFullImageModal] = useState(false);
   const [fullImageUri, setFullImageUri] = useState<string>('');
   const [isDownloading, setIsDownloading] = useState(false);
@@ -158,6 +166,58 @@ export function PartDetailModal({
         }
       ]
     );
+  };
+
+  // Helper function to get display name for a comment
+  const getCommentAuthorName = (comment: Comment): string => {
+    if (comment.userId) {
+      const userProfile = profiles.find(p => p.id === comment.userId);
+      if (userProfile?.full_name) {
+        return userProfile.full_name;
+      }
+    }
+    return comment.author || 'Anonymous';
+  };
+
+  const handleCommentSend = async () => {
+    if (!selectedPart || !newCommentText.trim()) {
+      return;
+    }
+
+    try {
+      setIsSubmittingComment(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      let authorName = 'Anonymous';
+      let userId: string | undefined = undefined;
+      
+      if (user) {
+        const userProfile = profiles.find(p => p.id === user.id);
+        authorName = userProfile?.full_name || user.email?.split('@')[0] || 'Anonymous';
+        userId = user.id;
+      }
+
+      const newComment = await createComment({
+        partId: selectedPart.id,
+        text: newCommentText.trim(),
+        author: authorName,
+        isPending: false,
+        isCompleted: false,
+        venueName: venueName,
+        userId: userId,
+      });
+
+      if (newComment) {
+        const updatedComments = [...comments, newComment];
+        onCommentsChange(updatedComments);
+        setNewCommentText('');
+      }
+    } catch (error) {
+      console.error('Error creating comment:', error);
+      Alert.alert('Error', 'Failed to send comment');
+    } finally {
+      setIsSubmittingComment(false);
+    }
   };
 
   return (
@@ -308,55 +368,67 @@ export function PartDetailModal({
                 <MessageCircle color="#6B7280" size={20} />
                 <ThemedText style={styles.sectionTitle}>Comments ({comments.length})</ThemedText>
               </View>
+
+              {/* Comment Input Form */}
+              <View style={styles.commentInputContainer}>
+                <TextInput
+                  style={styles.commentInput}
+                  value={newCommentText}
+                  onChangeText={setNewCommentText}
+                  placeholder={`Add comment for ${venueName || 'this part'}...`}
+                  multiline
+                  editable={!isSubmittingComment}
+                />
+                <View style={styles.commentInputActions}>
+                  <TouchableOpacity
+                    style={[styles.commentSendButton, (!newCommentText.trim() || isSubmittingComment) && styles.commentSendButtonDisabled]}
+                    onPress={handleCommentSend}
+                    disabled={!newCommentText.trim() || isSubmittingComment}
+                  >
+                    <ThemedText style={styles.commentSendText}>
+                      {isSubmittingComment ? 'Sending...' : 'Send'}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Existing Comments */}
               {comments.length > 0 ? (
-                comments.map((comment) => (
-                  <View key={comment.id} style={[
+                comments.map((comment, index) => (
+                  <View key={comment.id || `comment-${index}`} style={[
                     styles.commentItem,
                     comment.isCompleted && styles.commentItemCompleted
                   ]}>
                     <View style={styles.commentHeader}>
-                      <TouchableOpacity
-                        style={styles.commentCheckbox}
-                        onPress={() => handleToggleCommentCompletion(comment.id)}
-                      >
-                        {comment.isCompleted ? (
-                          <CheckSquare color="#10B981" size={24} />
+                      <View style={styles.commentHeaderLeft}>
+                        <TouchableOpacity
+                          style={styles.commentCheckbox}
+                          onPress={() => handleToggleCommentCompletion(comment.id)}
+                        >
+                          {comment.isCompleted ? (
+                            <CheckSquare color="#10B981" size={24} />
+                          ) : (
+                            <Square color="#6B7280" size={24} />
+                          )}
+                        </TouchableOpacity>
+                        {editingCommentId === comment.id ? (
+                          <TextInput
+                            style={styles.commentEditInput}
+                            value={editingCommentText}
+                            onChangeText={setEditingCommentText}
+                            multiline
+                            autoFocus
+                          />
                         ) : (
-                          <Square color="#6B7280" size={24} />
-                        )}
-                      </TouchableOpacity>
-                      {editingCommentId === comment.id ? (
-                        <TextInput
-                          style={styles.commentEditInput}
-                          value={editingCommentText}
-                          onChangeText={setEditingCommentText}
-                          multiline
-                          autoFocus
-                        />
-                      ) : (
-                        <ThemedText style={[
-                          styles.commentText,
-                          comment.isCompleted && styles.commentTextCompleted
-                        ]}>
-                          {comment.text}
-                        </ThemedText>
-                      )}
-                    </View>
-                    <View style={styles.commentFooter}>
-                      <View style={styles.commentMetadata}>
-                        <ThemedText style={styles.commentAuthor}>{comment.author}</ThemedText>
-                        <ThemedText style={styles.commentSeparator}>•</ThemedText>
-                        <ThemedText style={styles.commentDate}>
-                          {new Date(comment.createdAt).toLocaleDateString()} {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </ThemedText>
-                        {comment.venueName && (
-                          <>
-                            <ThemedText style={styles.commentSeparator}>•</ThemedText>
-                            <ThemedText style={styles.commentVenue}>{comment.venueName}</ThemedText>
-                          </>
+                          <ThemedText style={[
+                            styles.commentText,
+                            comment.isCompleted && styles.commentTextCompleted
+                          ]}>
+                            {comment.text}
+                          </ThemedText>
                         )}
                       </View>
-                      <View style={styles.commentActions}>
+                      <View style={styles.commentHeaderActions}>
                         {editingCommentId === comment.id ? (
                           <>
                             <TouchableOpacity
@@ -390,8 +462,23 @@ export function PartDetailModal({
                               style={styles.commentActionButton}
                               onPress={() => handleDeleteComment(comment.id)}
                             >
-                              <ThemedText style={styles.commentDeleteText}>Delete</ThemedText>
+                              <Trash color="#EF4444" size={16} />
                             </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.commentFooter}>
+                      <View style={styles.commentMetadata}>
+                        <ThemedText style={styles.commentAuthor}>{getCommentAuthorName(comment)}</ThemedText>
+                        <ThemedText style={styles.commentSeparator}>•</ThemedText>
+                        <ThemedText style={styles.commentDate}>
+                          {new Date(comment.createdAt).toLocaleDateString()} {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </ThemedText>
+                        {comment.venueName && (
+                          <>
+                            <ThemedText style={styles.commentSeparator}>•</ThemedText>
+                            <ThemedText style={styles.commentVenue}>{comment.venueName}</ThemedText>
                           </>
                         )}
                       </View>
@@ -575,11 +662,23 @@ const styles = StyleSheet.create({
   commentHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: 8,
+  },
+  commentHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  commentHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   commentCheckbox: {
     padding: 4,
     marginRight: 8,
+    marginTop: -4,
   },
   commentText: {
     flex: 1,
@@ -633,13 +732,9 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     fontWeight: '500',
   },
-  commentActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   commentActionButton: {
     padding: 4,
-    marginLeft: 12,
+    marginLeft: 4,
   },
   commentDeleteText: {
     fontSize: 12,
@@ -655,6 +750,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#10B981',
     fontWeight: '500',
+  },
+  commentInputContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 6,
+    padding: 12,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#FFFFFF',
+    minHeight: 70,
+    maxHeight: 130,
+    textAlignVertical: 'top',
+    marginBottom: 12,
+  },
+  commentInputActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  commentSendButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#2563EB',
+  },
+  commentSendButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  commentSendText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   fullImageOverlay: {
     position: 'absolute',

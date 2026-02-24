@@ -153,6 +153,7 @@ export interface Database {
           is_completed: boolean
           venue_id: string | null
           venue_name: string | null
+          user_id: string | null
           created_at: string
         }
         Insert: {
@@ -164,6 +165,7 @@ export interface Database {
           is_completed?: boolean
           venue_id?: string | null
           venue_name?: string | null
+          user_id?: string | null
           created_at?: string
         }
         Update: {
@@ -175,6 +177,7 @@ export interface Database {
           is_completed?: boolean
           venue_id?: string | null
           venue_name?: string | null
+          user_id?: string | null
           created_at?: string
         }
       }

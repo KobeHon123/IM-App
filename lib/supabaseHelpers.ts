@@ -10,7 +10,7 @@ const fromSupabase = {
   venue: (v: any): Venue => ({ id: v.id, projectId: v.project_id, name: v.name, description: v.description, pic: v.pic, thumbnail: v.thumbnail, partQuantities: v.part_quantities || {}, createdAt: new Date(v.created_at) }),
   part: (p: any): Part => ({ id: p.id, projectId: p.project_id, parentPartId: p.parent_part_id, name: p.name, type: p.type, status: p.status, description: p.description, designer: p.designer, dimensions: p.dimensions || {}, cadDrawing: p.cad_drawing, pictures: p.pictures || [], comments: [], createdAt: new Date(p.created_at) }),
   event: (e: any): Event => ({ id: e.id, projectId: e.project_id, date: e.date, type: e.type, description: e.description, parts: e.parts || [] }),
-  comment: (c: any): Comment => ({ id: c.id, partId: c.part_id, author: c.author, text: c.text, isPending: c.is_pending, isCompleted: c.is_completed, createdAt: new Date(c.created_at), venueId: c.venue_id, venueName: c.venue_name }),
+  comment: (c: any): Comment => ({ id: c.id, partId: c.part_id, author: c.author, text: c.text, isPending: c.is_pending, isCompleted: c.is_completed, createdAt: new Date(c.created_at), venueId: c.venue_id, venueName: c.venue_name, userId: c.user_id }),
 };
 
 // --- Part Type Prefix Mapping ---
@@ -401,18 +401,19 @@ export const checkPartNumberExists = async (partName: string): Promise<boolean> 
 };
 
 export const createComment = async (comment: Omit<Comment, 'id' | 'createdAt'>) => {
-    const { partId, isPending, venueId, venueName, ...rest } = comment;
-    const payload = { ...rest, part_id: partId, is_pending: isPending, venue_id: venueId, venue_name: venueName };
+    const { partId, isPending, isCompleted, venueId, venueName, userId, ...rest } = comment;
+    const payload = { ...rest, part_id: partId, is_pending: isPending, is_completed: isCompleted, venue_id: venueId, venue_name: venueName, user_id: userId };
     const { data, error } = await supabase.from('comments').insert(payload).select().single();
     if (error) throw error;
     return fromSupabase.comment(data);
 };
 
 export const updateComment = async (id: string, updates: Partial<Comment>) => {
-    const { partId, isPending, venueId, venueName, ...rest } = updates;
+    const { partId, isPending, isCompleted, venueId, venueName, ...rest } = updates;
     const payload: Record<string, any> = { ...rest };
     if (partId) payload.part_id = partId;
     if (isPending !== undefined) payload.is_pending = isPending;
+    if (isCompleted !== undefined) payload.is_completed = isCompleted;
     if (venueId) payload.venue_id = venueId;
     if (venueName) payload.venue_name = venueName;
 

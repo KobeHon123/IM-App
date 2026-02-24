@@ -131,4 +131,5 @@ export interface Comment {
   createdAt: Date;
   venueId?: string;
   venueName?: string;
+  userId?: string;
 }

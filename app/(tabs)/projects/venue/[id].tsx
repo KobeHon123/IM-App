@@ -1852,6 +1852,7 @@ export default function VenueDetailScreen() {
         visible={showPartDetailModal}
         selectedPart={selectedPart}
         comments={selectedPartComments}
+        venueName={venue?.name}
         onClose={() => {
           console.log('Closing part detail modal');
           setShowPartDetailModal(false);
