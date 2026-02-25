@@ -34,7 +34,7 @@ import {
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-import { Part, Comment } from '@/types';
+import { Part, Comment, Venue } from '@/types';
 import { updateComment, deleteComment, toggleCommentCompletion, createComment } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
@@ -45,6 +45,7 @@ interface PartDetailModalProps {
   comments: Comment[];
   projectNames?: string[];
   venueName?: string;
+  venues?: Venue[];
   onClose: () => void;
   onCommentsChange: (comments: Comment[]) => void;
   onImagePress?: (uri: string) => void;
@@ -56,6 +57,7 @@ export function PartDetailModal({
   comments,
   projectNames,
   venueName,
+  venues = [],
   onClose,
   onCommentsChange,
 }: PartDetailModalProps) {
@@ -362,6 +364,46 @@ export function PartDetailModal({
                 </View>
               );
             })()}
+            {/* Quantity Section */}
+            {selectedPart && venues.length > 0 && (() => {
+              const venuesWithQuantity = venues
+                .map(venue => ({
+                  ...venue,
+                  quantity: venue.partQuantities?.[selectedPart.id] ?? 0
+                }))
+                .filter(v => v.quantity > 0 || venues.length <= 5)
+                .sort((a, b) => {
+                  const nameCompare = a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase());
+                  if (nameCompare !== 0) {
+                    return nameCompare;
+                  }
+                  return a.quantity - b.quantity;
+                });
+              
+              if (venuesWithQuantity.length === 0) return null;
+              
+              return (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Package color="#6B7280" size={20} />
+                    <ThemedText style={styles.sectionTitle}>Quantity</ThemedText>
+                  </View>
+                  <FlatList
+                    data={venuesWithQuantity}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                      <View style={styles.quantityRow}>
+                        <ThemedText style={styles.quantityVenueName}>{item.name}</ThemedText>
+                        <ThemedText style={[styles.quantityValue, item.quantity === 0 && styles.quantityZero]}>
+                          {item.quantity}
+                        </ThemedText>
+                      </View>
+                    )}
+                    scrollEnabled={false}
+                  />
+                </View>
+              );
+            })()}
             {/* Comments Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -649,6 +691,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111827',
     fontWeight: '500',
+  },
+  quantityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  quantityVenueName: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
+  },
+  quantityValue: {
+    fontSize: 14,
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  quantityZero: {
+    color: '#9CA3AF',
   },
   commentItem: {
     backgroundColor: '#F9FAFB',

@@ -931,6 +931,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
         visible={showPartDetailModal}
         selectedPart={selectedPart}
         comments={selectedPartComments}
+        venues={venues}
         onClose={() => {
           console.log('Closing part detail modal');
           setShowPartDetailModal(false);

@@ -35,6 +35,7 @@ export default function VenueDetailScreen() {
   const [venue, setVenue] = useState<any>(null);
   const [project, setProject] = useState<any>(null);
   const [projectParts, setProjectParts] = useState<Part[]>([]);
+  const [projectVenues, setProjectVenues] = useState<any[]>([]);
   const [partQuantities, setPartQuantities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -73,6 +74,22 @@ export default function VenueDetailScreen() {
             thumbnail: projectData.thumbnail_url,
             createdAt: new Date(projectData.created_at),
           });
+          
+          // Load all venues in this project directly from Supabase
+          const { data: venuesData } = await supabase
+            .from('venues')
+            .select('*')
+            .eq('project_id', projectData.id);
+          
+          if (venuesData) {
+            const typedVenues = venuesData.map(v => ({
+              ...v,
+              projectId: v.project_id,
+              partQuantities: (v.part_quantities as Record<string, number>) || {},
+              createdAt: new Date(v.created_at)
+            }));
+            setProjectVenues(typedVenues);
+          }
         }
 
         const parts = await getPartsByProject(venueData.projectId);
@@ -593,6 +610,7 @@ export default function VenueDetailScreen() {
     if (!selectedPart) return;
     switch (action) {
       case 'view':
+        setSelectedPartComments(allComments[selectedPart.id] || []);
         setShowPartDetailModal(true);
         break;
       case 'edit':
@@ -1860,26 +1878,6 @@ export default function VenueDetailScreen() {
           )}
         </SafeAreaView>
       </Modal>
-      <PartDetailModal
-        visible={showPartDetailModal}
-        selectedPart={selectedPart}
-        comments={selectedPartComments}
-        venueName={venue?.name}
-        onClose={() => {
-          console.log('Closing part detail modal');
-          setShowPartDetailModal(false);
-          setSelectedPart(null);
-        }}
-        onCommentsChange={(updatedComments) => {
-          setSelectedPartComments(updatedComments);
-          if (selectedPart) {
-            setAllComments(prev => ({
-              ...prev,
-              [selectedPart.id]: updatedComments
-            }));
-          }
-        }}
-      />
       <EditPartModal
         visible={showEditPartModal}
         editingPart={editingPart}
@@ -2030,6 +2028,19 @@ export default function VenueDetailScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+      <PartDetailModal
+        visible={showPartDetailModal}
+        selectedPart={selectedPart}
+        comments={selectedPartComments}
+        venues={projectVenues}
+        onClose={() => {
+          setShowPartDetailModal(false);
+          setSelectedPart(null);
+        }}
+        onCommentsChange={(updatedComments) => {
+          setSelectedPartComments(updatedComments);
+        }}
+      />
     </SafeAreaView>
   );
 }
