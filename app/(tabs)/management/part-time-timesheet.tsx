@@ -80,7 +80,7 @@ export default function PartTimeTimesheet() {
   };
 
   const calculateWorkedHours = (entry: TimesheetEntry): number => {
-    if (entry.period === 'full') return 8;
+    if (entry.period === 'full') return 8.5;
     if (entry.period === 'am' || entry.period === 'pm') return 4;
     if (entry.period === 'other' && entry.custom_start_time && entry.custom_end_time) {
       const start = new Date(`2000-01-01T${entry.custom_start_time}`);
