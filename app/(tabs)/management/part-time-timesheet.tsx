@@ -41,7 +41,7 @@ const TriangleShape = ({ color, confirmed }: { color: string; confirmed?: boolea
   const crossPoints = "5,1 13,1 13,5 17,5 17,13 13,13 13,17 5,17 5,13 1,13 1,5 5,5";
   
   return (
-    <Svg width={18} height={18} viewBox="0 0 18 18">
+    <Svg width={20} height={20} viewBox="0 0 18 18">
       <Polygon 
         points={crossPoints} 
         fill={color}
@@ -840,8 +840,11 @@ export default function PartTimeTimesheet() {
               <ThemedText style={styles.legendText}>PolyU</ThemedText>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendSymbol, styles.triangleContainer, { backgroundColor: 'transparent' }]}>
-                <TriangleShape color="#9CA3AF" />
+              <View style={[styles.legendSiteSymbol, { backgroundColor: 'transparent' }]}>
+                <View style={styles.legendSiteIconScale}>
+                  <TriangleShape color="#9CA3AF" />
+                </View>
+                <ThemedText style={styles.legendSiteSymbolText}>S</ThemedText>
               </View>
               <ThemedText style={styles.legendText}>Site</ThemedText>
             </View>
@@ -1638,8 +1641,8 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
   triangleContainer: {
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1716,6 +1719,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   legendSymbolText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  legendSiteSymbol: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  legendSiteIconScale: {
+    transform: [{ scale: 1.3 }],
+  },
+  legendSiteSymbolText: {
+    position: 'absolute',
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
