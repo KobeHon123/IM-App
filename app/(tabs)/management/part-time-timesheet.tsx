@@ -9,8 +9,26 @@ import { useAuth } from '@/context/AuthContext';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThemedText } from '@/components/ThemedText';
+import { BlurView } from 'expo-blur';
 
 type Period = 'full' | 'am' | 'pm' | 'other';
+
+interface DutyAllocation {
+  duty: string;
+  hours: number;
+}
+
+interface DutyAllocationInput {
+  duty: string;
+  hours: string;
+}
+
+interface StoredDutyPayload {
+  version: 1;
+  duties: DutyAllocation[];
+}
+
+const MAX_DUTY_COUNT = 3;
 
 interface TimesheetEntry {
   id: string;
@@ -63,6 +81,286 @@ const StarShape = ({ color }: { color: string }) => {
   );
 };
 
+// ─── Wheel Picker constants (used by TimeWheelPickerModal) ──────────────────
+const WHEEL_ITEM_HEIGHT = 52;
+const WHEEL_VISIBLE_ITEMS = 5; // must be odd
+
+// WheelPickerModal removed — duty hours now use a plain TextInput (decimal-pad)
+
+const wheelStyles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+    zIndex: 999,
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+  sheet: {
+    backgroundColor: 'transparent',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  headerBtn: {
+    minWidth: 64,
+  },
+  cancelText: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  confirmText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+    textAlign: 'center',
+  },
+  wheelContainer: {
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: 'rgba(255,255,255,0.75)', // ← adjust 0.75 for transparency (0 = clear, 1 = solid white)
+  },
+  selectionIndicator: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D1D5DB',
+    backgroundColor: 'rgba(0,122,255,0.06)',
+    zIndex: 1,
+  },
+  wheelItem: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wheelItemText: {
+    fontSize: 20,
+    color: '#9CA3AF',
+  },
+  wheelItemTextSelected: {
+    color: '#111827',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+});
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ─── Time Wheel Picker ───────────────────────────────────────────────────────
+const TIME_HOURS_12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const TIME_MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+const TIME_AMPM = ['AM', 'PM'];
+const SHEET_SLIDE_AMOUNT = 420;
+
+// 24h → { hour12, isPM }
+const to12h = (h24: number) => {
+  const isPM = h24 >= 12;
+  const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+  return { h12, isPM };
+};
+// { hour12, isPM } → 24h
+const to24h = (h12: number, isPM: boolean) => {
+  if (!isPM && h12 === 12) return 0;
+  if (isPM && h12 !== 12) return h12 + 12;
+  return h12;
+};
+
+interface TimeWheelPickerModalProps {
+  visible: boolean;
+  hour: number;
+  minute: number;
+  title?: string;
+  onConfirm: (hour: number, minute: number) => void;
+  onCancel: () => void;
+}
+
+const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCancel }: TimeWheelPickerModalProps) => {
+  const hourRef = useRef<ScrollView>(null);
+  const minuteRef = useRef<ScrollView>(null);
+  const ampmRef = useRef<ScrollView>(null);
+  const slideAnim = useRef(new Animated.Value(SHEET_SLIDE_AMOUNT)).current;
+  const [rendered, setRendered] = useState(false);
+
+  const init12 = to12h(hour);
+  const [tempHour12, setTempHour12] = useState(init12.h12);
+  const [tempMinute, setTempMinute] = useState(minute);
+  const [tempIsPM, setTempIsPM] = useState(init12.isPM);
+
+  useEffect(() => {
+    if (visible) {
+      const { h12, isPM } = to12h(hour);
+      setTempHour12(h12);
+      setTempIsPM(isPM);
+      const rounded = TIME_MINUTES.reduce((prev, curr) =>
+        Math.abs(curr - minute) < Math.abs(prev - minute) ? curr : prev, 0);
+      setTempMinute(rounded);
+      const hIdx = TIME_HOURS_12.indexOf(h12);
+      const mIdx = TIME_MINUTES.indexOf(rounded);
+      const aIdx = isPM ? 1 : 0;
+      setRendered(true);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+      setTimeout(() => {
+        hourRef.current?.scrollTo({ y: Math.max(0, hIdx) * WHEEL_ITEM_HEIGHT, animated: false });
+        minuteRef.current?.scrollTo({ y: Math.max(0, mIdx) * WHEEL_ITEM_HEIGHT, animated: false });
+        ampmRef.current?.scrollTo({ y: aIdx * WHEEL_ITEM_HEIGHT, animated: false });
+      }, 80);
+    } else if (rendered) {
+      Animated.timing(slideAnim, {
+        toValue: SHEET_SLIDE_AMOUNT,
+        duration: 240,
+        useNativeDriver: true,
+      }).start(() => setRendered(false));
+    }
+  }, [visible]);
+
+  const handleHourScroll = (e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.y / WHEEL_ITEM_HEIGHT);
+    setTempHour12(TIME_HOURS_12[Math.max(0, Math.min(idx, 11))]);
+  };
+  const handleMinuteScroll = (e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.y / WHEEL_ITEM_HEIGHT);
+    setTempMinute(TIME_MINUTES[Math.max(0, Math.min(idx, TIME_MINUTES.length - 1))]);
+  };
+  const handleAmpmScroll = (e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.y / WHEEL_ITEM_HEIGHT);
+    setTempIsPM(Math.max(0, Math.min(idx, 1)) === 1);
+  };
+
+  const padding = Math.floor(WHEEL_VISIBLE_ITEMS / 2) * WHEEL_ITEM_HEIGHT;
+  const containerHeight = WHEEL_VISIBLE_ITEMS * WHEEL_ITEM_HEIGHT;
+
+  if (!rendered) return null;
+
+  return (
+    <View style={wheelStyles.overlay}>
+      <TouchableOpacity style={wheelStyles.backdrop} activeOpacity={1} onPress={onCancel} />
+      <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
+        <BlurView intensity={65} tint="light" style={wheelStyles.sheet}>
+          <View style={wheelStyles.header}>
+            <TouchableOpacity onPress={onCancel} style={wheelStyles.headerBtn}>
+              <Text style={wheelStyles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            {title ? <Text style={wheelStyles.title}>{title}</Text> : <View style={wheelStyles.headerBtn} />}
+            <TouchableOpacity
+              onPress={() => onConfirm(to24h(tempHour12, tempIsPM), tempMinute)}
+              style={wheelStyles.headerBtn}
+            >
+              <Text style={wheelStyles.confirmText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[wheelStyles.wheelContainer, { height: containerHeight, flexDirection: 'row' }]}>
+            <View style={[wheelStyles.selectionIndicator, { top: padding, height: WHEEL_ITEM_HEIGHT }]} pointerEvents="none" />
+            {/* Hours */}
+            <ScrollView
+              ref={hourRef}
+              style={{ flex: 2 }}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={WHEEL_ITEM_HEIGHT}
+              decelerationRate="fast"
+              onMomentumScrollEnd={handleHourScroll}
+              onScrollEndDrag={handleHourScroll}
+              contentContainerStyle={{ paddingVertical: padding }}
+            >
+              {TIME_HOURS_12.map((h) => (
+                <View key={h} style={[wheelStyles.wheelItem, { height: WHEEL_ITEM_HEIGHT }]}>
+                  <Text style={[wheelStyles.wheelItemText, h === tempHour12 && wheelStyles.wheelItemTextSelected]}>
+                    {String(h).padStart(2, '0')}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+            {/* Colon */}
+            <View style={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
+              <Text style={{ fontSize: 26, fontWeight: '700', color: '#111827' }}>:</Text>
+            </View>
+            {/* Minutes */}
+            <ScrollView
+              ref={minuteRef}
+              style={{ flex: 2 }}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={WHEEL_ITEM_HEIGHT}
+              decelerationRate="fast"
+              onMomentumScrollEnd={handleMinuteScroll}
+              onScrollEndDrag={handleMinuteScroll}
+              contentContainerStyle={{ paddingVertical: padding }}
+            >
+              {TIME_MINUTES.map((m) => (
+                <View key={m} style={[wheelStyles.wheelItem, { height: WHEEL_ITEM_HEIGHT }]}>
+                  <Text style={[wheelStyles.wheelItemText, m === tempMinute && wheelStyles.wheelItemTextSelected]}>
+                    {String(m).padStart(2, '0')}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+            {/* AM / PM */}
+            <View style={{ width: 8 }} />
+            <ScrollView
+              ref={ampmRef}
+              style={{ flex: 2 }}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={WHEEL_ITEM_HEIGHT}
+              decelerationRate="fast"
+              onMomentumScrollEnd={handleAmpmScroll}
+              onScrollEndDrag={handleAmpmScroll}
+              contentContainerStyle={{ paddingVertical: padding }}
+            >
+              {TIME_AMPM.map((ap) => (
+                <View key={ap} style={[wheelStyles.wheelItem, { height: WHEEL_ITEM_HEIGHT }]}>
+                  <Text style={[
+                    wheelStyles.wheelItemText,
+                    (ap === 'PM') === tempIsPM && wheelStyles.wheelItemTextSelected,
+                  ]}>
+                    {ap}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </BlurView>
+      </Animated.View>
+    </View>
+  );
+};
+// ──────────────────────────────────────────────────────────────────────────────
+
 export default function PartTimeTimesheet() {
   const router = useRouter();
   const { user } = useAuth();
@@ -90,6 +388,85 @@ export default function PartTimeTimesheet() {
     return 0;
   };
 
+  const roundToHalfHour = (hours: number): number => {
+    return Math.round(hours * 2) / 2;
+  };
+
+  const roundToTenth = (hours: number): number => {
+    return Math.round(hours * 10) / 10;
+  };
+
+  const isHalfHourIncrement = (hours: number): boolean => {
+    return Number.isFinite(hours) && Math.abs(hours * 2 - Math.round(hours * 2)) < 0.0001;
+  };
+
+  const isTenthHourIncrement = (hours: number): boolean => {
+    return Number.isFinite(hours) && Math.abs(hours * 10 - Math.round(hours * 10)) < 0.001;
+  };
+
+  const parseDutyPayload = (dutyRaw: string | null | undefined): DutyAllocation[] => {
+    if (!dutyRaw || !dutyRaw.trim()) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(dutyRaw) as StoredDutyPayload;
+      if (parsed?.version === 1 && Array.isArray(parsed.duties)) {
+        const normalized = parsed.duties
+          .filter(item => typeof item?.duty === 'string' && typeof item?.hours === 'number')
+          .map(item => ({
+            duty: item.duty.trim(),
+            hours: roundToHalfHour(item.hours),
+          }))
+          .filter(item => item.duty.length > 0 && item.hours > 0);
+
+        if (normalized.length > 0) {
+          return normalized;
+        }
+      }
+    } catch {
+      // Legacy plain-text duty format
+    }
+
+    return [{ duty: dutyRaw.trim(), hours: 0 }];
+  };
+
+  const getWorkedHoursFromForm = (): number => {
+    if (selectedPeriod === 'full') return 8.5;
+    if (selectedPeriod === 'am' || selectedPeriod === 'pm') return 4;
+    if (selectedPeriod === 'other') {
+      const start = new Date(`2000-01-01T${customStartTime.toTimeString().split(' ')[0]}`);
+      const end = new Date(`2000-01-01T${customEndTime.toTimeString().split(' ')[0]}`);
+      const diff = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      return Math.max(0, diff);
+    }
+    return 0;
+  };
+
+  const resolveEntryDuties = (entry: TimesheetEntry): DutyAllocation[] => {
+    const parsed = parseDutyPayload(entry.duty);
+    if (parsed.length === 0) {
+      return [];
+    }
+
+    if (parsed.length === 1 && parsed[0].hours <= 0) {
+      return [{
+        duty: parsed[0].duty,
+        hours: roundToHalfHour(calculateWorkedHours(entry)),
+      }];
+    }
+
+    return parsed;
+  };
+
+  const formatDutyText = (entry: TimesheetEntry): string | null => {
+    const duties = resolveEntryDuties(entry);
+    if (duties.length === 0) {
+      return null;
+    }
+    return duties.map(item => `${item.duty} (${item.hours.toFixed(1)}h)`).join(', ');
+  };
+
   const isFullDay = (entry: TimesheetEntry): boolean => {
     if (entry.period === 'full') return true;
     if (entry.period === 'other') {
@@ -106,11 +483,178 @@ export default function PartTimeTimesheet() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('full');
   const [selectedVenue, setSelectedVenue] = useState<string>('');
   const [siteName, setSiteName] = useState<string>('');
-  const [inputDuty, setInputDuty] = useState<string>('');
+  const [dutyAllocations, setDutyAllocations] = useState<DutyAllocationInput[]>([{ duty: '', hours: '' }]);
   const [customStartTime, setCustomStartTime] = useState(new Date());
   const [customEndTime, setCustomEndTime] = useState(new Date());
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [showTimeWheelPicker, setShowTimeWheelPicker] = useState(false);
+  const [timeWheelTarget, setTimeWheelTarget] = useState<'start' | 'end' | null>(null);
+
+  const openTimePicker = (target: 'start' | 'end') => {
+    setTimeWheelTarget(target);
+    setShowTimeWheelPicker(true);
+  };
+
+  const handleTimeConfirm = (h: number, m: number) => {
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    if (timeWheelTarget === 'end') {
+      const startMins = customStartTime.getHours() * 60 + customStartTime.getMinutes();
+      const endMins = h * 60 + m;
+      if (endMins <= startMins) {
+        Alert.alert('Invalid Time', 'End time must be later than start time.');
+        setShowTimeWheelPicker(false);
+        setTimeWheelTarget(null);
+        return;
+      }
+    }
+    if (timeWheelTarget === 'start') setCustomStartTime(d);
+    else if (timeWheelTarget === 'end') setCustomEndTime(d);
+    setShowTimeWheelPicker(false);
+    setTimeWheelTarget(null);
+  };
+  const resetDutyAllocations = () => {
+    setDutyAllocations([{ duty: '', hours: '' }]);
+  };
+
+  const addDutyAllocationInput = () => {
+    setDutyAllocations(prev => {
+      if (prev.length >= MAX_DUTY_COUNT) {
+        return prev;
+      }
+      return [...prev, { duty: '', hours: '' }];
+    });
+  };
+
+  const updateDutyText = (index: number, text: string) => {
+    setDutyAllocations(prev => prev.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, duty: text } : item
+    ));
+  };
+
+  const updateDutyHours = (index: number, value: string) => {
+    // Allow digits, one optional dot, and at most one digit after the dot
+    const sanitized = value.match(/^\d*\.?\d?/)?.[0] ?? '';
+    setDutyAllocations(prev => prev.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, hours: sanitized } : item
+    ));
+  };
+
+  const removeDutyAllocationInput = (index: number) => {
+    if (index === 0) return;
+    setDutyAllocations(prev => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const getManualDutyHoursTotal = (): number => {
+    return dutyAllocations.slice(1).reduce((sum, allocation) => {
+      if (!allocation.duty.trim()) return sum;
+      const parsed = parseFloat(allocation.hours);
+      if (!Number.isFinite(parsed) || parsed <= 0) return sum;
+      return sum + parsed;
+    }, 0);
+  };
+
+  const getFirstDutyAutoHours = (): number => {
+    const totalWorkedHours = getWorkedHoursFromForm();
+    const remaining = totalWorkedHours - getManualDutyHoursTotal();
+    return Math.max(0, roundToTenth(remaining));
+  };
+
+  const toDutyPayloadForSave = (): { value: string | null; error: string | null } => {
+    const totalWorkedHours = getWorkedHoursFromForm();
+
+    if (totalWorkedHours <= 0) {
+      return { value: null, error: 'Work time must be greater than 0 hour.' };
+    }
+
+    const normalizedInputs = dutyAllocations.map(item => ({
+      duty: item.duty.trim(),
+      hours: item.hours.trim(),
+    }));
+
+    const nonEmpty = normalizedInputs
+      .map((item, index) => ({ ...item, index }))
+      .filter(item => item.duty.length > 0);
+
+    if (nonEmpty.length === 0) {
+      return { value: null, error: null };
+    }
+
+    if (nonEmpty.length > 1 && !normalizedInputs[0].duty) {
+      return { value: null, error: 'Please fill the first duty before adding another duty.' };
+    }
+
+    if (nonEmpty.length === 1) {
+      const payload: StoredDutyPayload = {
+        version: 1,
+        duties: [{
+          duty: nonEmpty[0].duty,
+          hours: roundToTenth(totalWorkedHours),
+        }],
+      };
+      return { value: JSON.stringify(payload), error: null };
+    }
+
+    let manualHoursTotal = 0;
+    const additionalDuties: DutyAllocation[] = [];
+
+    for (const dutyInput of nonEmpty) {
+      if (dutyInput.index === 0) continue;
+
+      const parsedHours = parseFloat(dutyInput.hours);
+      if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+        return {
+          value: null,
+          error: `Please enter allocated hours for Duty ${dutyInput.index + 1}.`,
+        };
+      }
+
+      if (!isTenthHourIncrement(parsedHours)) {
+        return {
+          value: null,
+          error: `Duty ${dutyInput.index + 1} hours must be in 0.1-hour increments.`,
+        };
+      }
+
+      manualHoursTotal += parsedHours;
+      additionalDuties.push({
+        duty: dutyInput.duty,
+        hours: roundToTenth(parsedHours),
+      });
+    }
+
+    if (manualHoursTotal >= totalWorkedHours) {
+      return {
+        value: null,
+        error: 'Allocated duty hours must be less than total work time so Duty 1 can have remaining hours.',
+      };
+    }
+
+    const firstDutyHours = roundToTenth(totalWorkedHours - manualHoursTotal);
+    if (firstDutyHours <= 0) {
+      return {
+        value: null,
+        error: 'Duty 1 must have at least 0.1 hour allocated.',
+      };
+    }
+
+    const payload: StoredDutyPayload = {
+      version: 1,
+      duties: [
+        {
+          duty: normalizedInputs[0].duty,
+          hours: firstDutyHours,
+        },
+        ...additionalDuties,
+      ],
+    };
+
+    return { value: JSON.stringify(payload), error: null };
+  };
+
+  const canAddDutyInput = dutyAllocations.length < MAX_DUTY_COUNT
+    && dutyAllocations[dutyAllocations.length - 1].duty.trim().length > 0;
 
   // Edit state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -247,14 +791,25 @@ export default function PartTimeTimesheet() {
       work_date: dateStr,
       period: selectedPeriod,
       location: selectedVenue.toLowerCase(),
-      duty: inputDuty.trim() || null,
+      duty: null,
     };
+
+    const dutyPayload = toDutyPayloadForSave();
+    if (dutyPayload.error) {
+      Alert.alert('Invalid Duty Allocation', dutyPayload.error);
+      return;
+    }
+    timesheetData.duty = dutyPayload.value;
 
     if (selectedVenue === 'Site') {
       timesheetData.site_name = siteName.trim();
     }
 
     if (selectedPeriod === 'other') {
+      if (customEndTime <= customStartTime) {
+        Alert.alert('Invalid Time', 'End time must be later than start time.');
+        return;
+      }
       timesheetData.custom_start_time = customStartTime.toTimeString().split(' ')[0];
       timesheetData.custom_end_time = customEndTime.toTimeString().split(' ')[0];
     }
@@ -289,7 +844,7 @@ export default function PartTimeTimesheet() {
 
     setShowAddModal(false);
     setSiteName('');
-    setInputDuty('');
+    resetDutyAllocations();
     loadData();
   };
 
@@ -310,7 +865,15 @@ export default function PartTimeTimesheet() {
       setSiteName('');
     }
     
-    setInputDuty(entry.duty || '');
+    const parsedDuties = resolveEntryDuties(entry);
+    if (parsedDuties.length === 0) {
+      resetDutyAllocations();
+    } else {
+      setDutyAllocations(parsedDuties.slice(0, MAX_DUTY_COUNT).map((item, index) => ({
+        duty: item.duty,
+        hours: index === 0 ? '' : item.hours.toString(),
+      })));
+    }
 
     const dateObj = new Date(entry.work_date + 'T00:00:00');
     setSelectedDate(dateObj);
@@ -344,8 +907,15 @@ export default function PartTimeTimesheet() {
       work_date: dateStr,
       period: selectedPeriod,
       location: selectedVenue.toLowerCase(),
-      duty: inputDuty.trim() || null,
+      duty: null,
     };
+
+    const dutyPayload = toDutyPayloadForSave();
+    if (dutyPayload.error) {
+      Alert.alert('Invalid Duty Allocation', dutyPayload.error);
+      return;
+    }
+    timesheetData.duty = dutyPayload.value;
 
     if (selectedVenue === 'Site') {
       timesheetData.site_name = siteName.trim();
@@ -354,6 +924,10 @@ export default function PartTimeTimesheet() {
     }
 
     if (selectedPeriod === 'other') {
+      if (customEndTime <= customStartTime) {
+        Alert.alert('Invalid Time', 'End time must be later than start time.');
+        return;
+      }
       timesheetData.custom_start_time = customStartTime.toTimeString().split(' ')[0];
       timesheetData.custom_end_time = customEndTime.toTimeString().split(' ')[0];
     } else {
@@ -510,8 +1084,8 @@ export default function PartTimeTimesheet() {
           day: 'numeric',
         });
         const hours = calculateWorkedHours(entry).toFixed(1);
-        const amount = (calculateWorkedHours(entry) * 70).toFixed(2);
-        const duty = entry.duty || '-';
+        const amount = (calculateWorkedHours(entry) * 70).toFixed(1);
+        const duty = formatDutyText(entry) || '-';
         const dateStr = date.padEnd(16);
         const hoursStr = hours.padEnd(9);
         const amountStr = `HKD $${amount}`.padEnd(12);
@@ -740,10 +1314,10 @@ export default function PartTimeTimesheet() {
                             }
                           </ThemedText>
                         </View>
-                        {entry.duty && (
+                        {formatDutyText(entry) && (
                           <View style={styles.detailRow}>
                             <ThemedText style={styles.detailLabel}>Duty:</ThemedText>
-                            <ThemedText style={styles.detailValue}>{entry.duty}</ThemedText>
+                            <ThemedText style={styles.detailValue}>{formatDutyText(entry)}</ThemedText>
                           </View>
                         )}
                         {isAdmin && (
@@ -778,7 +1352,7 @@ export default function PartTimeTimesheet() {
                 setSelectedDate(selectedCalendarDate || new Date());
                 setSelectedPeriod('full');
                 setSelectedVenue('');
-                setInputDuty('');
+                resetDutyAllocations();
                 setSiteName('');
                 setShowAddModal(true);
               }}
@@ -933,7 +1507,7 @@ export default function PartTimeTimesheet() {
             <View style={[styles.salaryResultRow, styles.salaryResultRowBorder]}>
               <ThemedText style={styles.salaryTotalLabel}>Total Salary:</ThemedText>
               <ThemedText style={styles.salaryTotalValue}>
-                HKD ${calculateSalary().toFixed(2)}
+                HKD ${calculateSalary().toFixed(1)}
               </ThemedText>
             </View>
           </View>
@@ -955,7 +1529,7 @@ export default function PartTimeTimesheet() {
               setSelectedDate(selectedCalendarDate || new Date());
               setSelectedPeriod('full');
               setSelectedVenue('');
-              setInputDuty('');
+              resetDutyAllocations();
               setSiteName('');
             }}>
               <X size={24} color="#6B7280" />
@@ -1032,23 +1606,62 @@ export default function PartTimeTimesheet() {
 
             {/* Duty Input */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Duty (Optional)</ThemedText>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter duty/task"
-                value={inputDuty}
-                onChangeText={setInputDuty}
-                placeholderTextColor="#9CA3AF"
-              />
+              <View style={styles.dutyHeaderRow}>
+                <ThemedText style={styles.formLabel}>Duty (Optional, max 3)</ThemedText>
+                {canAddDutyInput && (
+                  <TouchableOpacity style={styles.addDutyInputButton} onPress={addDutyAllocationInput}>
+                    <Plus size={16} color="#2563EB" />
+                    <ThemedText style={styles.addDutyInputButtonText}>Add</ThemedText>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {dutyAllocations.map((allocation, index) => (
+                <View key={`add-duty-${index}`} style={styles.dutyInputRow}>
+                  <TextInput
+                    style={[styles.textInput, styles.dutyTextInput]}
+                    placeholder={`Enter duty/task ${index + 1}`}
+                    value={allocation.duty}
+                    onChangeText={(text) => updateDutyText(index, text)}
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  {index === 0 ? (
+                    <View style={styles.autoDutyHoursBadge}>
+                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}h</ThemedText>
+                    </View>
+                  ) : (
+                    <>
+                      <TextInput
+                        style={[styles.dutyHoursSelector, { textAlign: 'center', fontSize: 14, color: '#111827' }]}
+                        value={allocation.hours}
+                        onChangeText={(text) => updateDutyHours(index, text)}
+                        keyboardType="decimal-pad"
+                        placeholder="hrs *"
+                        placeholderTextColor="#9CA3AF"
+                        returnKeyType="done"
+                      />
+                      <TouchableOpacity
+                        style={styles.removeDutyButton}
+                        onPress={() => removeDutyAllocationInput(index)}
+                      >
+                        <Trash2 size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              ))}
+
+              <ThemedText style={styles.dutyHintText}>
+                Total: {getWorkedHoursFromForm().toFixed(1)}h • Allocated: {(
+                  (dutyAllocations[0]?.duty.trim() ? getFirstDutyAutoHours() : 0) + getManualDutyHoursTotal()
+                ).toFixed(1)}h
+              </ThemedText>
             </View>
 
             {/* Date Selection */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Date *</ThemedText>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
+              <ThemedText style={styles.formLabel}>Date</ThemedText>
+              <View style={[styles.dateButton, { opacity: 0.6 }]}>
                 <ThemedText style={styles.dateButtonText}>
                   {selectedDate.toLocaleDateString('en-US', {
                     weekday: 'short',
@@ -1057,18 +1670,7 @@ export default function PartTimeTimesheet() {
                     year: 'numeric'
                   })}
                 </ThemedText>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={selectedDate}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowDatePicker(false);
-                    if (date) setSelectedDate(date);
-                  }}
-                />
-              )}
+              </View>
             </View>
 
             {/* Period Selection */}
@@ -1109,7 +1711,7 @@ export default function PartTimeTimesheet() {
                     <ThemedText style={styles.timeLabel}>From</ThemedText>
                     <TouchableOpacity
                       style={styles.timeButton}
-                      onPress={() => setShowStartTimePicker(true)}
+                      onPress={() => openTimePicker('start')}
                     >
                       <ThemedText style={styles.timeButtonText}>
                         {customStartTime.toLocaleTimeString('en-US', {
@@ -1125,7 +1727,7 @@ export default function PartTimeTimesheet() {
                     <ThemedText style={styles.timeLabel}>To</ThemedText>
                     <TouchableOpacity
                       style={styles.timeButton}
-                      onPress={() => setShowEndTimePicker(true)}
+                      onPress={() => openTimePicker('end')}
                     >
                       <ThemedText style={styles.timeButtonText}>
                         {customEndTime.toLocaleTimeString('en-US', {
@@ -1137,30 +1739,6 @@ export default function PartTimeTimesheet() {
                     </TouchableOpacity>
                   </View>
                 </View>
-
-                {showStartTimePicker && (
-                  <DateTimePicker
-                    value={customStartTime}
-                    mode="time"
-                    display="default"
-                    onChange={(event, time) => {
-                      setShowStartTimePicker(false);
-                      if (time) setCustomStartTime(time);
-                    }}
-                  />
-                )}
-
-                {showEndTimePicker && (
-                  <DateTimePicker
-                    value={customEndTime}
-                    mode="time"
-                    display="default"
-                    onChange={(event, time) => {
-                      setShowEndTimePicker(false);
-                      if (time) setCustomEndTime(time);
-                    }}
-                  />
-                )}
               </View>
             )}
 
@@ -1172,6 +1750,15 @@ export default function PartTimeTimesheet() {
               <ThemedText style={styles.saveButtonText}>Save Work Time</ThemedText>
             </TouchableOpacity>
           </ScrollView>
+
+          <TimeWheelPickerModal
+            visible={showTimeWheelPicker}
+            hour={timeWheelTarget === 'start' ? customStartTime.getHours() : customEndTime.getHours()}
+            minute={timeWheelTarget === 'start' ? customStartTime.getMinutes() : customEndTime.getMinutes()}
+            title={timeWheelTarget === 'start' ? 'Start Time' : 'End Time'}
+            onConfirm={handleTimeConfirm}
+            onCancel={() => { setShowTimeWheelPicker(false); setTimeWheelTarget(null); }}
+          />
         </SafeAreaView>
       </Modal>
 
@@ -1191,7 +1778,7 @@ export default function PartTimeTimesheet() {
               setSelectedDate(new Date());
               setSelectedPeriod('full');
               setSelectedVenue('');
-              setInputDuty('');
+              resetDutyAllocations();
               setSiteName('');
             }}>
               <X size={24} color="#6B7280" />
@@ -1247,23 +1834,62 @@ export default function PartTimeTimesheet() {
 
             {/* Duty Input */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Duty (Optional)</ThemedText>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter duty/task"
-                value={inputDuty}
-                onChangeText={setInputDuty}
-                placeholderTextColor="#9CA3AF"
-              />
+              <View style={styles.dutyHeaderRow}>
+                <ThemedText style={styles.formLabel}>Duty (Optional, max 3)</ThemedText>
+                {canAddDutyInput && (
+                  <TouchableOpacity style={styles.addDutyInputButton} onPress={addDutyAllocationInput}>
+                    <Plus size={16} color="#2563EB" />
+                    <ThemedText style={styles.addDutyInputButtonText}>Add</ThemedText>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {dutyAllocations.map((allocation, index) => (
+                <View key={`edit-duty-${index}`} style={styles.dutyInputRow}>
+                  <TextInput
+                    style={[styles.textInput, styles.dutyTextInput]}
+                    placeholder={`Enter duty/task ${index + 1}`}
+                    value={allocation.duty}
+                    onChangeText={(text) => updateDutyText(index, text)}
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  {index === 0 ? (
+                    <View style={styles.autoDutyHoursBadge}>
+                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}h</ThemedText>
+                    </View>
+                  ) : (
+                    <>
+                      <TextInput
+                        style={[styles.dutyHoursSelector, { textAlign: 'center', fontSize: 14, color: '#111827' }]}
+                        value={allocation.hours}
+                        onChangeText={(text) => updateDutyHours(index, text)}
+                        keyboardType="decimal-pad"
+                        placeholder="hrs *"
+                        placeholderTextColor="#9CA3AF"
+                        returnKeyType="done"
+                      />
+                      <TouchableOpacity
+                        style={styles.removeDutyButton}
+                        onPress={() => removeDutyAllocationInput(index)}
+                      >
+                        <Trash2 size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              ))}
+
+              <ThemedText style={styles.dutyHintText}>
+                Total: {getWorkedHoursFromForm().toFixed(1)}h • Allocated: {(
+                  (dutyAllocations[0]?.duty.trim() ? getFirstDutyAutoHours() : 0) + getManualDutyHoursTotal()
+                ).toFixed(1)}h
+              </ThemedText>
             </View>
 
             {/* Date Selection */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Date *</ThemedText>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
+              <ThemedText style={styles.formLabel}>Date</ThemedText>
+              <View style={[styles.dateButton, { opacity: 0.6 }]}>
                 <ThemedText style={styles.dateButtonText}>
                   {selectedDate.toLocaleDateString('en-US', {
                     weekday: 'short',
@@ -1272,18 +1898,7 @@ export default function PartTimeTimesheet() {
                     year: 'numeric'
                   })}
                 </ThemedText>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={selectedDate}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowDatePicker(false);
-                    if (date) setSelectedDate(date);
-                  }}
-                />
-              )}
+              </View>
             </View>
 
             {/* Period Selection */}
@@ -1324,7 +1939,7 @@ export default function PartTimeTimesheet() {
                     <ThemedText style={styles.timeLabel}>From</ThemedText>
                     <TouchableOpacity
                       style={styles.timeButton}
-                      onPress={() => setShowStartTimePicker(true)}
+                      onPress={() => openTimePicker('start')}
                     >
                       <ThemedText style={styles.timeButtonText}>
                         {customStartTime.toLocaleTimeString('en-US', {
@@ -1340,7 +1955,7 @@ export default function PartTimeTimesheet() {
                     <ThemedText style={styles.timeLabel}>To</ThemedText>
                     <TouchableOpacity
                       style={styles.timeButton}
-                      onPress={() => setShowEndTimePicker(true)}
+                      onPress={() => openTimePicker('end')}
                     >
                       <ThemedText style={styles.timeButtonText}>
                         {customEndTime.toLocaleTimeString('en-US', {
@@ -1352,30 +1967,6 @@ export default function PartTimeTimesheet() {
                     </TouchableOpacity>
                   </View>
                 </View>
-
-                {showStartTimePicker && (
-                  <DateTimePicker
-                    value={customStartTime}
-                    mode="time"
-                    display="default"
-                    onChange={(event, time) => {
-                      setShowStartTimePicker(false);
-                      if (time) setCustomStartTime(time);
-                    }}
-                  />
-                )}
-
-                {showEndTimePicker && (
-                  <DateTimePicker
-                    value={customEndTime}
-                    mode="time"
-                    display="default"
-                    onChange={(event, time) => {
-                      setShowEndTimePicker(false);
-                      if (time) setCustomEndTime(time);
-                    }}
-                  />
-                )}
               </View>
             )}
 
@@ -1387,6 +1978,15 @@ export default function PartTimeTimesheet() {
               <ThemedText style={styles.saveButtonText}>Update Work Time</ThemedText>
             </TouchableOpacity>
           </ScrollView>
+
+          <TimeWheelPickerModal
+            visible={showTimeWheelPicker}
+            hour={timeWheelTarget === 'start' ? customStartTime.getHours() : customEndTime.getHours()}
+            minute={timeWheelTarget === 'start' ? customStartTime.getMinutes() : customEndTime.getMinutes()}
+            title={timeWheelTarget === 'start' ? 'Start Time' : 'End Time'}
+            onConfirm={handleTimeConfirm}
+            onCancel={() => { setShowTimeWheelPicker(false); setTimeWheelTarget(null); }}
+          />
         </SafeAreaView>
       </Modal>
 
@@ -1435,14 +2035,21 @@ export default function PartTimeTimesheet() {
                     </View>
                     <View style={styles.salaryDetailAmountSection}>
                       <ThemedText style={styles.salaryDetailAmount}>
-                        HKD ${(calculateWorkedHours(entry) * 70).toFixed(2)}
+                        HKD ${(calculateWorkedHours(entry) * 70).toFixed(1)}
                       </ThemedText>
                     </View>
                   </View>
-                  {entry.duty && (
-                    <ThemedText style={styles.salaryDetailDuty}>
-                      • {entry.duty}
-                    </ThemedText>
+                  {resolveEntryDuties(entry).length > 0 && (
+                    <View style={{ marginTop: 4 }}>
+                      {resolveEntryDuties(entry).map((d, i) => (
+                        <ThemedText key={i} style={[
+                          styles.salaryDetailDuty,
+                          i === 0 && { borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 8, marginTop: 8 },
+                        ]}>
+                          • {d.duty} ({d.hours.toFixed(1)}h)
+                        </ThemedText>
+                      ))}
+                    </View>
                   )}
                 </View>
               ))}
@@ -1463,6 +2070,7 @@ export default function PartTimeTimesheet() {
           </ScrollView>
         </SafeAreaView>
       </Animated.View>
+
     </SafeAreaView>
   );
 }
@@ -1839,6 +2447,86 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
     backgroundColor: '#F3F4F6',
+  },
+  dutyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  addDutyInputButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#2563EB',
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+  },
+  addDutyInputButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  dutyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  dutyTextInput: {
+    flex: 1,
+  },
+  dutyHoursInput: {
+    width: 100,
+    textAlign: 'center',
+  },
+  dutyHoursSelector: {
+    width: 110,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dutyHoursSelectorText: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
+  },
+  removeDutyButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  autoDutyHoursBadge: {
+    width: 100,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+  },
+  autoDutyHoursText: {
+    fontSize: 12,
+    color: '#1D4ED8',
+    fontWeight: '600',
+  },
+  dutyHintText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
   },
   periodButtons: {
     flexDirection: 'row',
@@ -2288,10 +2976,6 @@ const styles = StyleSheet.create({
   salaryDetailDuty: {
     fontSize: 12,
     color: '#6B7280',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    marginTop: 8,
   },
   salaryDetailSeparator: {
     height: 2,
