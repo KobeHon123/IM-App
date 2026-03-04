@@ -82,7 +82,7 @@ const StarShape = ({ color }: { color: string }) => {
 };
 
 // ─── Wheel Picker constants (used by TimeWheelPickerModal) ──────────────────
-const WHEEL_ITEM_HEIGHT = 52;
+const WHEEL_ITEM_HEIGHT = 48;
 const WHEEL_VISIBLE_ITEMS = 5; // must be odd
 
 // WheelPickerModal removed — duty hours now use a plain TextInput (decimal-pad)
@@ -1611,7 +1611,6 @@ export default function PartTimeTimesheet() {
                 {canAddDutyInput && (
                   <TouchableOpacity style={styles.addDutyInputButton} onPress={addDutyAllocationInput}>
                     <Plus size={16} color="#2563EB" />
-                    <ThemedText style={styles.addDutyInputButtonText}>Add</ThemedText>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1627,19 +1626,22 @@ export default function PartTimeTimesheet() {
                   />
                   {index === 0 ? (
                     <View style={styles.autoDutyHoursBadge}>
-                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}h</ThemedText>
+                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}hrs</ThemedText>
                     </View>
                   ) : (
                     <>
-                      <TextInput
-                        style={[styles.dutyHoursSelector, { textAlign: 'center', fontSize: 14, color: '#111827' }]}
-                        value={allocation.hours}
-                        onChangeText={(text) => updateDutyHours(index, text)}
-                        keyboardType="decimal-pad"
-                        placeholder="hrs *"
-                        placeholderTextColor="#9CA3AF"
-                        returnKeyType="done"
-                      />
+                      <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
+                        <TextInput
+                          style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
+                          value={allocation.hours}
+                          onChangeText={(text) => updateDutyHours(index, text)}
+                          keyboardType="decimal-pad"
+                          placeholder="—"
+                          placeholderTextColor="#9CA3AF"
+                          returnKeyType="done"
+                        />
+                        <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                      </View>
                       <TouchableOpacity
                         style={styles.removeDutyButton}
                         onPress={() => removeDutyAllocationInput(index)}
@@ -1652,9 +1654,9 @@ export default function PartTimeTimesheet() {
               ))}
 
               <ThemedText style={styles.dutyHintText}>
-                Total: {getWorkedHoursFromForm().toFixed(1)}h • Allocated: {(
+                Total: {getWorkedHoursFromForm().toFixed(1)}hrs • Allocated: {(
                   (dutyAllocations[0]?.duty.trim() ? getFirstDutyAutoHours() : 0) + getManualDutyHoursTotal()
-                ).toFixed(1)}h
+                ).toFixed(1)}hrs
               </ThemedText>
             </View>
 
@@ -1839,7 +1841,6 @@ export default function PartTimeTimesheet() {
                 {canAddDutyInput && (
                   <TouchableOpacity style={styles.addDutyInputButton} onPress={addDutyAllocationInput}>
                     <Plus size={16} color="#2563EB" />
-                    <ThemedText style={styles.addDutyInputButtonText}>Add</ThemedText>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1855,19 +1856,22 @@ export default function PartTimeTimesheet() {
                   />
                   {index === 0 ? (
                     <View style={styles.autoDutyHoursBadge}>
-                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}h</ThemedText>
+                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}hrs</ThemedText>
                     </View>
                   ) : (
                     <>
-                      <TextInput
-                        style={[styles.dutyHoursSelector, { textAlign: 'center', fontSize: 14, color: '#111827' }]}
-                        value={allocation.hours}
-                        onChangeText={(text) => updateDutyHours(index, text)}
-                        keyboardType="decimal-pad"
-                        placeholder="hrs *"
-                        placeholderTextColor="#9CA3AF"
-                        returnKeyType="done"
-                      />
+                      <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
+                        <TextInput
+                          style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
+                          value={allocation.hours}
+                          onChangeText={(text) => updateDutyHours(index, text)}
+                          keyboardType="decimal-pad"
+                          placeholder="—"
+                          placeholderTextColor="#9CA3AF"
+                          returnKeyType="done"
+                        />
+                        <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                      </View>
                       <TouchableOpacity
                         style={styles.removeDutyButton}
                         onPress={() => removeDutyAllocationInput(index)}
@@ -1880,9 +1884,9 @@ export default function PartTimeTimesheet() {
               ))}
 
               <ThemedText style={styles.dutyHintText}>
-                Total: {getWorkedHoursFromForm().toFixed(1)}h • Allocated: {(
+                Total: {getWorkedHoursFromForm().toFixed(1)}hrs • Allocated: {(
                   (dutyAllocations[0]?.duty.trim() ? getFirstDutyAutoHours() : 0) + getManualDutyHoursTotal()
-                ).toFixed(1)}h
+                ).toFixed(1)}hrs
               </ThemedText>
             </View>
 
@@ -2458,11 +2462,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: '#2563EB',
-    borderRadius: 8,
+    borderRadius: 20,
     backgroundColor: '#EFF6FF',
   },
   addDutyInputButtonText: {
@@ -2501,7 +2505,7 @@ const styles = StyleSheet.create({
   removeDutyButton: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#FECACA',
     backgroundColor: '#FEF2F2',
