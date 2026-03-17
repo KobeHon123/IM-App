@@ -14,10 +14,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Camera, ChevronDown, ChevronRight, ChevronRightIcon, FileText, Hash, Image as ImageIcon, Plus, Tag, X } from 'lucide-react-native';
+import { ArrowLeft, Camera, ChevronDown, ChevronRight, ChevronRightIcon, FileText, Hash, Image as ImageIcon, Plus, Tag, X, Pencil, Trash2, GitBranch } from 'lucide-react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
@@ -113,7 +114,7 @@ export default function VenueDetailScreen() {
   const [showPhotos, setShowPhotos] = useState(false);
   const [selectedPartIdForPhotos, setSelectedPartIdForPhotos] = useState<string | null>(null);
   const [showCreatePartModal, setShowCreatePartModal] = useState(false);
-  const [showPartActionModal, setShowPartActionModal] = useState(false);
+  const [showPartActionModal, setShowPartActionModal] = useState(false); // kept for compatibility
   const [showPartDetailModal, setShowPartDetailModal] = useState(false);
   const [showEditPartModal, setShowEditPartModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -586,20 +587,18 @@ export default function VenueDetailScreen() {
       }
     }
   };
-  const handleCreateSubPart = async () => {
-    if (!selectedPart) return;
+  const handleCreateSubPart = async (part: Part) => {
     try {
       const subPartData = {
-        type: selectedPart.type,
-        description: `Sub-part of ${selectedPart.name}`,
+        type: part.type,
+        description: `Sub-part of ${part.name}`,
         pictures: [],
-        dimensions: selectedPart.dimensions,
+        dimensions: part.dimensions,
         status: 'measured' as const,
-        projectId: selectedPart.projectId,
-        designer: selectedPart.designer || undefined,
+        projectId: part.projectId,
+        designer: part.designer || undefined,
       };
-      await createSubPart(selectedPart.id, subPartData);
-      setShowPartActionModal(false);
+      await createSubPart(part.id, subPartData);
       await loadVenueData();
     } catch (error) {
       console.error('Error creating sub-part:', error);
@@ -628,10 +627,10 @@ export default function VenueDetailScreen() {
         setShowStatusModal(true);
         break;
       case 'subpart':
-        handleCreateSubPart();
+        handleCreateSubPart(selectedPart);
         break;
       case 'delete':
-        handleDeletePart();
+        handleDeletePart(selectedPart);
         break;
     }
     setShowPartActionModal(false);
@@ -678,11 +677,10 @@ export default function VenueDetailScreen() {
       Alert.alert('Error', 'Failed to update part');
     }
   };
-  const handleDeletePart = () => {
-    if (!selectedPart) return;
+  const handleDeletePart = (part: Part) => {
     Alert.alert(
       'Delete Part',
-      `Are you sure you want to delete "${selectedPart.name}"? This will also delete all sub-parts if any.`,
+      `Are you sure you want to delete "${part.name}"? This will also delete all sub-parts if any.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -690,9 +688,8 @@ export default function VenueDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Deleting part ID:', selectedPart.id);
-              await deletePart(selectedPart.id);
-              setShowPartActionModal(false);
+              console.log('Deleting part ID:', part.id);
+              await deletePart(part.id);
               setShowPartDetailModal(false);
               setShowEditPartModal(false);
               setShowStatusModal(false);
@@ -1410,63 +1407,151 @@ export default function VenueDetailScreen() {
 
                 return (
                   <View key={part.id}>
-                    <PartCard
-                      part={part}
-                      quantity={quantity}
-                      showQuantity={true}
-                      countingMode={countingMode}
-                      hasComments={hasComments}
-                      isSelected={isSelectedForPhotos}
-                      allowPressInCountingMode={showPhotos}
-                      venueName={venue.name}
-                      simplifyDisplay={true}
-                      onQuantityChange={(delta) => handleQuantityChange(part.id, delta)}
-                      onCommentSend={(text) => handleCommentSend(part.id, text)}
-                      onMorePress={() => {
-                        setSelectedPart(part);
-                        setShowPartActionModal(true);
-                      }}
-                      onPress={() => {
-                        if (showPhotos) {
-                          setSelectedPartIdForPhotos(part.id);
-                        } else {
-                          setSelectedPart(part);
-                          setShowPartDetailModal(true);
-                        }
-                      }}
-                    />
+                    <ReanimatedSwipeable
+                      containerStyle={{ backgroundColor: '#F9FAFB' }}
+                      renderLeftActions={(_prog, _drag, swipeable) => (
+                        <View style={[styles.swipeActionsLeft, styles.swipeActionsLeftMain]}>
+                          <TouchableOpacity
+                            style={styles.swipeActionButton}
+                            onPress={() => {
+                              swipeable.close();
+                              setSelectedPart(part);
+                              setEditingPart({
+                                type: part.type,
+                                description: part.description,
+                                pictures: part.pictures || [],
+                                cadDrawing: part.cadDrawing || '',
+                                dimensions: normalizeDimensions(part.type, part.dimensions),
+                                designer: part.designer || '',
+                              });
+                              setShowEditPartModal(true);
+                            }}
+                          >
+                            <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
+                              <Pencil color="#FFFFFF" size={18} />
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.swipeActionButton}
+                            onPress={() => {
+                              swipeable.close();
+                              handleDeletePart(part);
+                            }}
+                          >
+                            <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
+                              <Trash2 color="#FFFFFF" size={18} />
+                            </View>
+                          </TouchableOpacity>
+                          {!part.parentPartId && (
+                            <TouchableOpacity
+                              style={styles.swipeActionButton}
+                              onPress={() => {
+                                swipeable.close();
+                                handleCreateSubPart(part);
+                              }}
+                            >
+                              <View style={[styles.swipeCircle, styles.swipeSubPartCircle]}>
+                                <GitBranch color="#FFFFFF" size={18} />
+                              </View>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+                      friction={2}
+                      leftThreshold={80}
+                    >
+                      <PartCard
+                        part={part}
+                        quantity={quantity}
+                        showQuantity={true}
+                        countingMode={countingMode}
+                        hasComments={hasComments}
+                        isSelected={isSelectedForPhotos}
+                        allowPressInCountingMode={showPhotos}
+                        venueName={venue.name}
+                        simplifyDisplay={true}
+                        onQuantityChange={(delta) => handleQuantityChange(part.id, delta)}
+                        onCommentSend={(text) => handleCommentSend(part.id, text)}
+                        onPress={() => {
+                          if (showPhotos) {
+                            setSelectedPartIdForPhotos(part.id);
+                          } else {
+                            setSelectedPart(part);
+                            setShowPartDetailModal(true);
+                          }
+                        }}
+                      />
+                    </ReanimatedSwipeable>
                     {subParts.map((subPart) => {
                       const subQuantity = partQuantities[subPart.id] || 0;
                       const subHasComments = hasUnfinishedComments(subPart.id);
                       const isSubPartSelectedForPhotos = showPhotos && selectedPartIdForPhotos === subPart.id;
                       return (
-                        <View key={subPart.id} style={[styles.subPartContainer]}>
-                          <PartCard
-                            part={subPart}
-                            quantity={subQuantity}
-                            showQuantity={true}
-                            countingMode={countingMode}
-                            hasComments={subHasComments}
-                            isSelected={isSubPartSelectedForPhotos}
-                            allowPressInCountingMode={showPhotos}
-                            venueName={venue.name}
-                            simplifyDisplay={true}
-                            onQuantityChange={(delta) => handleQuantityChange(subPart.id, delta)}
-                            onCommentSend={(text) => handleCommentSend(subPart.id, text)}
-                            onMorePress={() => {
-                              setSelectedPart(subPart);
-                              setShowPartActionModal(true);
-                            }}
-                            onPress={() => {
-                              if (showPhotos) {
-                                setSelectedPartIdForPhotos(subPart.id);
-                              } else {
-                                setSelectedPart(subPart);
-                                setShowPartDetailModal(true);
-                              }
-                            }}
-                          />
-                        </View>
+                        <ReanimatedSwipeable
+                          key={subPart.id}
+                          containerStyle={{ backgroundColor: '#F9FAFB' }}
+                          renderLeftActions={(_prog, _drag, swipeable) => (
+                            <View style={[styles.swipeActionsLeft, styles.swipeActionsLeftSubPart]}>
+                              <TouchableOpacity
+                                style={styles.swipeActionButton}
+                                onPress={() => {
+                                  swipeable.close();
+                                  setSelectedPart(subPart);
+                                  setEditingPart({
+                                    type: subPart.type,
+                                    description: subPart.description,
+                                    pictures: subPart.pictures || [],
+                                    cadDrawing: subPart.cadDrawing || '',
+                                    dimensions: normalizeDimensions(subPart.type, subPart.dimensions),
+                                    designer: subPart.designer || '',
+                                  });
+                                  setShowEditPartModal(true);
+                                }}
+                              >
+                                <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
+                                  <Pencil color="#FFFFFF" size={18} />
+                                </View>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.swipeActionButton}
+                                onPress={() => {
+                                  swipeable.close();
+                                  handleDeletePart(subPart);
+                                }}
+                              >
+                                <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
+                                  <Trash2 color="#FFFFFF" size={18} />
+                                </View>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                          friction={2}
+                          leftThreshold={80}
+                        >
+                          <View style={styles.subPartContainer}>
+                            <PartCard
+                              part={subPart}
+                              quantity={subQuantity}
+                              showQuantity={true}
+                              countingMode={countingMode}
+                              hasComments={subHasComments}
+                              isSelected={isSubPartSelectedForPhotos}
+                              allowPressInCountingMode={showPhotos}
+                              venueName={venue.name}
+                              simplifyDisplay={true}
+                              onQuantityChange={(delta) => handleQuantityChange(subPart.id, delta)}
+                              onCommentSend={(text) => handleCommentSend(subPart.id, text)}
+                              onPress={() => {
+                                if (showPhotos) {
+                                  setSelectedPartIdForPhotos(subPart.id);
+                                } else {
+                                  setSelectedPart(subPart);
+                                  setShowPartDetailModal(true);
+                                }
+                              }}
+                            />
+                          </View>
+                        </ReanimatedSwipeable>
                       );
                     })}
                   </View>
@@ -1944,62 +2029,7 @@ export default function VenueDetailScreen() {
           </View>
         </View>
       </Modal>
-      <Modal
-        visible={showPartActionModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => {
-          console.log('Closing part action modal');
-          setShowPartActionModal(false);
-          setSelectedPart(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            onPress={() => {
-              console.log('Closing part action modal via backdrop');
-              setShowPartActionModal(false);
-              setSelectedPart(null);
-            }}
-            activeOpacity={1}
-          />
-          <View style={styles.actionModal}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handlePartAction('view')}
-            >
-              <ThemedText style={styles.actionButtonText}>View Details</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handlePartAction('edit')}
-            >
-              <ThemedText style={styles.actionButtonText}>Edit Part</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handlePartAction('status')}
-            >
-              <ThemedText style={styles.actionButtonText}>Change Status</ThemedText>
-            </TouchableOpacity>
-            {selectedPart && !selectedPart.parentPartId && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handlePartAction('subpart')}
-              >
-                <ThemedText style={styles.actionButtonText}>Create Sub-part</ThemedText>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.actionButton, { borderBottomWidth: 0 }]}
-              onPress={() => handlePartAction('delete')}
-            >
-              <ThemedText style={[styles.actionButtonText, { color: '#EF4444' }]}>Delete Part</ThemedText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Part action modal removed – swipe-to-reveal used instead */}
       <Modal
         visible={showFullImageModal}
         animationType="fade"
@@ -2371,6 +2401,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
     textAlign: 'center',
+  },
+  swipeActionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  swipeActionsLeftMain: {
+    marginLeft: 16,
+  },
+  swipeActionsLeftSubPart: {
+    marginLeft: 64,
+  },
+  swipeActionButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 56,
+  },
+  swipeCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swipeEditCircle: {
+    backgroundColor: '#2563EB',
+  },
+  swipeDeleteCircle: {
+    backgroundColor: '#EF4444',
+  },
+  swipeSubPartCircle: {
+    backgroundColor: '#059669',
   },
   detailSection: {
     marginBottom: 20,

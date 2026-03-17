@@ -1,18 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Project } from '@/types';
-import { FolderOpen, User, EllipsisVertical } from 'lucide-react-native';
+import { FolderOpen, User } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
 
 interface ProjectCardProps {
   project: Project;
   onPress: () => void;
-  onMorePress?: () => void;
 }
 
-export function ProjectCard({ project, onPress, onMorePress }: ProjectCardProps) {
+export function ProjectCard({ project, onPress }: ProjectCardProps) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress}>
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={1}>
       <View style={styles.header}>
         <View style={styles.thumbnailContainer}>
           {project.thumbnail ? (
@@ -35,11 +34,7 @@ export function ProjectCard({ project, onPress, onMorePress }: ProjectCardProps)
             <ThemedText style={styles.pic}>PIC: {project.pic}</ThemedText>
           </View>
         </View>
-        {onMorePress && (
-          <TouchableOpacity style={styles.moreButton} onPress={onMorePress}>
-            <EllipsisVertical color="#6B7280" size={20} />
-          </TouchableOpacity>
-        )}
+
       </View>
     </TouchableOpacity>
   );
@@ -108,8 +103,5 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 4,
   },
-  moreButton: {
-    padding: 8,
-    marginLeft: 8,
-  },
+
 });

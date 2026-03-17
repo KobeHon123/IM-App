@@ -137,7 +137,7 @@ export function PartCard({
         onLongPress={onLongPress}
         delayLongPress={500}
         disabled={shouldDisablePress && !onLongPress}
-        activeOpacity={shouldDisablePress ? 1 : 0.7}
+        activeOpacity={1}
       >
         {/* Background image from CAD drawing or picture or placeholder */}
         {part.cadDrawing ? (
@@ -194,7 +194,7 @@ export function PartCard({
       onLongPress={onLongPress}
       delayLongPress={500}
       disabled={shouldDisablePress && !onLongPress}
-      activeOpacity={shouldDisablePress ? 1 : 0.7}
+      activeOpacity={1}
     >
       <View style={styles.content}>
         <View style={styles.mainContent}>

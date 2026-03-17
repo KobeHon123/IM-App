@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -71,12 +72,14 @@ export default function RootLayout() {
   useFrameworkReady();
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <EasterEggProvider>
-          <RootLayoutNav />
-        </EasterEggProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={StyleSheet.absoluteFill}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <EasterEggProvider>
+            <RootLayoutNav />
+          </EasterEggProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

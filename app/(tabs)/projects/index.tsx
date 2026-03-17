@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { 
   View, 
   Text, 
@@ -12,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, X, Camera, ArrowUpDown } from 'lucide-react-native';
+import { Plus, X, Camera, ArrowUpDown, Pencil, Trash2 } from 'lucide-react-native';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
@@ -28,7 +29,6 @@ export default function ProjectsScreen() {
   const [sortAsc, setSortAsc] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showProjectActionModal, setShowProjectActionModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -122,37 +122,11 @@ export default function ProjectsScreen() {
     console.log('Deleting project ID:', selectedProject.id);
     const success = await deleteProject(selectedProject.id);
     setShowDeleteConfirmModal(false);
-    setShowProjectActionModal(false);
     setSelectedProject(null);
     setDeleteConfirmText('');
     if (success) {
       console.log('Project deleted successfully');
     }
-  };
-
-  const handleProjectAction = (action: string) => {
-    if (!selectedProject) {
-      console.log('No project selected for action:', action);
-      return;
-    }
-
-    console.log('Project action:', action, 'for project ID:', selectedProject.id);
-    switch (action) {
-      case 'edit':
-        setEditingProject({
-          name: selectedProject.name,
-          description: selectedProject.description,
-          pic: '',
-          thumbnail: selectedProject.thumbnail || '',
-        });
-        setEditingProjectPics(selectedProject.pic.split(', ').filter(p => p.trim()));
-        setShowEditModal(true);
-        break;
-      case 'delete':
-        handleDeleteProject();
-        break;
-    }
-    setShowProjectActionModal(false);
   };
 
   const handleSelectThumbnail = async (isEdit = false) => {
@@ -213,18 +187,55 @@ export default function ProjectsScreen() {
         data={filteredProjects}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <ProjectCard
-            project={item}
-            onPress={() => {
-              console.log('Navigating to project ID:', item.id);
-              router.push(`/(tabs)/projects/${item.id}`);
-            }}
-            onMorePress={() => {
-              console.log('Opening project action modal for ID:', item.id);
-              setSelectedProject(item);
-              setShowProjectActionModal(true);
-            }}
-          />
+          <ReanimatedSwipeable
+            containerStyle={{ backgroundColor: '#F9FAFB' }}
+            renderLeftActions={(_prog, _drag, swipeable) => (
+              <View style={styles.swipeActionsLeft}>
+                <TouchableOpacity
+                  style={styles.swipeActionButton}
+                  onPress={() => {
+                    swipeable.close();
+                    setSelectedProject(item);
+                    setEditingProject({
+                      name: item.name,
+                      description: item.description,
+                      pic: '',
+                      thumbnail: item.thumbnail || '',
+                    });
+                    setEditingProjectPics(item.pic.split(', ').filter(p => p.trim()));
+                    setShowEditModal(true);
+                  }}
+                >
+                  <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
+                    <Pencil color="#FFFFFF" size={20} />
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.swipeActionButton}
+                  onPress={() => {
+                    swipeable.close();
+                    setSelectedProject(item);
+                    setDeleteConfirmText('');
+                    setShowDeleteConfirmModal(true);
+                  }}
+                >
+                  <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
+                    <Trash2 color="#FFFFFF" size={20} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+            friction={2}
+            leftThreshold={80}
+          >
+            <ProjectCard
+              project={item}
+              onPress={() => {
+                console.log('Navigating to project ID:', item.id);
+                router.push(`/(tabs)/projects/${item.id}`);
+              }}
+            />
+          </ReanimatedSwipeable>
         )}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -450,42 +461,6 @@ export default function ProjectsScreen() {
         </SafeAreaView>
       </Modal>
 
-      <Modal
-        visible={showProjectActionModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => {
-          console.log('Closing project action modal');
-          setShowProjectActionModal(false);
-          setSelectedProject(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill} 
-            onPress={() => {
-              console.log('Closing project action modal via backdrop');
-              setShowProjectActionModal(false);
-              setSelectedProject(null);
-            }} 
-            activeOpacity={1}
-          />
-          <View style={styles.actionModal}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => handleProjectAction('edit')}
-            >
-              <ThemedText style={styles.actionButtonText}>Edit Project</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={() => handleProjectAction('delete')}
-            >
-              <ThemedText style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Project</ThemedText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       <Modal
         visible={showDeleteConfirmModal}
@@ -654,37 +629,28 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignSelf: 'center',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  swipeActionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 16,
+  },
+  swipeActionButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 56,
+  },
+  swipeCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionModal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    minWidth: 200,
-    maxWidth: 300,
+  swipeEditCircle: {
+    backgroundColor: '#2563EB',
   },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  actionButtonText: {
-    fontSize: 16,
-    color: '#111827',
-    marginLeft: 12,
-  },
-  deleteButton: {
-    borderBottomWidth: 0,
-  },
-  deleteButtonText: {
-    color: '#EF4444',
+  swipeDeleteCircle: {
+    backgroundColor: '#EF4444',
   },
   disabledInput: {
     backgroundColor: '#F3F4F6',

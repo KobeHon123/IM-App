@@ -12,18 +12,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, MapPin, Camera, EllipsisVertical, ArrowUpDown } from 'lucide-react-native';
+import { Plus, MapPin, Camera, ArrowUpDown, Pencil, Trash2 } from 'lucide-react-native';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { getVenuesByProject, createVenue, updateVenue, deleteVenue } from '@/lib/supabaseHelpers';
-import { Venue } from '@/types';
+import { Part, Venue } from '@/types';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
 import { SearchBar } from '@/components/SearchBar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { ThemedText } from '@/components/ThemedText';
 
-const VenueTab = ({ projectId }: { projectId: string }) => {
-  const { profiles } = useData();
+const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMode?: 'cards' | 'matrix' }) => {
+  const { profiles, parts: globalParts } = useData();
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [venues, setVenues] = React.useState<Venue[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -47,7 +48,6 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
 
   const [showCreateVenueModal, setShowCreateVenueModal] = useState(false);
   const [showEditVenueModal, setShowEditVenueModal] = useState(false);
-  const [showVenueActionModal, setShowVenueActionModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortAsc, setSortAsc] = useState(true);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
@@ -68,12 +68,7 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
   const isVenueNameDuplicate = newVenue.name.trim() !== '' && 
     venues.some(v => v.name.toLowerCase() === newVenue.name.trim().toLowerCase());
 
-  const filteredVenues = [...venues]
-    .filter((venue) =>
-      venue.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      venue.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      venue.pic.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+  const sortedVenues = [...venues]
     .sort((a, b) => {
       if (sortAsc) {
         return a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase());
@@ -83,6 +78,25 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
       const bTime = new Date((b as any).created_at ?? b.createdAt ?? 0).getTime();
       return bTime - aTime;
     });
+
+  const filteredVenues = [...sortedVenues]
+    .filter((venue) =>
+      venue.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      venue.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      venue.pic.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+  const projectParts = [...globalParts]
+    .filter(part => part.projectId === projectId)
+    .sort((a, b) => {
+      if (a.parentPartId && !b.parentPartId) return 1;
+      if (!a.parentPartId && b.parentPartId) return -1;
+      return a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase());
+    });
+
+  const matrixParts = projectParts.filter(part => !part.parentPartId);
+
+  const getPartRowLabel = (part: Part) => part.parentPartId ? `↳ ${part.name}` : part.name;
 
 
   const handleCreateVenue = async () => {
@@ -123,15 +137,11 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
     }
   };
 
-  const handleDeleteVenue = () => {
-    if (!selectedVenue) {
-      console.log('No venue selected for deletion');
-      return;
-    }
-    console.log('Showing delete venue alert for ID:', selectedVenue.id);
+  const handleDeleteVenue = (venue: Venue) => {
+    console.log('Showing delete venue alert for ID:', venue.id);
     Alert.alert(
       'Delete Venue',
-      `Are you sure you want to delete "${selectedVenue.name}"?`,
+      `Are you sure you want to delete "${venue.name}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -139,9 +149,8 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Deleting venue ID:', selectedVenue.id);
-              await deleteVenue(selectedVenue.id);
-              setShowVenueActionModal(false);
+              console.log('Deleting venue ID:', venue.id);
+              await deleteVenue(venue.id);
               setSelectedVenue(null);
               await loadVenues();
             } catch (error) {
@@ -152,29 +161,6 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
         },
       ]
     );
-  };
-
-  const handleVenueAction = (action: string) => {
-    if (!selectedVenue) {
-      console.log('No venue selected for action:', action);
-      return;
-    }
-    console.log('Venue action:', action, 'for venue ID:', selectedVenue.id);
-    switch (action) {
-      case 'edit':
-        setEditingVenue({
-          name: selectedVenue.name,
-          description: selectedVenue.description,
-          pic: selectedVenue.pic,
-          thumbnail: selectedVenue.thumbnail || '',
-        });
-        setShowEditVenueModal(true);
-        break;
-      case 'delete':
-        handleDeleteVenue();
-        break;
-    }
-    setShowVenueActionModal(false);
   };
 
   const handleSelectThumbnail = async (isEdit = false) => {
@@ -211,71 +197,190 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
 
   return (
     <View style={styles.tabContent}>
-      <View style={styles.searchRow}>
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search venues..."
-          containerStyle={{ flex: 1, marginHorizontal: 0 }}
-        />
-        <TouchableOpacity
-          style={styles.sortButton}
-          onPress={() => setSortAsc(prev => !prev)}
-          accessibilityLabel="Toggle sort order"
-        >
-          <ArrowUpDown color={sortAsc ? '#2563EB' : '#374151'} size={20} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.venueList} showsVerticalScrollIndicator={false}>
-        {filteredVenues.map((venue) => (
-          <View key={venue.id} style={styles.venueCard}>
+      {viewMode === 'cards' ? (
+        <>
+          <View style={styles.searchRow}>
+            <SearchBar
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search venues..."
+              containerStyle={{ flex: 1, marginHorizontal: 0 }}
+            />
             <TouchableOpacity
-              style={styles.venueCardContent}
-              onPress={() => {
-                console.log('Navigating to venue ID:', venue.id);
-                router.push(`/(tabs)/projects/venue/${venue.id}`);
-              }}
+              style={styles.sortButton}
+              onPress={() => setSortAsc(prev => !prev)}
+              accessibilityLabel="Toggle sort order"
             >
-              <View style={styles.venueThumbnailContainer}>
-                {venue.thumbnail ? (
-                  <Image source={{ uri: venue.thumbnail }} style={styles.venueThumbnail} />
-                ) : (
-                  <View style={styles.venueIconContainer}>
-                    <MapPin color="#059669" size={24} />
-                  </View>
-                )}
-              </View>
-              <View style={styles.venueContent}>
-                <ThemedText style={[styles.venueName, !venue.description && styles.venueNameNoDescription]}>{venue.name}</ThemedText>
-                {venue.description ? (
-                  <ThemedText style={styles.venueDescription}>{venue.description}</ThemedText>
-                ) : null}
-                <ThemedText style={styles.venuePic}>Measurer: {venue.pic}</ThemedText>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.venueMoreButton}
-              onPress={() => {
-                console.log('Opening venue action modal for ID:', venue.id);
-                setSelectedVenue(venue);
-                setShowVenueActionModal(true);
-              }}
-            >
-              <EllipsisVertical color="#6B7280" size={20} />
+              <ArrowUpDown color={sortAsc ? '#2563EB' : '#374151'} size={20} />
             </TouchableOpacity>
           </View>
-        ))}
-      </ScrollView>
-      <TouchableOpacity
-        style={styles.floatingAddButton}
-        onPress={() => {
-          console.log('Opening create venue modal');
-          setShowCreateVenueModal(true);
-        }}
-      >
-        <Plus color="#FFFFFF" size={28} />
-      </TouchableOpacity>
+
+          <ScrollView style={styles.venueList} showsVerticalScrollIndicator={false}>
+            {filteredVenues.map((venue) => (
+          <ReanimatedSwipeable
+            key={venue.id}
+            containerStyle={{ backgroundColor: '#F9FAFB' }}
+            renderLeftActions={(_prog, _drag, swipeable) => (
+              <View style={styles.swipeActionsLeft}>
+                <TouchableOpacity
+                  style={styles.swipeActionButton}
+                  onPress={() => {
+                    swipeable.close();
+                    setSelectedVenue(venue);
+                    setEditingVenue({
+                      name: venue.name,
+                      description: venue.description,
+                      pic: venue.pic,
+                      thumbnail: venue.thumbnail || '',
+                    });
+                    setShowEditVenueModal(true);
+                  }}
+                >
+                  <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
+                    <Pencil color="#FFFFFF" size={20} />
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.swipeActionButton}
+                  onPress={() => {
+                    swipeable.close();
+                    handleDeleteVenue(venue);
+                  }}
+                >
+                  <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
+                    <Trash2 color="#FFFFFF" size={20} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+            friction={2}
+            leftThreshold={80}
+          >
+            <View style={styles.venueCard}>
+              <TouchableOpacity
+                style={styles.venueCardContent}
+                activeOpacity={1}
+                onPress={() => {
+                  console.log('Navigating to venue ID:', venue.id);
+                  router.push(`/(tabs)/projects/venue/${venue.id}`);
+                }}
+              >
+                <View style={styles.venueThumbnailContainer}>
+                  {venue.thumbnail ? (
+                    <Image source={{ uri: venue.thumbnail }} style={styles.venueThumbnail} />
+                  ) : (
+                    <View style={styles.venueIconContainer}>
+                      <MapPin color="#059669" size={24} />
+                    </View>
+                  )}
+                </View>
+                <View style={styles.venueContent}>
+                  <ThemedText style={[styles.venueName, !venue.description && styles.venueNameNoDescription]}>{venue.name}</ThemedText>
+                  {venue.description ? (
+                    <ThemedText style={styles.venueDescription}>{venue.description}</ThemedText>
+                  ) : null}
+                  <ThemedText style={styles.venuePic}>Measurer: {venue.pic}</ThemedText>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </ReanimatedSwipeable>
+            ))}
+          </ScrollView>
+        </>
+      ) : (
+        <ScrollView style={styles.matrixWrapper} contentContainerStyle={styles.matrixWrapperContent} showsVerticalScrollIndicator={false}>
+          {sortedVenues.length === 0 ? (
+            <View style={styles.matrixEmptyState}>
+              <ThemedText style={styles.matrixEmptyTitle}>No venues yet</ThemedText>
+              <ThemedText style={styles.matrixEmptyText}>Create a venue to start comparing part quantities across locations.</ThemedText>
+            </View>
+          ) : matrixParts.length === 0 ? (
+            <View style={styles.matrixEmptyState}>
+              <ThemedText style={styles.matrixEmptyTitle}>No parts yet</ThemedText>
+              <ThemedText style={styles.matrixEmptyText}>Create parts first, then this matrix will show quantities by venue.</ThemedText>
+            </View>
+          ) : (
+            <View style={styles.matrixLandscapeShell}>
+              <View style={styles.matrixCard}>
+                <View style={styles.matrixViewport}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.matrixHorizontalContent}>
+                    <ScrollView
+                      style={styles.matrixVerticalScroll}
+                      showsVerticalScrollIndicator={false}
+                      nestedScrollEnabled
+                    >
+                      <View>
+                        <View style={styles.matrixHeaderRow}>
+                          <View style={[styles.matrixHeaderCell, styles.matrixFirstColumn]}>
+                            <ThemedText style={styles.matrixHeaderText}>Part</ThemedText>
+                          </View>
+                          {sortedVenues.map((venue, venueIndex) => (
+                            <View
+                              key={venue.id}
+                              style={[
+                                styles.matrixHeaderCell,
+                                venueIndex === sortedVenues.length - 1 && styles.matrixLastHeaderCell,
+                              ]}
+                            >
+                              <ThemedText style={styles.matrixHeaderText} numberOfLines={2}>{venue.name}</ThemedText>
+                            </View>
+                          ))}
+                        </View>
+
+                        {matrixParts.map((part, index) => (
+                          <View
+                            key={part.id}
+                            style={[
+                              styles.matrixRow,
+                              index % 2 === 1 && styles.matrixRowAlternate,
+                              index === matrixParts.length - 1 && styles.matrixLastRow,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.matrixCell,
+                                styles.matrixFirstColumn,
+                                index === matrixParts.length - 1 && styles.matrixLastRowFirstCell,
+                              ]}
+                            >
+                              <ThemedText style={[styles.matrixPartText, part.parentPartId && styles.matrixSubPartText]} numberOfLines={2}>
+                                {getPartRowLabel(part)}
+                              </ThemedText>
+                            </View>
+                            {sortedVenues.map((venue, venueIndex) => (
+                              <View
+                                key={`${part.id}-${venue.id}`}
+                                style={[
+                                  styles.matrixCell,
+                                  venueIndex === sortedVenues.length - 1 && styles.matrixLastColumnCell,
+                                  index === matrixParts.length - 1 && venueIndex === sortedVenues.length - 1 && styles.matrixLastRowLastCell,
+                                ]}
+                              >
+                                <ThemedText style={styles.matrixValueText}>{venue.partQuantities?.[part.id] ?? 0}</ThemedText>
+                              </View>
+                            ))}
+                          </View>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </ScrollView>
+                </View>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      )}
+      {viewMode === 'cards' && (
+        <TouchableOpacity
+          style={styles.floatingAddButton}
+          onPress={() => {
+            console.log('Opening create venue modal');
+            setShowCreateVenueModal(true);
+          }}
+        >
+          <Plus color="#FFFFFF" size={28} />
+        </TouchableOpacity>
+      )}
       <Modal
         visible={showCreateVenueModal}
         animationType="slide"
@@ -431,42 +536,6 @@ const VenueTab = ({ projectId }: { projectId: string }) => {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-      <Modal
-        visible={showVenueActionModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => {
-          console.log('Closing venue action modal');
-          setShowVenueActionModal(false);
-          setSelectedVenue(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            onPress={() => {
-              console.log('Closing venue action modal via backdrop');
-              setShowVenueActionModal(false);
-              setSelectedVenue(null);
-            }}
-            activeOpacity={1}
-          />
-          <View style={styles.actionModal}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleVenueAction('edit')}
-            >
-              <ThemedText style={styles.actionButtonText}>Edit Venue</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={() => handleVenueAction('delete')}
-            >
-              <ThemedText style={[styles.actionButtonText, styles.deleteButtonText]}>Delete Venue</ThemedText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -510,6 +579,131 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     marginTop: 8,
+  },
+  matrixWrapper: {
+    flex: 1,
+  },
+  matrixWrapperContent: {
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingBottom: 32,
+  },
+  matrixLandscapeShell: {
+    width: '100%',
+  },
+  matrixViewport: {
+    maxHeight: 520,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  matrixVerticalScroll: {
+    maxHeight: 520,
+  },
+  matrixHorizontalContent: {
+    minWidth: '100%',
+    paddingRight: 24,
+  },
+  matrixCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  matrixHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: '#EEF2FF',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  matrixRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  matrixLastRow: {
+    borderBottomWidth: 0,
+  },
+  matrixLastRowFirstCell: {
+    borderBottomLeftRadius: 14,
+  },
+  matrixLastRowLastCell: {
+    borderBottomRightRadius: 14,
+  },
+  matrixRowAlternate: {
+    backgroundColor: '#F9FAFB',
+  },
+  matrixHeaderCell: {
+    width: 132,
+    minHeight: 56,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#D1D5DB',
+  },
+  matrixLastHeaderCell: {
+    borderRightWidth: 0,
+  },
+  matrixCell: {
+    width: 132,
+    minHeight: 52,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#E5E7EB',
+  },
+  matrixLastColumnCell: {
+    borderRightWidth: 0,
+  },
+  matrixFirstColumn: {
+    width: 80,
+    alignItems: 'center',
+  },
+  matrixHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F2937',
+    textAlign: 'center',
+  },
+  matrixPartText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  matrixSubPartText: {
+    color: '#4B5563',
+  },
+  matrixValueText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  matrixEmptyState: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  matrixEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  matrixEmptyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   venueCard: {
     backgroundColor: '#FFFFFF',
@@ -565,10 +759,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   venueMoreButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    padding: 8,
+    display: 'none',
   },
   floatingAddButton: {
     position: 'absolute',
@@ -683,32 +874,45 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'none',
+  },
+  actionModal: {
+    display: 'none',
+  },
+  actionButton: {
+    display: 'none',
+  },
+  actionButtonText: {
+    display: 'none',
+  },
+  deleteButton: {
+    display: 'none',
+  },
+  deleteButtonText: {
+    display: 'none',
+  },
+  swipeActionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 0,
+  },
+  swipeActionButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 56,
+  },
+  swipeCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionModal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    minWidth: 200,
+  swipeEditCircle: {
+    backgroundColor: '#2563EB',
   },
-  actionButton: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  actionButtonText: {
-    fontSize: 16,
-    color: '#111827',
-    textAlign: 'center',
-  },
-  deleteButton: {
-    borderBottomWidth: 0,
-  },
-  deleteButtonText: {
-    color: '#EF4444',
+  swipeDeleteCircle: {
+    backgroundColor: '#EF4444',
   },
 });
 

@@ -1,11 +1,15 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info, Download, ArrowLeft } from 'lucide-react-native';
+import { File as FSFile, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as XLSX from 'xlsx';
 import { useRouter } from 'expo-router';
 import Svg, { Polygon } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useData } from '@/hooks/useData';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThemedText } from '@/components/ThemedText';
@@ -364,11 +368,23 @@ const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCance
 export default function PartTimeTimesheet() {
   const router = useRouter();
   const { user } = useAuth();
+  const { projects } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [dutySuggestIndex, setDutySuggestIndex] = useState<number | null>(null);
+  const suppressBlurRef = useRef(false);
+
+  const getDutySuggestions = (text: string): string[] => {
+    if (!text.trim()) return [];
+    const lower = text.toLowerCase();
+    return projects
+      .filter(p => p.name.toLowerCase().includes(lower))
+      .slice(0, 3)
+      .map(p => p.name);
+  };
 
   const formatDateToLocalString = (date: Date): string => {
     const year = date.getFullYear();
@@ -1059,55 +1075,109 @@ export default function PartTimeTimesheet() {
     return hours * 70; // HKD 70 per hour
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadCSV = async () => {
     try {
-      const entries = timesheets
-        .filter(entry => entry.worker_name === selectedWorkerForSalary)
-        .filter(entry => salaryCalculationType === 'total' || entry.confirmed);
-      
-      const totalHours = calculateWorkerHours(selectedWorkerForSalary, salaryCalculationType);
-      const totalSalary = calculateSalary();
-      
-      // Create a formatted text representation of the data
-      let content = '';
-      content += `${selectedWorkerForSalary} - Salary Breakdown\n`;
-      content += `Period: ${currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}\n`;
-      content += `Generated: ${new Date().toLocaleDateString('en-US')}\n\n`;
-      content += '═══════════════════════════════════════════\n';
-      content += 'Date            Hours    Amount      Duty\n';
-      content += '───────────────────────────────────────────\n';
-      
-      entries.forEach(entry => {
-        const date = new Date(entry.work_date).toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
+      const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      // Build a column-block for each worker: array of rows, each row = 3 cells
+      const workerBlocks: (string | number)[][][] = TEAM_MEMBERS.map(worker => {
+        const entries = timesheets
+          .filter(e => e.worker_name === worker)
+          .filter(e => salaryCalculationType === 'total' || e.confirmed)
+          .sort((a, b) => a.work_date.localeCompare(b.work_date));
+
+        const block: (string | number)[][] = [];
+        block.push([worker, '', '']);                          // row 0 — worker name (yellow)
+        block.push(['Date', 'Hours', 'Amount (HKD)']);        // row 1 — column headers
+
+        entries.forEach(entry => {
+          const dateStr = new Date(entry.work_date).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+          });
+          const hours = calculateWorkedHours(entry);
+          block.push([dateStr, parseFloat(hours.toFixed(1)), parseFloat((hours * 70).toFixed(1))]);
         });
-        const hours = calculateWorkedHours(entry).toFixed(1);
-        const amount = (calculateWorkedHours(entry) * 70).toFixed(1);
-        const duty = formatDutyText(entry) || '-';
-        const dateStr = date.padEnd(16);
-        const hoursStr = hours.padEnd(9);
-        const amountStr = `HKD $${amount}`.padEnd(12);
-        content += `${dateStr}${hoursStr}${amountStr}${duty}\n`;
+
+        const totalHours = calculateWorkerHours(worker, salaryCalculationType);
+        block.push(['Total', parseFloat(totalHours.toFixed(1)), parseFloat((totalHours * 70).toFixed(1))]);
+
+        // Duty summary
+        const dutyMap: Record<string, number> = {};
+        entries.forEach(entry => {
+          resolveEntryDuties(entry).forEach(d => {
+            dutyMap[d.duty] = (dutyMap[d.duty] || 0) + d.hours;
+          });
+        });
+        const duties = Object.entries(dutyMap);
+        if (duties.length > 0) {
+          block.push(['', '', '']);
+          block.push(['Duty Summary', '', '']);
+          block.push(['Duty', 'Total Hours', '']);
+          duties.forEach(([name, hrs]) => {
+            block.push([name, parseFloat(roundToTenth(hrs).toFixed(1)), '']);
+          });
+        }
+
+        return block;
       });
-      
-      content += '═══════════════════════════════════════════\n';
-      content += `Total Hours:      ${totalHours.toFixed(1)} hrs\n`;
-      content += `Total Salary:     HKD $${totalSalary.toFixed(2)}\n`;
-      content += '═══════════════════════════════════════════\n';
-      
-      // Use Share API to share the content
-      await Share.share({
-        message: content,
-        title: `${selectedWorkerForSalary} Salary Breakdown - ${currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
-        url: undefined, // No URL needed for text sharing
-      });
-    } catch (error: any) {
-      if (error.message !== 'Share cancelled') {
-        console.error('Share error:', error);
-        Alert.alert('Error', 'Failed to share salary breakdown');
+
+      // Combine blocks side-by-side with a blank separator column between each
+      const maxRows = Math.max(...workerBlocks.map(b => b.length));
+      const combined: (string | number)[][] = [];
+      for (let r = 0; r < maxRows; r++) {
+        const row: (string | number)[] = [];
+        workerBlocks.forEach((block, wi) => {
+          if (wi > 0) row.push('');                   // blank separator column
+          const cells = block[r] ?? ['', '', ''];
+          row.push(...cells);
+        });
+        combined.push(row);
       }
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(combined);
+
+      // Yellow fill on worker name cells (row 0, each worker's first column)
+      const yellowStyle = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFF00' } }, font: { bold: true, sz: 12 } };
+      TEAM_MEMBERS.forEach((_, wi) => {
+        const col = wi * 4; // cols 0, 4, 8 (3 data cols + 1 separator)
+        const ref = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (ws[ref]) ws[ref].s = yellowStyle;
+      });
+
+      // Column widths
+      const colWidths: { wch: number }[] = [];
+      TEAM_MEMBERS.forEach((_, wi) => {
+        const offset = wi * 4;
+        colWidths[offset]     = { wch: 18 }; // Date / Duty name
+        colWidths[offset + 1] = { wch: 10 }; // Hours
+        colWidths[offset + 2] = { wch: 14 }; // Amount
+        if (wi < TEAM_MEMBERS.length - 1) colWidths[offset + 3] = { wch: 3 }; // separator
+      });
+      ws['!cols'] = colWidths;
+
+      XLSX.utils.book_append_sheet(wb, ws, monthLabel);
+
+      const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true }) as ArrayBuffer;
+      const uint8 = new Uint8Array(wbArray);
+
+      const fileName = `salary_breakdown_${currentDate.getFullYear()}_${String(currentDate.getMonth() + 1).padStart(2, '0')}.xlsx`;
+      const file = new FSFile(Paths.cache, fileName);
+      if (file.exists) file.delete();
+      file.create();
+      file.write(uint8);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: 'Export Salary Breakdown',
+        });
+      } else {
+        Alert.alert('Saved', `File saved to:\n${file.uri}`);
+      }
+    } catch (error: any) {
+      console.error('CSV export error:', error);
+      Alert.alert('Error', 'Failed to export file.');
     }
   };
 
@@ -1150,6 +1220,7 @@ export default function PartTimeTimesheet() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View>
         {/* Calendar */}
         <View style={styles.calendar}>
           {/* Day headers */}
@@ -1512,6 +1583,7 @@ export default function PartTimeTimesheet() {
             </View>
           </View>
         </View>
+        </View>
       </ScrollView>
 
       {/* Add Modal */}
@@ -1616,39 +1688,65 @@ export default function PartTimeTimesheet() {
               </View>
 
               {dutyAllocations.map((allocation, index) => (
-                <View key={`add-duty-${index}`} style={styles.dutyInputRow}>
-                  <TextInput
-                    style={[styles.textInput, styles.dutyTextInput]}
-                    placeholder={`Enter duty/task ${index + 1}`}
-                    value={allocation.duty}
-                    onChangeText={(text) => updateDutyText(index, text)}
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  {index === 0 ? (
-                    <View style={styles.autoDutyHoursBadge}>
-                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}hrs</ThemedText>
-                    </View>
-                  ) : (
-                    <>
-                      <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
-                        <TextInput
-                          style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
-                          value={allocation.hours}
-                          onChangeText={(text) => updateDutyHours(index, text)}
-                          keyboardType="decimal-pad"
-                          placeholder="—"
-                          placeholderTextColor="#9CA3AF"
-                          returnKeyType="done"
-                        />
-                        <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                <View key={`add-duty-${index}`}>
+                  <View style={styles.dutyInputRow}>
+                    <TextInput
+                      style={[styles.textInput, styles.dutyTextInput]}
+                      placeholder={`Enter duty/task ${index + 1}`}
+                      value={allocation.duty}
+                      onChangeText={(text) => updateDutyText(index, text)}
+                      onFocus={() => setDutySuggestIndex(index)}
+                      onBlur={() => {
+                        if (suppressBlurRef.current) {
+                          suppressBlurRef.current = false;
+                          return;
+                        }
+                        setDutySuggestIndex(null);
+                      }}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    {index === 0 ? (
+                      <View style={styles.autoDutyHoursBadge}>
+                        <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}hrs</ThemedText>
                       </View>
-                      <TouchableOpacity
-                        style={styles.removeDutyButton}
-                        onPress={() => removeDutyAllocationInput(index)}
-                      >
-                        <Trash2 size={16} color="#EF4444" />
-                      </TouchableOpacity>
-                    </>
+                    ) : (
+                      <>
+                        <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
+                          <TextInput
+                            style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
+                            value={allocation.hours}
+                            onChangeText={(text) => updateDutyHours(index, text)}
+                            keyboardType="decimal-pad"
+                            placeholder="—"
+                            placeholderTextColor="#9CA3AF"
+                            returnKeyType="done"
+                          />
+                          <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.removeDutyButton}
+                          onPress={() => removeDutyAllocationInput(index)}
+                        >
+                          <Trash2 size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                  {dutySuggestIndex === index && getDutySuggestions(allocation.duty).length > 0 && (
+                    <View
+                      style={styles.dutySuggestionList}
+                      onTouchStart={() => { suppressBlurRef.current = true; }}
+                    >
+                      {getDutySuggestions(allocation.duty).map((name) => (
+                        <TouchableOpacity
+                          key={name}
+                          style={styles.dutySuggestionItem}
+                          onPress={() => { updateDutyText(index, name); setDutySuggestIndex(null); }}
+                        >
+                          <Text style={styles.dutySuggestionText}>{name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   )}
                 </View>
               ))}
@@ -1846,39 +1944,65 @@ export default function PartTimeTimesheet() {
               </View>
 
               {dutyAllocations.map((allocation, index) => (
-                <View key={`edit-duty-${index}`} style={styles.dutyInputRow}>
-                  <TextInput
-                    style={[styles.textInput, styles.dutyTextInput]}
-                    placeholder={`Enter duty/task ${index + 1}`}
-                    value={allocation.duty}
-                    onChangeText={(text) => updateDutyText(index, text)}
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  {index === 0 ? (
-                    <View style={styles.autoDutyHoursBadge}>
-                      <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}hrs</ThemedText>
-                    </View>
-                  ) : (
-                    <>
-                      <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
-                        <TextInput
-                          style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
-                          value={allocation.hours}
-                          onChangeText={(text) => updateDutyHours(index, text)}
-                          keyboardType="decimal-pad"
-                          placeholder="—"
-                          placeholderTextColor="#9CA3AF"
-                          returnKeyType="done"
-                        />
-                        <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                <View key={`edit-duty-${index}`}>
+                  <View style={styles.dutyInputRow}>
+                    <TextInput
+                      style={[styles.textInput, styles.dutyTextInput]}
+                      placeholder={`Enter duty/task ${index + 1}`}
+                      value={allocation.duty}
+                      onChangeText={(text) => updateDutyText(index, text)}
+                      onFocus={() => setDutySuggestIndex(index)}
+                      onBlur={() => {
+                        if (suppressBlurRef.current) {
+                          suppressBlurRef.current = false;
+                          return;
+                        }
+                        setDutySuggestIndex(null);
+                      }}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    {index === 0 ? (
+                      <View style={styles.autoDutyHoursBadge}>
+                        <ThemedText style={styles.autoDutyHoursText}>{getFirstDutyAutoHours().toFixed(1)}hrs</ThemedText>
                       </View>
-                      <TouchableOpacity
-                        style={styles.removeDutyButton}
-                        onPress={() => removeDutyAllocationInput(index)}
-                      >
-                        <Trash2 size={16} color="#EF4444" />
-                      </TouchableOpacity>
-                    </>
+                    ) : (
+                      <>
+                        <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
+                          <TextInput
+                            style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
+                            value={allocation.hours}
+                            onChangeText={(text) => updateDutyHours(index, text)}
+                            keyboardType="decimal-pad"
+                            placeholder="—"
+                            placeholderTextColor="#9CA3AF"
+                            returnKeyType="done"
+                          />
+                          <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.removeDutyButton}
+                          onPress={() => removeDutyAllocationInput(index)}
+                        >
+                          <Trash2 size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                  {dutySuggestIndex === index && getDutySuggestions(allocation.duty).length > 0 && (
+                    <View
+                      style={styles.dutySuggestionList}
+                      onTouchStart={() => { suppressBlurRef.current = true; }}
+                    >
+                      {getDutySuggestions(allocation.duty).map((name) => (
+                        <TouchableOpacity
+                          key={name}
+                          style={styles.dutySuggestionItem}
+                          onPress={() => { updateDutyText(index, name); setDutySuggestIndex(null); }}
+                        >
+                          <Text style={styles.dutySuggestionText}>{name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   )}
                 </View>
               ))}
@@ -2007,7 +2131,7 @@ export default function PartTimeTimesheet() {
               {selectedWorkerForSalary} - Salary Breakdown
             </ThemedText>
             <View style={styles.salaryDetailHeaderActions}>
-              <TouchableOpacity onPress={handleDownloadPDF} style={styles.downloadButton}>
+              <TouchableOpacity onPress={handleDownloadCSV} style={styles.downloadButton}>
                 <Download size={20} color="#2563EB" />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => toggleSalaryDetail(false)}>
@@ -2017,6 +2141,7 @@ export default function PartTimeTimesheet() {
           </View>
 
           <ScrollView style={styles.salaryDetailContent} showsVerticalScrollIndicator={false}>
+            <View>
             {timesheets
               .filter(entry => entry.worker_name === selectedWorkerForSalary)
               .filter(entry => salaryCalculationType === 'total' || entry.confirmed)
@@ -2043,18 +2168,6 @@ export default function PartTimeTimesheet() {
                       </ThemedText>
                     </View>
                   </View>
-                  {resolveEntryDuties(entry).length > 0 && (
-                    <View style={{ marginTop: 4 }}>
-                      {resolveEntryDuties(entry).map((d, i) => (
-                        <ThemedText key={i} style={[
-                          styles.salaryDetailDuty,
-                          i === 0 && { borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 8, marginTop: 8 },
-                        ]}>
-                          • {d.duty} ({d.hours.toFixed(1)}h)
-                        </ThemedText>
-                      ))}
-                    </View>
-                  )}
                 </View>
               ))}
 
@@ -2068,8 +2181,35 @@ export default function PartTimeTimesheet() {
                 </ThemedText>
               </View>
               <ThemedText style={styles.salaryDetailTotalAmount}>
-                HKD ${calculateSalary().toFixed(2)}
+                HKD ${calculateSalary().toFixed(1)}
               </ThemedText>
+            </View>
+
+            {/* Duty Summary */}
+            {(() => {
+              const dutyMap: Record<string, number> = {};
+              timesheets
+                .filter(entry => entry.worker_name === selectedWorkerForSalary)
+                .filter(entry => salaryCalculationType === 'total' || entry.confirmed)
+                .forEach(entry => {
+                  resolveEntryDuties(entry).forEach(d => {
+                    dutyMap[d.duty] = (dutyMap[d.duty] || 0) + d.hours;
+                  });
+                });
+              const duties = Object.entries(dutyMap);
+              if (duties.length === 0) return null;
+              return (
+                <View style={styles.dutySummarySection}>
+                  <ThemedText style={styles.dutySummaryTitle}>Duty Summary</ThemedText>
+                  {duties.map(([name, hours]) => (
+                    <View key={name} style={styles.dutySummaryRow}>
+                      <ThemedText style={styles.dutySummaryName}>{name}</ThemedText>
+                      <ThemedText style={styles.dutySummaryHours}>{roundToTenth(hours).toFixed(1)} hrs</ThemedText>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -3019,5 +3159,64 @@ const styles = StyleSheet.create({
   },
   downloadButton: {
     padding: 8,
+  },
+  dutySummarySection: {
+    marginTop: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  dutySummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 10,
+  },
+  dutySummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  dutySummaryName: {
+    fontSize: 13,
+    color: '#111827',
+    fontWeight: '500',
+    flex: 1,
+  },
+  dutySummaryHours: {
+    fontSize: 13,
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  dutySuggestionList: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    marginTop: 2,
+    marginBottom: 6,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dutySuggestionItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  dutySuggestionText: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
   },
 });

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Plus, MapPin, Package, Calendar as CalendarIcon } from 'lucide-react-native';
+import { ArrowLeft, Plus, MapPin, Package, Calendar as CalendarIcon, Table2 } from 'lucide-react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useData } from '@/hooks/useData';
 import VenueTab from './VenueTab';
@@ -14,6 +14,7 @@ export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams();
   const { projects } = useData();
   const [activeTab, setActiveTab] = useState<'venue' | 'part' | 'calendar'>('venue');
+  const [venueViewMode, setVenueViewMode] = useState<'cards' | 'matrix'>('cards');
 
   const project = projects.find((p) => p.id === id);
 
@@ -41,6 +42,15 @@ export default function ProjectDetailScreen() {
           <ThemedText style={styles.headerTitle}>{project.name}</ThemedText>
           <ThemedText style={styles.headerSubtitle}>PIC: {project.pic}</ThemedText>
         </View>
+        {activeTab === 'venue' && (
+          <TouchableOpacity
+            style={[styles.headerModeButton, venueViewMode === 'matrix' && styles.headerModeButtonActive]}
+            onPress={() => setVenueViewMode(prev => prev === 'cards' ? 'matrix' : 'cards')}
+            accessibilityLabel={venueViewMode === 'matrix' ? 'Switch to venue cards view' : 'Switch to venue matrix view'}
+          >
+            <Table2 color={venueViewMode === 'matrix' ? '#FFFFFF' : '#6B7280'} size={20} />
+          </TouchableOpacity>
+        )}
       </View>
       <View style={styles.tabContainer}>
         <TouchableOpacity
@@ -80,7 +90,7 @@ export default function ProjectDetailScreen() {
           </ThemedText>
         </TouchableOpacity>
       </View>
-      {activeTab === 'venue' && <VenueTab projectId={id as string} />}
+      {activeTab === 'venue' && <VenueTab projectId={id as string} viewMode={venueViewMode} />}
       {activeTab === 'part' && <PartTab projectId={id as string} />}
       {activeTab === 'calendar' && <CalendarTabSimplified projectId={id as string} />}
     </SafeAreaView>
@@ -119,6 +129,17 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  headerModeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  headerModeButtonActive: {
+    backgroundColor: '#2563EB',
   },
   tabContainer: {
     flexDirection: 'row',
