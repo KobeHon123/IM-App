@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Edit2, LogOut, Camera, Phone } from 'lucide-react-native';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import * as FileSystem from 'expo-file-system/legacy';
+import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import PublicProfile from '@/components/PublicProfile';
@@ -27,6 +28,7 @@ import { ThemedText } from '@/components/ThemedText';
 
 const ProfileScreen = () => {
   const { profile, signOut, refreshProfile, user } = useAuth();
+  const appVersion = Constants.expoConfig?.version ?? 'N/A';
   const { showOffWorkCounter, setShowOffWorkCounter, handleBioTap, timeLeft, isOffTime } = useEasterEgg();
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [userName, setUserName] = useState('');
@@ -469,6 +471,10 @@ const ProfileScreen = () => {
             <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.versionContainer}>
+          <ThemedText style={styles.versionText}>Version {appVersion}</ThemedText>
+        </View>
       </View>
 
       <Animated.View
@@ -726,6 +732,17 @@ const styles = StyleSheet.create({
   actionsSection: {
     paddingHorizontal: 16,
     paddingTop: 12,
+  },
+  versionContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    alignItems: 'center',
+  },
+  versionText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   logoutButton: {
     flexDirection: 'row',

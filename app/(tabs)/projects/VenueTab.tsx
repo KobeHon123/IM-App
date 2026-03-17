@@ -894,6 +894,7 @@ const styles = StyleSheet.create({
   swipeActionsLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'stretch',
     marginLeft: 0,
   },
   swipeActionButton: {
