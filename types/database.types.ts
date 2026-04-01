@@ -252,7 +252,7 @@ export interface Database {
           id: string
           user_id: string
           work_date: string
-          period: 'full' | 'am' | 'pm' | 'off'
+          period: 'full' | 'am' | 'pm' | 'off' | 'other' | 'on_call'
           location: 'office' | 'polyu' | 'home' | 'site' | null
           created_at: string
           updated_at: string
@@ -261,7 +261,7 @@ export interface Database {
           id?: string
           user_id: string
           work_date: string
-          period: 'full' | 'am' | 'pm' | 'off'
+          period: 'full' | 'am' | 'pm' | 'off' | 'other' | 'on_call'
           location?: 'office' | 'polyu' | 'home' | 'site' | null
           created_at?: string
           updated_at?: string
@@ -270,7 +270,7 @@ export interface Database {
           id?: string
           user_id?: string
           work_date?: string
-          period?: 'full' | 'am' | 'pm' | 'off'
+          period?: 'full' | 'am' | 'pm' | 'off' | 'other' | 'on_call'
           location?: 'office' | 'polyu' | 'home' | 'site' | null
           created_at?: string
           updated_at?: string

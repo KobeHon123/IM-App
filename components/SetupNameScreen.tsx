@@ -7,15 +7,24 @@ import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/ThemedText';
 
 export function SetupNameScreen() {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [fullName, setFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    const existing = (profile?.full_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '').toString();
+    if (existing.trim().length > 0) {
+      setFullName(existing);
+    }
+  }, [profile?.full_name, user?.user_metadata?.full_name, user?.user_metadata?.name]);
+
   const handleSaveName = async () => {
     if (!user) return;
 
-    if (!fullName.trim()) {
+    const trimmedName = fullName.trim();
+
+    if (!trimmedName) {
       setError('Please enter your name');
       return;
     }
@@ -27,12 +36,22 @@ export function SetupNameScreen() {
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
-          full_name: fullName.trim(),
+          full_name: trimmedName,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
 
-      if (updateError) throw updateError;
+      // Keep auth metadata in sync; this also serves as a fallback name source.
+      const { error: authUpdateError } = await supabase.auth.updateUser({
+        data: {
+          full_name: trimmedName,
+          name: trimmedName,
+        },
+      });
+
+      if (updateError && authUpdateError) {
+        throw updateError;
+      }
 
       await refreshProfile();
     } catch (err: any) {

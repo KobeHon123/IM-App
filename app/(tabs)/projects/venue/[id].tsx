@@ -18,7 +18,9 @@ import { ArrowLeft, Camera, ChevronDown, ChevronRight, ChevronRightIcon, FileTex
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
+import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
 import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
@@ -33,6 +35,7 @@ export default function VenueDetailScreen() {
   const { id } = useLocalSearchParams();
   const { updatePart, parts: globalParts, profiles } = useData();
   const { impactAsync, notificationAsync } = usePlatformHaptics();
+  const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [venue, setVenue] = useState<any>(null);
   const [project, setProject] = useState<any>(null);
   const [projectParts, setProjectParts] = useState<Part[]>([]);
@@ -413,19 +416,18 @@ export default function VenueDetailScreen() {
   };
 
   const handleSelectPictures = async (isEdit = false) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select pictures.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: true,
-      selectionLimit: 6,
       quality: 1,
     });
-    if (!result.canceled) {
-      const uris = result.assets.map(asset => asset.uri);
+    if (result) {
+      const uris = Array.isArray(result) ? result.map(r => r.uri) : [result.uri];
       console.log('Selected pictures:', uris);
       if (isEdit) {
         setEditingPart((prev: any) => ({ ...prev, pictures: [...(prev.pictures || []), ...uris].slice(0, 6) }));
@@ -442,18 +444,19 @@ export default function VenueDetailScreen() {
     }
   };
   const handleSelectCADDrawing = async (isEdit = false) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const hasPermission = await requestPermissionsAsync();
+    if (!hasPermission) {
       Alert.alert('Permission Denied', 'We need access to your gallery to select CAD drawing.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    const result = await launchImageLibraryAsync({
+      mediaTypes: 'Images',
       allowsMultipleSelection: false,
       quality: 1,
     });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
+    if (result) {
+      const uri = Array.isArray(result) ? result[0]?.uri : result.uri;
+      if (!uri) return;
       console.log('Selected CAD drawing:', uri);
       if (isEdit) {
         setEditingPart(prev => ({ ...prev, cadDrawing: uri }));
@@ -1411,7 +1414,7 @@ export default function VenueDetailScreen() {
                       containerStyle={{ backgroundColor: '#F9FAFB' }}
                       renderLeftActions={(_prog, _drag, swipeable) => (
                         <View style={[styles.swipeActionsLeft, styles.swipeActionsLeftMain]}>
-                          <TouchableOpacity
+                          <GHTouchableOpacity
                             style={styles.swipeActionButton}
                             onPress={() => {
                               swipeable.close();
@@ -1430,8 +1433,8 @@ export default function VenueDetailScreen() {
                             <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
                               <Pencil color="#FFFFFF" size={18} />
                             </View>
-                          </TouchableOpacity>
-                          <TouchableOpacity
+                          </GHTouchableOpacity>
+                          <GHTouchableOpacity
                             style={styles.swipeActionButton}
                             onPress={() => {
                               swipeable.close();
@@ -1441,9 +1444,9 @@ export default function VenueDetailScreen() {
                             <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
                               <Trash2 color="#FFFFFF" size={18} />
                             </View>
-                          </TouchableOpacity>
+                          </GHTouchableOpacity>
                           {!part.parentPartId && (
-                            <TouchableOpacity
+                            <GHTouchableOpacity
                               style={styles.swipeActionButton}
                               onPress={() => {
                                 swipeable.close();
@@ -1453,7 +1456,7 @@ export default function VenueDetailScreen() {
                               <View style={[styles.swipeCircle, styles.swipeSubPartCircle]}>
                                 <GitBranch color="#FFFFFF" size={18} />
                               </View>
-                            </TouchableOpacity>
+                            </GHTouchableOpacity>
                           )}
                         </View>
                       )}
@@ -1492,7 +1495,7 @@ export default function VenueDetailScreen() {
                           containerStyle={{ backgroundColor: '#F9FAFB' }}
                           renderLeftActions={(_prog, _drag, swipeable) => (
                             <View style={[styles.swipeActionsLeft, styles.swipeActionsLeftSubPart]}>
-                              <TouchableOpacity
+                              <GHTouchableOpacity
                                 style={styles.swipeActionButton}
                                 onPress={() => {
                                   swipeable.close();
@@ -1511,8 +1514,8 @@ export default function VenueDetailScreen() {
                                 <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
                                   <Pencil color="#FFFFFF" size={18} />
                                 </View>
-                              </TouchableOpacity>
-                              <TouchableOpacity
+                              </GHTouchableOpacity>
+                              <GHTouchableOpacity
                                 style={styles.swipeActionButton}
                                 onPress={() => {
                                   swipeable.close();
@@ -1522,7 +1525,7 @@ export default function VenueDetailScreen() {
                                 <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
                                   <Trash2 color="#FFFFFF" size={18} />
                                 </View>
-                              </TouchableOpacity>
+                              </GHTouchableOpacity>
                             </View>
                           )}
                           friction={2}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
 import { 
   View, 
   Text, 
@@ -9,11 +10,12 @@ import {
   Modal, 
   TextInput, 
   Alert,
-  Image
+  Image,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, X, Camera, ArrowUpDown, Pencil, Trash2 } from 'lucide-react-native';
+import { Plus, Camera, ArrowUpDown, Pencil, Trash2 } from 'lucide-react-native';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
@@ -191,7 +193,7 @@ export default function ProjectsScreen() {
             containerStyle={{ backgroundColor: '#F9FAFB' }}
             renderLeftActions={(_prog, _drag, swipeable) => (
               <View style={styles.swipeActionsLeft}>
-                <TouchableOpacity
+                <GHTouchableOpacity
                   style={styles.swipeActionButton}
                   onPress={() => {
                     swipeable.close();
@@ -209,8 +211,8 @@ export default function ProjectsScreen() {
                   <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
                     <Pencil color="#FFFFFF" size={20} />
                   </View>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </GHTouchableOpacity>
+                <GHTouchableOpacity
                   style={styles.swipeActionButton}
                   onPress={() => {
                     swipeable.close();
@@ -222,7 +224,7 @@ export default function ProjectsScreen() {
                   <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
                     <Trash2 color="#FFFFFF" size={20} />
                   </View>
-                </TouchableOpacity>
+                </GHTouchableOpacity>
               </View>
             )}
             friction={2}
@@ -256,105 +258,120 @@ export default function ProjectsScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Create New Project</ThemedText>
-            <TouchableOpacity 
-              onPress={() => {
-                console.log('Closing create project modal');
-                setShowCreateModal(false);
-              }}
-            >
-              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Project Name *</ThemedText>
-              <TextInput
-                style={styles.input}
-                value={newProject.name}
-                onChangeText={(text) => setNewProject(prev => ({ ...prev, name: text }))}
-                placeholder="Enter project name"
-                placeholderTextColor="#6B728080"
-              />
+        <SafeAreaView style={styles.editModalContainer}>
+          <ScrollView
+            style={styles.editModalScroll}
+            contentContainerStyle={styles.editModalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.editModalIntroCard}>
+              <ThemedText style={styles.editModalEyebrow}>Project Settings</ThemedText>
+              <ThemedText style={styles.editModalTitle}>Create New Project</ThemedText>
             </View>
 
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>PIC (up to 2) *</ThemedText>
-              <DesignerSelector
-                value={newProject.pic}
-                onChangeText={(text) => {
-                  // only update the input while typing
-                  setNewProject(prev => ({ ...prev, pic: text }));
-                }}
-                onSelectProfile={(name) => {
-                  if (!newProjectPics.includes(name) && newProjectPics.length < 2) {
-                    setNewProjectPics(prev => [...prev, name]);
-                    setNewProject(prev => ({ ...prev, pic: '' }));
-                  }
-                }}
-                profiles={profiles}
-                placeholder="Select PIC"
-                placeholderTextColor="#6B728080"
-                inputStyle={[styles.input, newProjectPics.length >= 2 && styles.disabledInput]}
-                editable={newProjectPics.length < 2}
-              />
-              {newProjectPics.length > 0 && (
-                <View style={styles.selectedPicsContainer}>
-                  {newProjectPics.map((pic) => (
-                    <View key={pic} style={styles.picTag}>
-                      <ThemedText style={styles.picTagText}>{pic}</ThemedText>
-                      <TouchableOpacity onPress={() => handleRemovePicFromCreate(pic)}>
-                        <ThemedText style={styles.picRemoveText}>×</ThemedText>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Project Name *</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={newProject.name}
+                  onChangeText={(text) => setNewProject(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter project name"
+                  placeholderTextColor="#6B728080"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Description</ThemedText>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={newProject.description}
+                  onChangeText={(text) => setNewProject(prev => ({ ...prev, description: text }))}
+                  placeholder="Enter project description"
+                  placeholderTextColor="#6B728080"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Description</ThemedText>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={newProject.description}
-                onChangeText={(text) => setNewProject(prev => ({ ...prev, description: text }))}
-                placeholder="Enter project description"
-                placeholderTextColor="#6B728080"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>PIC (up to 2) *</ThemedText>
+                <DesignerSelector
+                  value={newProject.pic}
+                  onChangeText={(text) => {
+                    // only update the input while typing
+                    setNewProject(prev => ({ ...prev, pic: text }));
+                  }}
+                  onSelectProfile={(name) => {
+                    if (!newProjectPics.includes(name) && newProjectPics.length < 2) {
+                      setNewProjectPics(prev => [...prev, name]);
+                      setNewProject(prev => ({ ...prev, pic: '' }));
+                    }
+                  }}
+                  profiles={profiles}
+                  placeholder="Select PIC"
+                  placeholderTextColor="#6B728080"
+                  inputStyle={[styles.input, newProjectPics.length >= 2 && styles.disabledInput]}
+                  editable={newProjectPics.length < 2}
+                />
+                {newProjectPics.length > 0 && (
+                  <View style={styles.selectedPicsContainer}>
+                    {newProjectPics.map((pic) => (
+                      <View key={pic} style={styles.picTag}>
+                        <ThemedText style={styles.picTagText}>{pic}</ThemedText>
+                        <TouchableOpacity onPress={() => handleRemovePicFromCreate(pic)}>
+                          <ThemedText style={styles.picRemoveText}>×</ThemedText>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Project Thumbnail (Optional)</ThemedText>
-              <TouchableOpacity 
-                style={styles.pictureButton} 
-                onPress={() => handleSelectThumbnail(false)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <ThemedText style={styles.pictureButtonText}>Add Thumbnail</ThemedText>
-              </TouchableOpacity>
-              {newProject.thumbnail && (
-                <Image source={{ uri: newProject.thumbnail }} style={styles.thumbnailPreview} />
-              )}
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Project Thumbnail (Optional)</ThemedText>
+                <TouchableOpacity
+                  style={styles.editPictureButton}
+                  onPress={() => handleSelectThumbnail(false)}
+                >
+                  <Camera color="#334155" size={22} />
+                  <ThemedText style={styles.editPictureButtonText}>Add Thumbnail</ThemedText>
+                </TouchableOpacity>
+                {newProject.thumbnail && (
+                  <Image source={{ uri: newProject.thumbnail }} style={styles.editThumbnailPreview} />
+                )}
+              </View>
             </View>
 
             {isProjectNameDuplicate && (
               <ThemedText style={styles.duplicateWarning}>A project with this name already exists</ThemedText>
             )}
 
-            <TouchableOpacity 
-              style={[styles.createProjectButton, isProjectNameDuplicate && styles.disabledButton]}
-              onPress={handleCreateProject}
-              disabled={isProjectNameDuplicate}
-            >
-              <ThemedText style={[styles.createProjectButtonText, isProjectNameDuplicate && styles.disabledButtonText]}>Create Project</ThemedText>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.editActionRow}>
+              <TouchableOpacity
+                style={styles.editSecondaryButton}
+                onPress={() => {
+                  console.log('Closing create project modal');
+                  setShowCreateModal(false);
+                }}
+              >
+                <ThemedText style={styles.editSecondaryButtonText}>Discard</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.editPrimaryButton, isProjectNameDuplicate && styles.editPrimaryButtonDisabled]}
+                onPress={handleCreateProject}
+                disabled={isProjectNameDuplicate}
+              >
+                <ThemedText style={[styles.editPrimaryButtonText, isProjectNameDuplicate && styles.editPrimaryButtonTextDisabled]}>Create Project</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -363,101 +380,117 @@ export default function ProjectsScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Edit Project</ThemedText>
-            <TouchableOpacity 
-              onPress={() => {
-                console.log('Closing edit project modal');
-                setShowEditModal(false);
-                setSelectedProject(null);
-              }}
-            >
-              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Project Name *</ThemedText>
-              <TextInput
-                style={styles.input}
-                value={editingProject.name}
-                onChangeText={(text) => setEditingProject(prev => ({ ...prev, name: text }))}
-                placeholder="Enter project name"
-                placeholderTextColor="#6B728080"
-              />
+        <SafeAreaView style={styles.editModalContainer}>
+          <ScrollView
+            style={styles.editModalScroll}
+            contentContainerStyle={styles.editModalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.editModalIntroCard}>
+              <ThemedText style={styles.editModalEyebrow}>Project Settings</ThemedText>
+              <ThemedText style={styles.editModalTitle}>Edit Project</ThemedText>
             </View>
 
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>PIC (up to 2) *</ThemedText>
-              <DesignerSelector
-                value={editingProject.pic}
-                onChangeText={(text) => {
-                  // only update the input while typing
-                  setEditingProject(prev => ({ ...prev, pic: text }));
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Project Name *</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={editingProject.name}
+                  onChangeText={(text) => setEditingProject(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter project name"
+                  placeholderTextColor="#6B728080"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Description</ThemedText>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={editingProject.description}
+                  onChangeText={(text) => setEditingProject(prev => ({ ...prev, description: text }))}
+                  placeholder="Enter project description"
+                  placeholderTextColor="#6B728080"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>PIC (up to 2) *</ThemedText>
+                <DesignerSelector
+                  value={editingProject.pic}
+                  onChangeText={(text) => {
+                    // only update the input while typing
+                    setEditingProject(prev => ({ ...prev, pic: text }));
+                  }}
+                  onSelectProfile={(name) => {
+                    if (!editingProjectPics.includes(name) && editingProjectPics.length < 2) {
+                      setEditingProjectPics(prev => [...prev, name]);
+                      setEditingProject(prev => ({ ...prev, pic: '' }));
+                    }
+                  }}
+                  profiles={profiles}
+                  placeholder="Select PIC"
+                  placeholderTextColor="#6B728080"
+                  inputStyle={[styles.input, editingProjectPics.length >= 2 && styles.disabledInput]}
+                  editable={editingProjectPics.length < 2}
+                />
+                {editingProjectPics.length > 0 && (
+                  <View style={styles.selectedPicsContainer}>
+                    {editingProjectPics.map((pic) => (
+                      <View key={pic} style={styles.picTag}>
+                        <ThemedText style={styles.picTagText}>{pic}</ThemedText>
+                        <TouchableOpacity onPress={() => handleRemovePicFromEdit(pic)}>
+                          <ThemedText style={styles.picRemoveText}>×</ThemedText>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Project Thumbnail (Optional)</ThemedText>
+                <TouchableOpacity
+                  style={styles.editPictureButton}
+                  onPress={() => handleSelectThumbnail(true)}
+                >
+                  <Camera color="#334155" size={22} />
+                  <ThemedText style={styles.editPictureButtonText}>Change Thumbnail</ThemedText>
+                </TouchableOpacity>
+                {editingProject.thumbnail && (
+                  <Image source={{ uri: editingProject.thumbnail }} style={styles.editThumbnailPreview} />
+                )}
+              </View>
+            </View>
+
+            <View style={styles.editActionRow}>
+              <TouchableOpacity
+                style={styles.editSecondaryButton}
+                onPress={() => {
+                  console.log('Closing edit project modal');
+                  setShowEditModal(false);
+                  setSelectedProject(null);
                 }}
-                onSelectProfile={(name) => {
-                  if (!editingProjectPics.includes(name) && editingProjectPics.length < 2) {
-                    setEditingProjectPics(prev => [...prev, name]);
-                    setEditingProject(prev => ({ ...prev, pic: '' }));
-                  }
-                }}
-                profiles={profiles}
-                placeholder="Select PIC"
-                placeholderTextColor="#6B728080"
-                inputStyle={[styles.input, editingProjectPics.length >= 2 && styles.disabledInput]}
-                editable={editingProjectPics.length < 2}
-              />
-              {editingProjectPics.length > 0 && (
-                <View style={styles.selectedPicsContainer}>
-                  {editingProjectPics.map((pic) => (
-                    <View key={pic} style={styles.picTag}>
-                      <ThemedText style={styles.picTagText}>{pic}</ThemedText>
-                      <TouchableOpacity onPress={() => handleRemovePicFromEdit(pic)}>
-                        <ThemedText style={styles.picRemoveText}>×</ThemedText>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Description</ThemedText>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={editingProject.description}
-                onChangeText={(text) => setEditingProject(prev => ({ ...prev, description: text }))}
-                placeholder="Enter project description"
-                placeholderTextColor="#6B728080"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Project Thumbnail (Optional)</ThemedText>
-              <TouchableOpacity 
-                style={styles.pictureButton} 
-                onPress={() => handleSelectThumbnail(true)}
               >
-                <Camera color="#6B7280" size={24} />
-                <ThemedText style={styles.pictureButtonText}>Change Thumbnail</ThemedText>
+                <ThemedText style={styles.editSecondaryButtonText}>Discard</ThemedText>
               </TouchableOpacity>
-              {editingProject.thumbnail && (
-                <Image source={{ uri: editingProject.thumbnail }} style={styles.thumbnailPreview} />
-              )}
+
+              <TouchableOpacity
+                style={styles.editPrimaryButton}
+                onPress={handleEditProject}
+              >
+                <ThemedText style={styles.editPrimaryButtonText}>Save Changes</ThemedText>
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
-              style={styles.createProjectButton}
-              onPress={handleEditProject}
-            >
-              <ThemedText style={styles.createProjectButtonText}>Save Changes</ThemedText>
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -558,6 +591,109 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 16,
+  },
+  editModalContainer: {
+    flex: 1,
+    backgroundColor: '#F4F7FB',
+  },
+  editModalIntroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editModalEyebrow: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  editModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  editModalScroll: {
+    flex: 1,
+  },
+  editModalScrollContent: {
+    padding: 16,
+    gap: 14,
+  },
+  editModalSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editPictureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  editPictureButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  editThumbnailPreview: {
+    width: 128,
+    height: 128,
+    marginTop: 12,
+    borderRadius: 12,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  editSecondaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  editSecondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  editPrimaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0F4FA8',
+  },
+  editPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  editPrimaryButtonDisabled: {
+    backgroundColor: '#E2E8F0',
+  },
+  editPrimaryButtonTextDisabled: {
+    color: '#94A3B8',
   },
   inputGroup: {
     marginBottom: 20,

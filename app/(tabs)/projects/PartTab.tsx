@@ -1012,25 +1012,21 @@ const PartTab = ({ projectId }: { projectId: string }) => {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Create Sub-part</ThemedText>
-            <TouchableOpacity
-              onPress={() => {
-                console.log('Closing create sub-part modal');
-                setShowCreateSubPartModal(false);
-                setNewSubPart({ type: 'U shape', description: '', pictures: [], cadDrawing: '', dimensions: {}, designer: '' });
-                setUsingSimilarPart(false);
-                setSimilarPart(null);
-              }}
-            >
-              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Part Type *</ThemedText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.typeContainer, usingSimilarPart && styles.disabledTypeContainer]}>
+        <SafeAreaView style={styles.editModalContainer}>
+          <ScrollView
+            style={styles.editModalScroll}
+            contentContainerStyle={styles.editModalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.editModalIntroCard}>
+              <ThemedText style={styles.editModalEyebrow}>Part Settings</ThemedText>
+              <ThemedText style={styles.editModalTitle}>Create Sub-part</ThemedText>
+            </View>
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Part Type *</ThemedText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.typeContainer, usingSimilarPart && styles.disabledTypeContainer]}>
                 {[
                   'U shape', 'Straight', 'Knob', 'Button', 'Push Pad',
                   'Cover', 'X - Special Design', 'Gadget'
@@ -1058,62 +1054,74 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                     </ThemedText>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
-              {usingSimilarPart && (
-                <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>
-              )}
-            </View>
-            {renderDimensionInputs()}
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Description *</ThemedText>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={newSubPart.description}
-                onChangeText={(text) => setNewSubPart(prev => ({ ...prev, description: text }))}
-                placeholder="Enter sub-part description"
-                placeholderTextColor="#6B728080"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Designer</ThemedText>
-              <TextInput
-                style={styles.input}
-                value={newSubPart.designer}
-                onChangeText={(text) => setNewSubPart(prev => ({ ...prev, designer: text }))}
-                placeholder="Enter designer name (optional)"
-                placeholderTextColor="#6B728080"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Pictures (1-6)</ThemedText>
-              <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectPictures(false)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <ThemedText style={styles.pictureButtonText}>Add Pictures</ThemedText>
-              </TouchableOpacity>
-              <FlatList
-                data={newSubPart.pictures}
-                keyExtractor={(item) => item}
-                horizontal
-                style={styles.previewList}
-                renderItem={({ item }) => (
-                  <View style={styles.previewContainer}>
-                    <Image source={{ uri: item }} style={styles.thumbnailPreview} />
-                    <TouchableOpacity
-                      style={styles.removePreviewButton}
-                      onPress={() => handleRemovePicture(item)}
-                    >
-                      <X color="#FFFFFF" size={16} />
-                    </TouchableOpacity>
-                  </View>
+                </ScrollView>
+                {usingSimilarPart && (
+                  <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>
                 )}
-              />
+              </View>
             </View>
+
+            <View style={styles.editModalSectionCard}>
+              {renderDimensionInputs()}
+            </View>
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Description *</ThemedText>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={newSubPart.description}
+                  onChangeText={(text) => setNewSubPart(prev => ({ ...prev, description: text }))}
+                  placeholder="Enter sub-part description"
+                  placeholderTextColor="#6B728080"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Designer</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={newSubPart.designer}
+                  onChangeText={(text) => setNewSubPart(prev => ({ ...prev, designer: text }))}
+                  placeholder="Enter designer name (optional)"
+                  placeholderTextColor="#6B728080"
+                />
+              </View>
+            </View>
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Pictures (1-6)</ThemedText>
+                <TouchableOpacity
+                  style={styles.editPictureButton}
+                  onPress={() => handleSelectPictures(false)}
+                >
+                  <Camera color="#334155" size={22} />
+                  <ThemedText style={styles.editPictureButtonText}>Add Pictures</ThemedText>
+                </TouchableOpacity>
+                <FlatList
+                  data={newSubPart.pictures}
+                  keyExtractor={(item) => item}
+                  horizontal
+                  style={styles.previewList}
+                  renderItem={({ item }) => (
+                    <View style={styles.previewContainer}>
+                      <Image source={{ uri: item }} style={styles.thumbnailPreview} />
+                      <TouchableOpacity
+                        style={styles.removePreviewButton}
+                        onPress={() => handleRemovePicture(item)}
+                      >
+                        <X color="#FFFFFF" size={16} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                />
+              </View>
+            </View>
+
             {similarPart && !usingSimilarPart && (
               <View style={styles.similarPartContainer}>
                 <View style={styles.similarPartMessageBox}>
@@ -1151,14 +1159,30 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                 <ThemedText style={styles.generateNewPartButtonText}>Generate New Part</ThemedText>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              style={[styles.createButton, usingSimilarPart && styles.createPartUsingExistingButton]}
-              onPress={handleCreateSubPart}
-            >
-              <ThemedText style={styles.createButtonText}>
-                {usingSimilarPart ? 'Create Existing Part' : 'Create Sub-part'}
-              </ThemedText>
-            </TouchableOpacity>
+
+            <View style={styles.editActionRow}>
+              <TouchableOpacity
+                style={styles.editSecondaryButton}
+                onPress={() => {
+                  console.log('Closing create sub-part modal');
+                  setShowCreateSubPartModal(false);
+                  setNewSubPart({ type: 'U shape', description: '', pictures: [], cadDrawing: '', dimensions: {}, designer: '' });
+                  setUsingSimilarPart(false);
+                  setSimilarPart(null);
+                }}
+              >
+                <ThemedText style={styles.editSecondaryButtonText}>Discard</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.editPrimaryButton, usingSimilarPart && styles.createPartUsingExistingButton]}
+                onPress={handleCreateSubPart}
+              >
+                <ThemedText style={styles.editPrimaryButtonText}>
+                  {usingSimilarPart ? 'Create Existing Part' : 'Create Sub-part'}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1402,6 +1426,44 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  editModalContainer: {
+    flex: 1,
+    backgroundColor: '#F4F7FB',
+  },
+  editModalScroll: {
+    flex: 1,
+  },
+  editModalScrollContent: {
+    padding: 16,
+    gap: 14,
+  },
+  editModalIntroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editModalEyebrow: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  editModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  editModalSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
   statusSelectionLabel: {
     fontSize: 16,
     fontWeight: '500',
@@ -1534,6 +1596,56 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  editPictureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  editPictureButtonText: {
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  editActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  editSecondaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  editSecondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  editPrimaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0F4FA8',
+  },
+  editPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   createPartUsingExistingButton: {
     backgroundColor: '#DC2626',

@@ -48,6 +48,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const ensureProfileExists = async (authUser: User) => {
+    try {
+      const fallbackName = String(
+        authUser.user_metadata?.full_name || authUser.user_metadata?.name || ''
+      ).trim();
+
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: authUser.id,
+          email: authUser.email || '',
+          full_name: fallbackName || null,
+          avatar_url: null,
+          is_authorized: false,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        console.error('Error ensuring profile exists:', error);
+      }
+    } catch (error) {
+      console.error('Error ensuring profile exists:', error);
+    }
+  };
+
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -59,6 +84,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) {
         console.error('Error fetching profile:', error);
         return null;
+      }
+
+      if (!data) {
+        const currentUser = (await supabase.auth.getUser()).data.user;
+        if (currentUser && currentUser.id === userId) {
+          await ensureProfileExists(currentUser);
+
+          const { data: recreatedProfile, error: refetchError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+
+          if (refetchError) {
+            console.error('Error fetching recreated profile:', refetchError);
+            return null;
+          }
+
+          return recreatedProfile;
+        }
       }
 
       return data;
@@ -149,7 +194,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const isAuthorized = profile?.is_authorized ?? false;
-  const hasName = !!profile?.full_name && profile.full_name.trim().length > 0;
+  const profileName = profile?.full_name?.trim() || '';
+  const metadataName = String(user?.user_metadata?.full_name || user?.user_metadata?.name || '').trim();
+  const hasName = profileName.length > 0 || metadataName.length > 0;
 
   return (
     <AuthContext.Provider

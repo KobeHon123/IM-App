@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Plus, MapPin, Camera, ArrowUpDown, Pencil, Trash2 } from 'lucide-react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { getVenuesByProject, createVenue, updateVenue, deleteVenue } from '@/lib/supabaseHelpers';
 import { Part, Venue } from '@/types';
@@ -175,7 +176,11 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
       quality: 1,
     });
     if (result) {
-      const uri = result.uri;
+      const pickerResult = result as { uri?: string } | { uri?: string }[];
+      const picked = Array.isArray(pickerResult) ? pickerResult[0] : pickerResult;
+      const uriValue = picked ? (picked as Record<string, unknown>)['uri'] : undefined;
+      if (typeof uriValue !== 'string' || !uriValue) return;
+      const uri = uriValue;
       console.log('Selected thumbnail:', uri);
       if (isEdit) {
         setEditingVenue((prev) => ({ ...prev, thumbnail: uri }));
@@ -222,7 +227,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
             containerStyle={{ backgroundColor: '#F9FAFB' }}
             renderLeftActions={(_prog, _drag, swipeable) => (
               <View style={styles.swipeActionsLeft}>
-                <TouchableOpacity
+                <GHTouchableOpacity
                   style={styles.swipeActionButton}
                   onPress={() => {
                     swipeable.close();
@@ -239,8 +244,8 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
                   <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
                     <Pencil color="#FFFFFF" size={20} />
                   </View>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </GHTouchableOpacity>
+                <GHTouchableOpacity
                   style={styles.swipeActionButton}
                   onPress={() => {
                     swipeable.close();
@@ -250,7 +255,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
                   <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
                     <Trash2 color="#FFFFFF" size={20} />
                   </View>
-                </TouchableOpacity>
+                </GHTouchableOpacity>
               </View>
             )}
             friction={2}
@@ -386,78 +391,98 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Create New Venue</ThemedText>
-            <TouchableOpacity
-              onPress={() => {
-                console.log('Closing create venue modal');
-                setShowCreateVenueModal(false);
-                setSelectedVenue(null);
-              }}
-            >
-              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Venue Name *</ThemedText>
-              <TextInput
-                style={styles.input}
-                value={newVenue.name}
-                onChangeText={(text) => setNewVenue((prev) => ({ ...prev, name: text }))}
-                placeholder="Enter venue name"
-                placeholderTextColor="#6B728080"
-              />
+        <SafeAreaView style={styles.editModalContainer}>
+          <ScrollView
+            style={styles.editModalScroll}
+            contentContainerStyle={styles.editModalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.editModalIntroCard}>
+              <ThemedText style={styles.editModalEyebrow}>Venue Settings</ThemedText>
+              <ThemedText style={styles.editModalTitle}>Create New Venue</ThemedText>
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Measurer*</ThemedText>
-              <DesignerSelector
-                value={newVenue.pic}
-                onChangeText={(text) => setNewVenue((prev) => ({ ...prev, pic: text }))}
-                profiles={profiles}
-                placeholder="Enter PIC name"
-                placeholderTextColor="#6B728080"
-                inputStyle={styles.input}
-              />
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Venue Name *</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={newVenue.name}
+                  onChangeText={(text) => setNewVenue((prev) => ({ ...prev, name: text }))}
+                  placeholder="Enter venue name"
+                  placeholderTextColor="#6B728080"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Description</ThemedText>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={newVenue.description}
+                  onChangeText={(text) => setNewVenue((prev) => ({ ...prev, description: text }))}
+                  placeholder="Enter venue description"
+                  placeholderTextColor="#6B728080"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Description</ThemedText>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={newVenue.description}
-                onChangeText={(text) => setNewVenue((prev) => ({ ...prev, description: text }))}
-                placeholder="Enter venue description"
-                placeholderTextColor="#6B728080"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Measurer*</ThemedText>
+                <DesignerSelector
+                  value={newVenue.pic}
+                  onChangeText={(text) => setNewVenue((prev) => ({ ...prev, pic: text }))}
+                  profiles={profiles}
+                  placeholder="Enter PIC name"
+                  placeholderTextColor="#6B728080"
+                  inputStyle={styles.input}
+                />
+              </View>
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Venue Thumbnail (Optional)</ThemedText>
-              <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectThumbnail(false)}
-              >
-                <Camera color="#6B7280" size={24} />
-                <ThemedText style={styles.pictureButtonText}>Add Thumbnail</ThemedText>
-              </TouchableOpacity>
-              {newVenue.thumbnail && (
-                <Image source={{ uri: newVenue.thumbnail }} style={styles.thumbnailPreview} />
-              )}
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Venue Thumbnail (Optional)</ThemedText>
+                <TouchableOpacity
+                  style={styles.editPictureButton}
+                  onPress={() => handleSelectThumbnail(false)}
+                >
+                  <Camera color="#334155" size={22} />
+                  <ThemedText style={styles.editPictureButtonText}>Add Thumbnail</ThemedText>
+                </TouchableOpacity>
+                {newVenue.thumbnail && (
+                  <Image source={{ uri: newVenue.thumbnail }} style={styles.editThumbnailPreview} />
+                )}
+              </View>
             </View>
+
             {isVenueNameDuplicate && (
               <ThemedText style={styles.duplicateWarning}>A venue with this name already exists in this project</ThemedText>
             )}
 
-            <TouchableOpacity
-              style={[styles.createButton, isVenueNameDuplicate && styles.disabledButton]}
-              onPress={handleCreateVenue}
-              disabled={isVenueNameDuplicate}
-            >
-              <ThemedText style={[styles.createButtonText, isVenueNameDuplicate && styles.disabledButtonText]}>Create Venue</ThemedText>
-            </TouchableOpacity>
+            <View style={styles.editActionRow}>
+              <TouchableOpacity
+                style={styles.editSecondaryButton}
+                onPress={() => {
+                  console.log('Closing create venue modal');
+                  setShowCreateVenueModal(false);
+                  setSelectedVenue(null);
+                }}
+              >
+                <ThemedText style={styles.editSecondaryButtonText}>Discard</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.editPrimaryButton, isVenueNameDuplicate && styles.editPrimaryButtonDisabled]}
+                onPress={handleCreateVenue}
+                disabled={isVenueNameDuplicate}
+              >
+                <ThemedText style={[styles.editPrimaryButtonText, isVenueNameDuplicate && styles.editPrimaryButtonTextDisabled]}>Create Venue</ThemedText>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -466,73 +491,93 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Edit Venue</ThemedText>
-            <TouchableOpacity
-              onPress={() => {
-                console.log('Closing edit venue modal');
-                setShowEditVenueModal(false);
-                setSelectedVenue(null);
-              }}
-            >
-              <ThemedText style={styles.modalClose}>Cancel</ThemedText>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Venue Name *</ThemedText>
-              <TextInput
-                style={styles.input}
-                value={editingVenue.name}
-                onChangeText={(text) => setEditingVenue((prev) => ({ ...prev, name: text }))}
-                placeholder="Enter venue name"
-                placeholderTextColor="#6B728080"
-              />
+        <SafeAreaView style={styles.editModalContainer}>
+          <ScrollView
+            style={styles.editModalScroll}
+            contentContainerStyle={styles.editModalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.editModalIntroCard}>
+              <ThemedText style={styles.editModalEyebrow}>Venue Settings</ThemedText>
+              <ThemedText style={styles.editModalTitle}>Edit Venue</ThemedText>
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Person in Charge (PIC) *</ThemedText>
-              <DesignerSelector
-                value={editingVenue.pic}
-                onChangeText={(text) => setEditingVenue((prev) => ({ ...prev, pic: text }))}
-                profiles={profiles}
-                placeholder="Enter PIC name"
-                placeholderTextColor="#6B728080"
-                inputStyle={styles.input}
-              />
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Venue Name *</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={editingVenue.name}
+                  onChangeText={(text) => setEditingVenue((prev) => ({ ...prev, name: text }))}
+                  placeholder="Enter venue name"
+                  placeholderTextColor="#6B728080"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Description</ThemedText>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={editingVenue.description}
+                  onChangeText={(text) => setEditingVenue((prev) => ({ ...prev, description: text }))}
+                  placeholder="Enter venue description"
+                  placeholderTextColor="#6B728080"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Description</ThemedText>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={editingVenue.description}
-                onChangeText={(text) => setEditingVenue((prev) => ({ ...prev, description: text }))}
-                placeholder="Enter venue description"
-                placeholderTextColor="#6B728080"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Person in Charge (PIC) *</ThemedText>
+                <DesignerSelector
+                  value={editingVenue.pic}
+                  onChangeText={(text) => setEditingVenue((prev) => ({ ...prev, pic: text }))}
+                  profiles={profiles}
+                  placeholder="Enter PIC name"
+                  placeholderTextColor="#6B728080"
+                  inputStyle={styles.input}
+                />
+              </View>
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.inputLabel}>Venue Thumbnail (Optional)</ThemedText>
+
+            <View style={styles.editModalSectionCard}>
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Venue Thumbnail (Optional)</ThemedText>
+                <TouchableOpacity
+                  style={styles.editPictureButton}
+                  onPress={() => handleSelectThumbnail(true)}
+                >
+                  <Camera color="#334155" size={22} />
+                  <ThemedText style={styles.editPictureButtonText}>Change Thumbnail</ThemedText>
+                </TouchableOpacity>
+                {editingVenue.thumbnail && (
+                  <Image source={{ uri: editingVenue.thumbnail }} style={styles.editThumbnailPreview} />
+                )}
+              </View>
+            </View>
+
+            <View style={styles.editActionRow}>
               <TouchableOpacity
-                style={styles.pictureButton}
-                onPress={() => handleSelectThumbnail(true)}
+                style={styles.editSecondaryButton}
+                onPress={() => {
+                  console.log('Closing edit venue modal');
+                  setShowEditVenueModal(false);
+                  setSelectedVenue(null);
+                }}
               >
-                <Camera color="#6B7280" size={24} />
-                <ThemedText style={styles.pictureButtonText}>Change Thumbnail</ThemedText>
+                <ThemedText style={styles.editSecondaryButtonText}>Discard</ThemedText>
               </TouchableOpacity>
-              {editingVenue.thumbnail && (
-                <Image source={{ uri: editingVenue.thumbnail }} style={styles.thumbnailPreview} />
-              )}
+
+              <TouchableOpacity
+                style={styles.editPrimaryButton}
+                onPress={handleEditVenue}
+              >
+                <ThemedText style={styles.editPrimaryButtonText}>Save Changes</ThemedText>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={handleEditVenue}
-            >
-              <ThemedText style={styles.createButtonText}>Save Changes</ThemedText>
-            </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -803,6 +848,109 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  editModalContainer: {
+    flex: 1,
+    backgroundColor: '#F4F7FB',
+  },
+  editModalScroll: {
+    flex: 1,
+  },
+  editModalScrollContent: {
+    padding: 16,
+    gap: 14,
+  },
+  editModalIntroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editModalEyebrow: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  editModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  editModalSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editPictureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  editPictureButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  editThumbnailPreview: {
+    width: 128,
+    height: 128,
+    marginTop: 12,
+    borderRadius: 12,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  editSecondaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  editSecondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  editPrimaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0F4FA8',
+  },
+  editPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  editPrimaryButtonDisabled: {
+    backgroundColor: '#E2E8F0',
+  },
+  editPrimaryButtonTextDisabled: {
+    color: '#94A3B8',
+  },
   inputGroup: {
     marginBottom: 20,
   },
@@ -893,9 +1041,11 @@ const styles = StyleSheet.create({
   },
   swipeActionsLeft: {
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'stretch',
+    alignSelf: 'center',
     marginLeft: 0,
+    marginTop: -10,
   },
   swipeActionButton: {
     justifyContent: 'center',

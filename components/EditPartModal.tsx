@@ -45,6 +45,17 @@ export function EditPartModal({
   onEditingPartChange,
 }: EditPartModalProps) {
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
+  const getFirstUri = (result: unknown): string | null => {
+    if (!result) return null;
+    if (Array.isArray(result)) {
+      const first = result[0] as Record<string, unknown> | undefined;
+      const uri = first?.uri;
+      return typeof uri === 'string' ? uri : null;
+    }
+    const uri = (result as Record<string, unknown>).uri;
+    return typeof uri === 'string' ? uri : null;
+  };
+
   const handleEditDimensionChange = useCallback((fieldName: string, text: string) => {
     // For edgeType, allow string values (Seal, Cut)
     if (fieldName === 'edgeType') {
@@ -77,8 +88,8 @@ export function EditPartModal({
       allowsMultipleSelection: false,
       quality: 1,
     });
-    if (result) {
-      const uri = result.uri;
+    const uri = getFirstUri(result);
+    if (uri) {
       console.log('Selected CAD drawing:', uri);
       onEditingPartChange({ cadDrawing: uri });
     }
@@ -487,97 +498,123 @@ export function EditPartModal({
       animationType="slide"
       presentationStyle="pageSheet"
     >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <ThemedText style={styles.modalTitle}>Edit Part</ThemedText>
-          <TouchableOpacity onPress={onClose}>
-            <ThemedText style={styles.modalClose}>Cancel</ThemedText>
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={styles.modalContent}>
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Part Type</ThemedText>
-            <ThemedText style={styles.typeDisplay}>{getDisplayTypeName(editingPart.type)}</ThemedText>
+      <SafeAreaView style={styles.editModalContainer}>
+        <ScrollView
+          style={styles.editModalScroll}
+          contentContainerStyle={styles.editModalScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.editModalIntroCard}>
+            <ThemedText style={styles.editModalEyebrow}>Part Settings</ThemedText>
+            <ThemedText style={styles.editModalTitle}>Edit Part</ThemedText>
           </View>
-          {renderEditDimensionInputs()}
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Description *</ThemedText>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={editingPart.description}
-              onChangeText={(text) => onEditingPartChange({ description: text })}
-              placeholder="Enter part description"
-              placeholderTextColor="#6B728080"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
+
+          <View style={styles.editModalSectionCard}>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Part Type</ThemedText>
+              <ThemedText style={styles.typeDisplay}>{getDisplayTypeName(editingPart.type)}</ThemedText>
+            </View>
           </View>
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Designer</ThemedText>
-            <DesignerSelector
-              value={editingPart.designer}
-              onChangeText={(text) => onEditingPartChange({ designer: text })}
-              profiles={profiles}
-              placeholder="Enter designer name (optional)"
-              placeholderTextColor="#6B728080"
-              inputStyle={styles.input}
-            />
+
+          <View style={styles.editModalSectionCard}>
+            {renderEditDimensionInputs()}
           </View>
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>CAD Drawing (Optional)</ThemedText>
-            <TouchableOpacity
-              style={styles.pictureButton}
-              onPress={handleSelectCADDrawing}
-            >
-              <Camera color="#6B7280" size={24} />
-              <ThemedText style={styles.pictureButtonText}>Change CAD Drawing</ThemedText>
-            </TouchableOpacity>
-            {editingPart.cadDrawing && (
-              <View style={styles.previewContainer}>
-                <Image key={editingPart.cadDrawing} source={{ uri: editingPart.cadDrawing }} style={styles.thumbnailPreview} />
-                <TouchableOpacity
-                  style={styles.removePreviewButton}
-                  onPress={() => onEditingPartChange({ cadDrawing: '' })}
-                >
-                  <X color="#FFFFFF" size={16} />
-                </TouchableOpacity>
-              </View>
-            )}
+
+          <View style={styles.editModalSectionCard}>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Description *</ThemedText>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={editingPart.description}
+                onChangeText={(text) => onEditingPartChange({ description: text })}
+                placeholder="Enter part description"
+                placeholderTextColor="#6B728080"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Designer</ThemedText>
+              <DesignerSelector
+                value={editingPart.designer}
+                onChangeText={(text) => onEditingPartChange({ designer: text })}
+                profiles={profiles}
+                placeholder="Enter designer name (optional)"
+                placeholderTextColor="#6B728080"
+                inputStyle={styles.input}
+              />
+            </View>
           </View>
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Pictures (1-6)</ThemedText>
-            <TouchableOpacity
-              style={styles.pictureButton}
-              onPress={handleSelectPictures}
-            >
-              <Camera color="#6B7280" size={24} />
-              <ThemedText style={styles.pictureButtonText}>Add Pictures</ThemedText>
-            </TouchableOpacity>
-            <FlatList
-              data={editingPart.pictures}
-              keyExtractor={(item) => item}
-              horizontal
-              style={styles.previewList}
-              renderItem={({ item }) => (
+
+          <View style={styles.editModalSectionCard}>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>CAD Drawing (Optional)</ThemedText>
+              <TouchableOpacity
+                style={styles.editPictureButton}
+                onPress={handleSelectCADDrawing}
+              >
+                <Camera color="#334155" size={22} />
+                <ThemedText style={styles.editPictureButtonText}>Change CAD Drawing</ThemedText>
+              </TouchableOpacity>
+              {editingPart.cadDrawing && (
                 <View style={styles.previewContainer}>
-                  <Image key={item} source={{ uri: item }} style={styles.thumbnailPreview} />
+                  <Image key={editingPart.cadDrawing} source={{ uri: editingPart.cadDrawing }} style={styles.thumbnailPreview} />
                   <TouchableOpacity
                     style={styles.removePreviewButton}
-                    onPress={() => handleRemovePicture(item)}
+                    onPress={() => onEditingPartChange({ cadDrawing: '' })}
                   >
                     <X color="#FFFFFF" size={16} />
                   </TouchableOpacity>
                 </View>
               )}
-            />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Pictures (1-6)</ThemedText>
+              <TouchableOpacity
+                style={styles.editPictureButton}
+                onPress={handleSelectPictures}
+              >
+                <Camera color="#334155" size={22} />
+                <ThemedText style={styles.editPictureButtonText}>Add Pictures</ThemedText>
+              </TouchableOpacity>
+              <FlatList
+                data={editingPart.pictures}
+                keyExtractor={(item) => item}
+                horizontal
+                style={styles.previewList}
+                renderItem={({ item }) => (
+                  <View style={styles.previewContainer}>
+                    <Image key={item} source={{ uri: item }} style={styles.thumbnailPreview} />
+                    <TouchableOpacity
+                      style={styles.removePreviewButton}
+                      onPress={() => handleRemovePicture(item)}
+                    >
+                      <X color="#FFFFFF" size={16} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              />
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={handleSave}
-          >
-            <ThemedText style={styles.createButtonText}>Save Changes</ThemedText>
-          </TouchableOpacity>
+
+          <View style={styles.editActionRow}>
+            <TouchableOpacity
+              style={styles.editSecondaryButton}
+              onPress={onClose}
+            >
+              <ThemedText style={styles.editSecondaryButtonText}>Discard</ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.editPrimaryButton}
+              onPress={handleSave}
+            >
+              <ThemedText style={styles.editPrimaryButtonText}>Save Changes</ThemedText>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -588,6 +625,44 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  editModalContainer: {
+    flex: 1,
+    backgroundColor: '#F4F7FB',
+  },
+  editModalScroll: {
+    flex: 1,
+  },
+  editModalScrollContent: {
+    padding: 16,
+    gap: 14,
+  },
+  editModalIntroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editModalEyebrow: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  editModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  editModalSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -657,6 +732,22 @@ const styles = StyleSheet.create({
   previewList: {
     marginTop: 12,
   },
+  editPictureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  editPictureButtonText: {
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '600',
+  },
   previewContainer: {
     marginRight: 12,
     marginTop: 12,
@@ -686,6 +777,40 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  editActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  editSecondaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  editSecondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  editPrimaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0F4FA8',
+  },
+  editPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   buttonShapeContainer: {
     flexDirection: 'row',

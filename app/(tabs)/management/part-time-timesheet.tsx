@@ -2,8 +2,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Tex
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info, Download, ArrowLeft } from 'lucide-react-native';
-import { File as FSFile, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'expo-router';
 import Svg, { Polygon } from 'react-native-svg';
@@ -13,9 +11,8 @@ import { useData } from '@/hooks/useData';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThemedText } from '@/components/ThemedText';
-import { BlurView } from 'expo-blur';
 
-type Period = 'full' | 'am' | 'pm' | 'other';
+type Period = 'full' | 'am' | 'pm' | 'off' | 'other' | 'on_call';
 
 interface DutyAllocation {
   duty: string;
@@ -277,7 +274,7 @@ const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCance
     <View style={wheelStyles.overlay}>
       <TouchableOpacity style={wheelStyles.backdrop} activeOpacity={1} onPress={onCancel} />
       <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
-        <BlurView intensity={65} tint="light" style={wheelStyles.sheet}>
+        <View style={wheelStyles.sheet}>
           <View style={wheelStyles.header}>
             <TouchableOpacity onPress={onCancel} style={wheelStyles.headerBtn}>
               <Text style={wheelStyles.cancelText}>Cancel</Text>
@@ -358,7 +355,7 @@ const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCance
               ))}
             </ScrollView>
           </View>
-        </BlurView>
+        </View>
       </Animated.View>
     </View>
   );
@@ -374,6 +371,7 @@ export default function PartTimeTimesheet() {
   const [loading, setLoading] = useState(true);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState('');
   const [dutySuggestIndex, setDutySuggestIndex] = useState<number | null>(null);
   const suppressBlurRef = useRef(false);
 
@@ -483,6 +481,12 @@ export default function PartTimeTimesheet() {
     return duties.map(item => `${item.duty} (${item.hours.toFixed(1)}h)`).join(', ');
   };
 
+  const isOnCallEntry = (entry: TimesheetEntry): boolean => {
+    return entry.worker_name === 'Kobe'
+      && (entry.period === 'on_call' || entry.period === 'off')
+      && !entry.location;
+  };
+
   const isFullDay = (entry: TimesheetEntry): boolean => {
     if (entry.period === 'full') return true;
     if (entry.period === 'other') {
@@ -496,7 +500,7 @@ export default function PartTimeTimesheet() {
   const [selectedMember, setSelectedMember] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('full');
+  const [selectedPeriod, setSelectedPeriod] = useState<Period | ''>('');
   const [selectedVenue, setSelectedVenue] = useState<string>('');
   const [siteName, setSiteName] = useState<string>('');
   const [dutyAllocations, setDutyAllocations] = useState<DutyAllocationInput[]>([{ duty: '', hours: '' }]);
@@ -679,6 +683,7 @@ export default function PartTimeTimesheet() {
   const [salaryCalculationType, setSalaryCalculationType] = useState<'total' | 'confirmed'>('total');
   const [showSalaryDetail, setShowSalaryDetail] = useState(false);
   const [salaryDetailAnim] = useState(new Animated.Value(800));
+  const canSeeKobeSalary = currentUserRole === 'dev';
 
   const toggleSalaryDetail = (show: boolean) => {
     setShowSalaryDetail(show);
@@ -737,7 +742,9 @@ export default function PartTimeTimesheet() {
       .eq('id', user.id)
       .single();
 
-    setIsAdmin(profileData?.role === 'admin');
+    const normalizedRole = (profileData?.role || '').toLowerCase();
+    setCurrentUserRole(normalizedRole);
+    setIsAdmin(normalizedRole === 'admin');
 
     // Load timesheets for current month
     const year = currentDate.getFullYear();
@@ -765,6 +772,12 @@ export default function PartTimeTimesheet() {
     loadData();
   }, [currentDate, user]);
 
+  useEffect(() => {
+    if (!canSeeKobeSalary && selectedWorkerForSalary === 'Kobe') {
+      setSelectedWorkerForSalary('Joyce');
+    }
+  }, [canSeeKobeSalary, selectedWorkerForSalary]);
+
   const goToPreviousMonth = () => {
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() - 1);
@@ -790,12 +803,19 @@ export default function PartTimeTimesheet() {
       return;
     }
 
-    if (!selectedVenue) {
+    const isOnCallSelection = selectedMember === 'Kobe' && !selectedVenue && !selectedPeriod;
+
+    if (!isOnCallSelection && !selectedVenue) {
       Alert.alert('Required', 'Please select a venue');
       return;
     }
 
-    if (selectedVenue === 'Site' && !siteName.trim()) {
+    if (!isOnCallSelection && !selectedPeriod) {
+      Alert.alert('Required', 'Please select a period');
+      return;
+    }
+
+    if (!isOnCallSelection && selectedVenue === 'Site' && !siteName.trim()) {
       Alert.alert('Required', 'Please enter the site name');
       return;
     }
@@ -805,23 +825,25 @@ export default function PartTimeTimesheet() {
     const timesheetData: any = {
       worker_name: selectedMember,
       work_date: dateStr,
-      period: selectedPeriod,
-      location: selectedVenue.toLowerCase(),
+      period: isOnCallSelection ? 'off' : selectedPeriod,
+      location: isOnCallSelection ? null : selectedVenue.toLowerCase(),
       duty: null,
     };
 
-    const dutyPayload = toDutyPayloadForSave();
-    if (dutyPayload.error) {
-      Alert.alert('Invalid Duty Allocation', dutyPayload.error);
-      return;
+    if (!isOnCallSelection) {
+      const dutyPayload = toDutyPayloadForSave();
+      if (dutyPayload.error) {
+        Alert.alert('Invalid Duty Allocation', dutyPayload.error);
+        return;
+      }
+      timesheetData.duty = dutyPayload.value;
     }
-    timesheetData.duty = dutyPayload.value;
 
-    if (selectedVenue === 'Site') {
+    if (!isOnCallSelection && selectedVenue === 'Site') {
       timesheetData.site_name = siteName.trim();
     }
 
-    if (selectedPeriod === 'other') {
+    if (!isOnCallSelection && selectedPeriod === 'other') {
       if (customEndTime <= customStartTime) {
         Alert.alert('Invalid Time', 'End time must be later than start time.');
         return;
@@ -867,12 +889,16 @@ export default function PartTimeTimesheet() {
   const handleEditEntry = (entry: TimesheetEntry) => {
     setEditingEntry(entry);
     setSelectedMember(entry.worker_name);
-    setSelectedPeriod(entry.period);
+    setSelectedPeriod(isOnCallEntry(entry) ? '' : entry.period);
     
-    // Capitalize the location to match the venue button labels
-    const location = entry.location || '';
-    const capitalizedLocation = location.charAt(0).toUpperCase() + location.slice(1);
-    setSelectedVenue(capitalizedLocation);
+    if (isOnCallEntry(entry)) {
+      setSelectedVenue('');
+    } else {
+      // Capitalize the location to match the venue button labels
+      const location = entry.location || '';
+      const capitalizedLocation = location.charAt(0).toUpperCase() + location.slice(1);
+      setSelectedVenue(capitalizedLocation);
+    }
     
     // Load site name if it's a site location
     if (entry.location === 'site' && entry.site_name) {
@@ -912,8 +938,15 @@ export default function PartTimeTimesheet() {
   const handleUpdateTimesheet = async () => {
     if (!editingEntry) return;
 
-    if (!selectedVenue) {
+    const isOnCallSelection = selectedMember === 'Kobe' && !selectedVenue && !selectedPeriod;
+
+    if (!isOnCallSelection && !selectedVenue) {
       Alert.alert('Required', 'Please select a venue');
+      return;
+    }
+
+    if (!isOnCallSelection && !selectedPeriod) {
+      Alert.alert('Required', 'Please select a period');
       return;
     }
 
@@ -921,25 +954,27 @@ export default function PartTimeTimesheet() {
 
     const timesheetData: any = {
       work_date: dateStr,
-      period: selectedPeriod,
-      location: selectedVenue.toLowerCase(),
+      period: isOnCallSelection ? 'off' : selectedPeriod,
+      location: isOnCallSelection ? null : selectedVenue.toLowerCase(),
       duty: null,
     };
 
-    const dutyPayload = toDutyPayloadForSave();
-    if (dutyPayload.error) {
-      Alert.alert('Invalid Duty Allocation', dutyPayload.error);
-      return;
+    if (!isOnCallSelection) {
+      const dutyPayload = toDutyPayloadForSave();
+      if (dutyPayload.error) {
+        Alert.alert('Invalid Duty Allocation', dutyPayload.error);
+        return;
+      }
+      timesheetData.duty = dutyPayload.value;
     }
-    timesheetData.duty = dutyPayload.value;
 
-    if (selectedVenue === 'Site') {
+    if (!isOnCallSelection && selectedVenue === 'Site') {
       timesheetData.site_name = siteName.trim();
     } else {
       timesheetData.site_name = null;
     }
 
-    if (selectedPeriod === 'other') {
+    if (!isOnCallSelection && selectedPeriod === 'other') {
       if (customEndTime <= customStartTime) {
         Alert.alert('Invalid Time', 'End time must be later than start time.');
         return;
@@ -999,15 +1034,21 @@ export default function PartTimeTimesheet() {
   };
 
   const getPeriodLabel = (period: Period, entry: TimesheetEntry) => {
+    if (isOnCallEntry(entry)) return 'On Call';
+
     switch (period) {
       case 'full': return 'Full';
       case 'am': return 'AM';
       case 'pm': return 'PM';
+      case 'off': return 'Off';
       case 'other': return 'Other';
+      case 'on_call': return 'On Call';
     }
   };
 
   const getPeriodColor = (period: Period, entry?: TimesheetEntry) => {
+    if (entry && isOnCallEntry(entry)) return '#111827'; // Black for on-call Kobe
+
     // If it's a full day period, show green
     if (period === 'full') return '#10B981';
     
@@ -1019,6 +1060,7 @@ export default function PartTimeTimesheet() {
       case 'am': return '#EF4444';     // Red
       case 'pm': return '#3B82F6';     // Blue
       case 'other': return '#9CA3AF';  // Grey
+      case 'on_call': return '#111827'; // Black
       default: return '#9CA3AF';
     }
   };
@@ -1077,6 +1119,11 @@ export default function PartTimeTimesheet() {
 
   const handleDownloadCSV = async () => {
     try {
+      const [{ File: FSFile, Paths }, Sharing] = await Promise.all([
+        import('expo-file-system'),
+        import('expo-sharing'),
+      ]);
+
       const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
       // Build a column-block for each worker: array of rows, each row = 3 cells
@@ -1266,8 +1313,25 @@ export default function PartTimeTimesheet() {
                       {entries.map(entry => {
                         const workerInfo = WORKER_SYMBOLS[entry.worker_name as keyof typeof WORKER_SYMBOLS];
                         const periodColor = getPeriodColor(entry.period, entry);
+                        const isOnCall = isOnCallEntry(entry);
                         const isTriangleShape = entry.location?.toLowerCase() === 'site';
                         const shapeStyle = getShapeStyle(entry.location);
+
+                        if (isOnCall) {
+                          return (
+                            <View
+                              key={entry.id}
+                              style={[
+                                styles.workerSymbol,
+                                styles.symbolSquare,
+                                { backgroundColor: '#111827' },
+                                entry.confirmed && styles.confirmedSymbol,
+                              ]}
+                            >
+                              <ThemedText style={styles.symbolText}>K</ThemedText>
+                            </View>
+                          );
+                        }
                         
                         if (isTriangleShape) {
                           return (
@@ -1421,7 +1485,7 @@ export default function PartTimeTimesheet() {
               onPress={() => {
                 setSelectedMember('');
                 setSelectedDate(selectedCalendarDate || new Date());
-                setSelectedPeriod('full');
+                setSelectedPeriod('');
                 setSelectedVenue('');
                 resetDutyAllocations();
                 setSiteName('');
@@ -1468,6 +1532,12 @@ export default function PartTimeTimesheet() {
               </View>
               <ThemedText style={styles.legendText}>Full Day</ThemedText>
             </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSymbol, { backgroundColor: '#111827' }]}>
+                <ThemedText style={styles.legendSymbolText}>OC</ThemedText>
+              </View>
+              <ThemedText style={styles.legendText}>On Call</ThemedText>
+            </View>
           </View>
 
           <ThemedText style={[styles.legendTitle, { marginTop: 16 }]}>Location Shapes</ThemedText>
@@ -1512,7 +1582,7 @@ export default function PartTimeTimesheet() {
           <View style={styles.salaryGroup}>
             <ThemedText style={styles.salaryLabel}>Select Worker</ThemedText>
             <View style={styles.workerSelectionButtons}>
-              {TEAM_MEMBERS.filter(member => isAdmin || member !== 'Kobe').map(member => (
+              {TEAM_MEMBERS.filter(member => canSeeKobeSalary || member !== 'Kobe').map(member => (
                 <TouchableOpacity
                   key={member}
                   style={[
@@ -1599,7 +1669,7 @@ export default function PartTimeTimesheet() {
               setShowAddModal(false);
               setSelectedMember('');
               setSelectedDate(selectedCalendarDate || new Date());
-              setSelectedPeriod('full');
+              setSelectedPeriod('');
               setSelectedVenue('');
               resetDutyAllocations();
               setSiteName('');
@@ -1635,7 +1705,7 @@ export default function PartTimeTimesheet() {
 
             {/* Venue Selection */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Venue *</ThemedText>
+              <ThemedText style={styles.formLabel}>Venue (optional for Kobe on call)</ThemedText>
               <View style={styles.memberButtons}>
                 {VENUES.map(venue => (
                   <TouchableOpacity
@@ -1775,7 +1845,7 @@ export default function PartTimeTimesheet() {
 
             {/* Period Selection */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Period *</ThemedText>
+              <ThemedText style={styles.formLabel}>Period (optional for Kobe on call)</ThemedText>
               <View style={styles.periodButtons}>
                 {[
                   { value: 'am' as Period, label: 'AM' },
@@ -1876,7 +1946,7 @@ export default function PartTimeTimesheet() {
               setEditingEntry(null);
               setSelectedMember('');
               setSelectedDate(new Date());
-              setSelectedPeriod('full');
+              setSelectedPeriod('');
               setSelectedVenue('');
               resetDutyAllocations();
               setSiteName('');
@@ -1896,7 +1966,7 @@ export default function PartTimeTimesheet() {
 
             {/* Venue Selection */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Venue *</ThemedText>
+              <ThemedText style={styles.formLabel}>Venue (optional for Kobe on call)</ThemedText>
               <View style={styles.memberButtons}>
                 {VENUES.map(venue => (
                   <TouchableOpacity
@@ -2031,7 +2101,7 @@ export default function PartTimeTimesheet() {
 
             {/* Period Selection */}
             <View style={styles.formGroup}>
-              <ThemedText style={styles.formLabel}>Period *</ThemedText>
+              <ThemedText style={styles.formLabel}>Period (optional for Kobe on call)</ThemedText>
               <View style={styles.periodButtons}>
                 {[
                   { value: 'am' as Period, label: 'AM' },
