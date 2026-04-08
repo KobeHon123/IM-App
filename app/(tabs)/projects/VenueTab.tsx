@@ -307,67 +307,80 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
           ) : (
             <View style={styles.matrixLandscapeShell}>
               <View style={styles.matrixCard}>
-                <View style={styles.matrixViewport}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.matrixHorizontalContent}>
-                    <ScrollView
-                      style={styles.matrixVerticalScroll}
-                      showsVerticalScrollIndicator={false}
-                      nestedScrollEnabled
-                    >
-                      <View>
-                        <View style={styles.matrixHeaderRow}>
-                          <View style={[styles.matrixHeaderCell, styles.matrixFirstColumn]}>
-                            <ThemedText style={styles.matrixHeaderText}>Part</ThemedText>
-                          </View>
-                          {sortedVenues.map((venue, venueIndex) => (
-                            <View
-                              key={venue.id}
-                              style={[
-                                styles.matrixHeaderCell,
-                                venueIndex === sortedVenues.length - 1 && styles.matrixLastHeaderCell,
-                              ]}
-                            >
-                              <ThemedText style={styles.matrixHeaderText} numberOfLines={2}>{venue.name}</ThemedText>
-                            </View>
-                          ))}
+                <View style={[styles.matrixViewport, { flexDirection: 'row' }]}>
+                  {/* Fixed left column - Part names */}
+                  <View style={styles.matrixFixedColumn}>
+                    <View style={styles.matrixHeaderRow}>
+                      <View style={[styles.matrixHeaderCell, styles.matrixFirstColumn, styles.matrixPartHeaderCell]}>
+                        <ThemedText style={styles.matrixHeaderText}>Part</ThemedText>
+                      </View>
+                    </View>
+                    {matrixParts.map((part, index) => (
+                      <View
+                        key={part.id}
+                        style={[
+                          styles.matrixRow,
+                          index % 2 === 1 && styles.matrixRowAlternate,
+                          index === matrixParts.length - 1 && styles.matrixLastRow,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.matrixCell,
+                            styles.matrixFirstColumn,
+                            index === matrixParts.length - 1 && styles.matrixLastRowFirstCell,
+                          ]}
+                        >
+                          <ThemedText style={[styles.matrixPartText, part.parentPartId && styles.matrixSubPartText]} numberOfLines={2}>
+                            {getPartRowLabel(part)}
+                          </ThemedText>
                         </View>
+                      </View>
+                    ))}
+                  </View>
 
-                        {matrixParts.map((part, index) => (
+                  {/* Horizontally scrollable right section - Venue quantities */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                    <View>
+                      <View style={styles.matrixHeaderRow}>
+                        {sortedVenues.map((venue, venueIndex) => (
                           <View
-                            key={part.id}
+                            key={venue.id}
                             style={[
-                              styles.matrixRow,
-                              index % 2 === 1 && styles.matrixRowAlternate,
-                              index === matrixParts.length - 1 && styles.matrixLastRow,
+                              styles.matrixHeaderCell,
+                              venueIndex === 0 && styles.matrixVenueFirstHeaderCell,
+                              venueIndex === sortedVenues.length - 1 && styles.matrixLastHeaderCell,
                             ]}
                           >
-                            <View
-                              style={[
-                                styles.matrixCell,
-                                styles.matrixFirstColumn,
-                                index === matrixParts.length - 1 && styles.matrixLastRowFirstCell,
-                              ]}
-                            >
-                              <ThemedText style={[styles.matrixPartText, part.parentPartId && styles.matrixSubPartText]} numberOfLines={2}>
-                                {getPartRowLabel(part)}
-                              </ThemedText>
-                            </View>
-                            {sortedVenues.map((venue, venueIndex) => (
-                              <View
-                                key={`${part.id}-${venue.id}`}
-                                style={[
-                                  styles.matrixCell,
-                                  venueIndex === sortedVenues.length - 1 && styles.matrixLastColumnCell,
-                                  index === matrixParts.length - 1 && venueIndex === sortedVenues.length - 1 && styles.matrixLastRowLastCell,
-                                ]}
-                              >
-                                <ThemedText style={styles.matrixValueText}>{venue.partQuantities?.[part.id] ?? 0}</ThemedText>
-                              </View>
-                            ))}
+                            <ThemedText style={styles.matrixHeaderText} numberOfLines={2}>{venue.name}</ThemedText>
                           </View>
                         ))}
                       </View>
-                    </ScrollView>
+
+                      {matrixParts.map((part, index) => (
+                        <View
+                          key={part.id}
+                          style={[
+                            styles.matrixRow,
+                            index % 2 === 1 && styles.matrixRowAlternate,
+                            index === matrixParts.length - 1 && styles.matrixLastRow,
+                          ]}
+                        >
+                          {sortedVenues.map((venue, venueIndex) => (
+                            <View
+                              key={`${part.id}-${venue.id}`}
+                              style={[
+                                styles.matrixCell,
+                                venueIndex === sortedVenues.length - 1 && styles.matrixLastColumnCell,
+                                index === matrixParts.length - 1 && venueIndex === sortedVenues.length - 1 && styles.matrixLastRowLastCell,
+                              ]}
+                            >
+                              <ThemedText style={styles.matrixValueText}>{venue.partQuantities?.[part.id] ?? 0}</ThemedText>
+                            </View>
+                          ))}
+                        </View>
+                      ))}
+                    </View>
                   </ScrollView>
                 </View>
               </View>
@@ -662,8 +675,6 @@ const styles = StyleSheet.create({
   matrixHeaderRow: {
     flexDirection: 'row',
     backgroundColor: '#EEF2FF',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
   },
   matrixRow: {
     flexDirection: 'row',
@@ -691,9 +702,6 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: '#D1D5DB',
   },
-  matrixLastHeaderCell: {
-    borderRightWidth: 0,
-  },
   matrixCell: {
     width: 132,
     minHeight: 52,
@@ -710,6 +718,20 @@ const styles = StyleSheet.create({
   matrixFirstColumn: {
     width: 80,
     alignItems: 'center',
+  },
+  matrixFixedColumn: {
+    width: 80,
+  },
+  matrixPartHeaderCell: {
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 0,
+  },
+  matrixVenueFirstHeaderCell: {
+    borderTopLeftRadius: 0,
+  },
+  matrixLastHeaderCell: {
+    borderRightWidth: 0,
+    borderTopRightRadius: 12,
   },
   matrixHeaderText: {
     fontSize: 13,
