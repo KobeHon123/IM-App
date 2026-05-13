@@ -12,12 +12,14 @@ import { LoginScreen } from '@/components/LoginScreen';
 import { SetupNameScreen } from '@/components/SetupNameScreen';
 import { WaitingForApprovalScreen } from '@/components/WaitingForApprovalScreen';
 import { NoConnectionScreen } from '@/components/NoConnectionScreen';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import { SplashScreen } from '@/components/SplashScreen';
 
 function RootLayoutNav() {
   const { user, isAuthorized, hasName, isLoading } = useAuth();
   const [isConnected, setIsConnected] = useState<boolean | null>(true);
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [splashAnimationComplete, setSplashAnimationComplete] = useState(false);
+  const [allowNavigation, setAllowNavigation] = useState(false);
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
@@ -27,6 +29,17 @@ function RootLayoutNav() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    // Only allow navigation after splash animation completes AND auth is fully loaded
+    if (splashAnimationComplete && !isLoading) {
+      // Add 500ms buffer to ensure all auth state is settled
+      const timer = setTimeout(() => {
+        setAllowNavigation(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [splashAnimationComplete, isLoading]);
+
   const handleRetry = async () => {
     setCheckingConnection(true);
     const state = await NetInfo.fetch();
@@ -34,16 +47,17 @@ function RootLayoutNav() {
     setCheckingConnection(false);
   };
 
-  if (isConnected === false) {
-    return <NoConnectionScreen onRetry={handleRetry} />;
+  const handleSplashAnimationComplete = () => {
+    setSplashAnimationComplete(true);
+  };
+
+  // Show splash screen while loading, checking connection, or animation is playing
+  if (isLoading || checkingConnection || !allowNavigation) {
+    return <SplashScreen onAnimationComplete={handleSplashAnimationComplete} />;
   }
 
-  if (isLoading || checkingConnection) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <LoadingSpinner size={50} color="#2563EB" strokeWidth={5} />
-      </View>
-    );
+  if (isConnected === false) {
+    return <NoConnectionScreen onRetry={handleRetry} />;
   }
 
   if (!user) {

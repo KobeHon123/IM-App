@@ -150,16 +150,16 @@ export default function VenueDetailScreen() {
   const [showFullImageModal, setShowFullImageModal] = useState(false);
   const [fullImageUri, setFullImageUri] = useState<string>('');
 
-  // Check for similar parts in real-time (search in current project only)
+  // Check for similar parts in real-time (search globally across all projects)
   useEffect(() => {
     console.log('=== Similarity Detection ===');
     console.log('newPart.type:', newPart.type);
     console.log('newPart.dimensions:', JSON.stringify(newPart.dimensions));
-    console.log('projectParts count:', projectParts.length);
-    const similar = findSimilarPart(newPart.type, newPart.dimensions, projectParts);
+    console.log('globalParts count:', globalParts.length);
+    const similar = findSimilarPart(newPart.type, newPart.dimensions, globalParts);
     console.log('Similar part found:', similar ? `${similar.part.name} (${similar.similarity}%)` : 'None');
     setSimilarPart(similar);
-  }, [newPart.dimensions, newPart.type, projectParts]);
+  }, [newPart.dimensions, newPart.type, globalParts]);
 
   // Keep selectedPart in sync with global state changes (e.g., after image upload)
   useEffect(() => {
@@ -1971,6 +1971,7 @@ export default function VenueDetailScreen() {
         editingPart={editingPart}
         selectedPart={selectedPart}
         profiles={profiles}
+        globalParts={globalParts}
         onClose={() => {
           console.log('Closing edit part modal');
           setShowEditPartModal(false);
@@ -2066,6 +2067,7 @@ export default function VenueDetailScreen() {
         selectedPart={selectedPart}
         comments={selectedPartComments}
         venues={projectVenues}
+        globalParts={globalParts}
         onClose={() => {
           setShowPartDetailModal(false);
           setSelectedPart(null);

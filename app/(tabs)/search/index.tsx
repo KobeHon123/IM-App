@@ -20,7 +20,7 @@ import { PartType, Part, Project, Comment } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
 
 export default function SearchScreen() {
-  const { getAllPartsWithProjects, getCommentsByPart, deleteComment, getPendingCommentsCountByPart } = useData();
+  const { getAllPartsWithProjects, getCommentsByPart, deleteComment, getPendingCommentsCountByPart, parts: globalParts } = useData();
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchFilters, setSearchFilters] = useState({
     type: '' as PartType | '',
@@ -405,6 +405,7 @@ export default function SearchScreen() {
         selectedPart={selectedPart}
         comments={selectedPartComments}
         projectNames={selectedPart ? getProjectNamesForPart(selectedPart) : []}
+        globalParts={globalParts}
         onClose={() => {
           setShowPartDetailModal(false);
           setSelectedPart(null);

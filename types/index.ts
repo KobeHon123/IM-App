@@ -27,6 +27,7 @@ export interface BasePart {
   projectId: string;
   parentPartId?: string; // For sub-parts
   comments?: any[]; // Comments associated with this part (Comment type defined below)
+  number?: number; // Derived from name (e.g., "U42" -> 42)
 }
 
 export interface UShapePart extends BasePart {

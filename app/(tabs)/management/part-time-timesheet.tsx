@@ -1324,11 +1324,15 @@ export default function PartTimeTimesheet() {
                               style={[
                                 styles.workerSymbol,
                                 styles.symbolSquare,
-                                { backgroundColor: '#111827' },
+                                {
+                                  backgroundColor: 'transparent',
+                                  borderWidth: 2,
+                                  borderColor: '#111827',
+                                },
                                 entry.confirmed && styles.confirmedSymbol,
                               ]}
                             >
-                              <ThemedText style={styles.symbolText}>K</ThemedText>
+                              <ThemedText style={[styles.symbolText, { color: '#111827' }]}>K</ThemedText>
                             </View>
                           );
                         }
@@ -1533,7 +1537,15 @@ export default function PartTimeTimesheet() {
               <ThemedText style={styles.legendText}>Full Day</ThemedText>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendSymbol, { backgroundColor: '#111827' }]}>
+              <View style={[
+                styles.legendSymbol,
+                styles.symbolSquare,
+                {
+                  backgroundColor: 'transparent',
+                  borderWidth: 4,
+                  borderColor: '#111827',
+                }
+              ]}>
                 <ThemedText style={styles.legendSymbolText}>OC</ThemedText>
               </View>
               <ThemedText style={styles.legendText}>On Call</ThemedText>

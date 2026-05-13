@@ -5,6 +5,7 @@ import { EditPartModal } from '@/components/EditPartModal';
 import { PartDetailModal } from '@/components/PartDetailModal';
 import { Part, PartType, Comment } from '@/types';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
+import { supabase } from '@/lib/supabase';
 import { Camera, ChevronDown, ChevronRight, X, Check, Grid, List } from 'lucide-react-native';
 import React, { useState, useCallback } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -285,21 +286,23 @@ const PartTab = ({ projectId }: { projectId: string }) => {
     }));
   };
 
-  const extractPartNumber = (partName: string): number => {
-    const match = partName.match(/\d+/);
-    return match ? parseInt(match[0]) : Infinity;
+  const extractPartNumber = (part: Part): number => {
+    // Extract number from part name (e.g., "U42" -> 42, "RH10" -> 10)
+    const match = part.name.match(/\d+/);
+    return match ? parseInt(match[0]) : 0;
   };
 
   const sortParts = (partsToSort: Part[]): Part[] => {
     return [...partsToSort].sort((a, b) => {
-      const numA = extractPartNumber(a.name);
-      const numB = extractPartNumber(b.name);
+      const numA = extractPartNumber(a);
+      const numB = extractPartNumber(b);
       
+      // Sort descending (biggest to smallest)
       if (numA !== numB) {
-        return numA - numB;
+        return numB - numA;
       }
       
-      return a.name.localeCompare(b.name);
+      return b.name.localeCompare(a.name);
     });
   };
 
@@ -932,6 +935,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
         selectedPart={selectedPart}
         comments={selectedPartComments}
         venues={venues}
+        globalParts={globalParts}
         onClose={() => {
           console.log('Closing part detail modal');
           setShowPartDetailModal(false);
@@ -946,6 +950,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
         editingPart={editingPart}
         selectedPart={selectedPart}
         profiles={profiles}
+        globalParts={globalParts}
         onClose={() => {
           console.log('Closing edit part modal');
           setShowEditPartModal(false);

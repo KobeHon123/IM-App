@@ -22,11 +22,13 @@ import {
   Download,
   Edit2,
   FileText,
+  GitBranch,
   Image as ImageIcon,
   Info,
   MessageCircle,
   Package,
   Ruler,
+  Send,
   Square,
   Trash,
   User,
@@ -38,6 +40,7 @@ import { Part, Comment, Venue } from '@/types';
 import { updateComment, deleteComment, toggleCommentCompletion, createComment } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
+import { calculateDimensionSimilarity } from '@/lib/similarityDetection';
 
 interface PartDetailModalProps {
   visible: boolean;
@@ -46,6 +49,7 @@ interface PartDetailModalProps {
   projectNames?: string[];
   venueName?: string;
   venues?: Venue[];
+  globalParts?: Part[];
   onClose: () => void;
   onCommentsChange: (comments: Comment[]) => void;
   onImagePress?: (uri: string) => void;
@@ -58,6 +62,7 @@ export function PartDetailModal({
   projectNames,
   venueName,
   venues = [],
+  globalParts = [],
   onClose,
   onCommentsChange,
 }: PartDetailModalProps) {
@@ -222,6 +227,39 @@ export function PartDetailModal({
     }
   };
 
+  const getSimilarParts = (): Array<{ part: Part; similarity: number }> => {
+    if (!globalParts || globalParts.length === 0 || !selectedPart) return [];
+    
+    // Extract current part number
+    const currentMatch = selectedPart.name.match(/\d+/);
+    const currentNum = currentMatch ? parseInt(currentMatch[0]) : Infinity;
+    
+    // Find similar parts with SMALLER numbers (previous versions)
+    const similar = globalParts
+      .filter(p => {
+        // Same type and not current part
+        if (p.type !== selectedPart.type || p.id === selectedPart.id) return false;
+        
+        // Extract part number
+        const match = p.name.match(/\d+/);
+        const num = match ? parseInt(match[0]) : 0;
+        
+        // Only include parts with smaller numbers
+        return num < currentNum;
+      })
+      .map(p => ({
+        part: p,
+        similarity: calculateDimensionSimilarity(selectedPart.dimensions, p.dimensions),
+      }));
+    
+    // Sort descending (closest smaller number first)
+    const extractNumber = (part: Part): number => {
+      const match = part.name.match(/\d+/);
+      return match ? parseInt(match[0]) : 0;
+    };
+    return similar.sort((a, b) => extractNumber(b.part) - extractNumber(a.part)).slice(0, 3);
+  };
+
   return (
     <Modal
       visible={visible}
@@ -364,7 +402,7 @@ export function PartDetailModal({
                 </View>
               );
             })()}
-            {/* Quantity Section */}
+            {/* Quantity Section */
             {selectedPart && venues.length > 0 && (() => {
               const venuesWithQuantity = venues
                 .map(venue => ({
@@ -413,23 +451,21 @@ export function PartDetailModal({
 
               {/* Comment Input Form */}
               <View style={styles.commentInputContainer}>
-                <TextInput
-                  style={styles.commentInput}
-                  value={newCommentText}
-                  onChangeText={setNewCommentText}
-                  placeholder={`Add comment for ${venueName || 'this part'}...`}
-                  multiline
-                  editable={!isSubmittingComment}
-                />
-                <View style={styles.commentInputActions}>
+                <View style={styles.commentInputWrapper}>
+                  <TextInput
+                    style={styles.commentInput}
+                    value={newCommentText}
+                    onChangeText={setNewCommentText}
+                    placeholder={`Add comment for ${venueName || 'this part'}...`}
+                    multiline
+                    editable={!isSubmittingComment}
+                  />
                   <TouchableOpacity
-                    style={[styles.commentSendButton, (!newCommentText.trim() || isSubmittingComment) && styles.commentSendButtonDisabled]}
+                    style={[styles.commentSendIconButton, (!newCommentText.trim() || isSubmittingComment) && styles.commentSendIconButtonDisabled]}
                     onPress={handleCommentSend}
                     disabled={!newCommentText.trim() || isSubmittingComment}
                   >
-                    <ThemedText style={styles.commentSendText}>
-                      {isSubmittingComment ? 'Sending...' : 'Send'}
-                    </ThemedText>
+                    <Send color={newCommentText.trim() && !isSubmittingComment ? '#2563EB' : '#9CA3AF'} size={20} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -531,6 +567,47 @@ export function PartDetailModal({
                 <ThemedText style={styles.noContentText}>No comments yet</ThemedText>
               )}
             </View>
+            {/* Similar Previous Versions Section */}
+            {(() => {
+              const similarParts = getSimilarParts();
+              return similarParts.length > 0 ? (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <GitBranch color="#6B7280" size={20} />
+                    <ThemedText style={styles.sectionTitle}>Similar Previous Versions</ThemedText>
+                  </View>
+                  {similarParts.map(({ part, similarity }) => {
+                    const similarityPercent = Math.round(similarity * 100);
+                    const matchNum = part.name.match(/\d+/);
+                    const partNum = matchNum ? parseInt(matchNum[0]) : null;
+                    
+                    // Color based on similarity
+                    let similarityColor = '#EF4444'; // Red < 50%
+                    if (similarityPercent >= 50 && similarityPercent < 75) similarityColor = '#F59E0B'; // Amber
+                    if (similarityPercent >= 75) similarityColor = '#10B981'; // Green
+                    
+                    return (
+                      <View key={part.id} style={styles.similarPartItem}>
+                        <View style={styles.similarPartHeader}>
+                          <ThemedText style={styles.similarPartName}>{part.name}</ThemedText>
+                          <View style={[styles.similarityBadge, { backgroundColor: similarityColor }]}>
+                            <ThemedText style={styles.similarityBadgeText}>
+                              {similarityPercent}%
+                            </ThemedText>
+                          </View>
+                        </View>
+                        <ThemedText style={styles.similarPartDetails}>
+                          {Object.entries(part.dimensions || {})
+                            .map(([key, val]) => `${key}: ${val}`)
+                            .slice(0, 2)
+                            .join(' • ')}
+                        </ThemedText>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null;
+            })()}
           </ScrollView>
         )}
 
@@ -817,23 +894,35 @@ const styles = StyleSheet.create({
   commentInputContainer: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
-    padding: 12,
+    padding: 0,
     marginBottom: 16,
+  },
+  commentInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
   },
   commentInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 12,
+    flex: 1,
     fontSize: 14,
     color: '#111827',
-    backgroundColor: '#FFFFFF',
-    minHeight: 70,
-    maxHeight: 130,
+    minHeight: 40,
+    maxHeight: 100,
     textAlignVertical: 'top',
-    marginBottom: 12,
+    paddingRight: 8,
+  },
+  commentSendIconButton: {
+    padding: 6,
+    justifyContent: 'flex-end',
+    marginBottom: 2,
+  },
+  commentSendIconButtonDisabled: {
+    opacity: 0.5,
   },
   commentInputActions: {
     flexDirection: 'row',
@@ -899,5 +988,37 @@ const styles = StyleSheet.create({
   noImageText: {
     color: '#FFFFFF',
     fontSize: 16,
+  },
+  similarPartItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingVertical: 12,
+  },
+  similarPartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  similarPartName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  similarityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  similarityBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  similarPartDetails: {
+    fontSize: 12,
+    color: '#6B7280',
   },
 });

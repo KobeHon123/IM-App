@@ -30,6 +30,7 @@ interface EditPartModalProps {
   };
   selectedPart: Part | null;
   profiles: Profile[];
+  globalParts?: Part[];
   onClose: () => void;
   onSave: (part: any) => void;
   onEditingPartChange: (updates: any) => void;
@@ -40,11 +41,22 @@ export function EditPartModal({
   editingPart,
   selectedPart,
   profiles,
+  globalParts = [],
   onClose,
   onSave,
   onEditingPartChange,
-}: EditPartModalProps) {
+}: Omit<EditPartModalProps, 'onSyncWithPart'>) {
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
+  
+  React.useEffect(() => {
+    if (visible) {
+      console.log('=== EditPartModal Opened ===');
+      console.log('globalParts received:', globalParts?.length || 0);
+      console.log('globalParts array:', globalParts);
+      console.log('selectedPart:', selectedPart?.name);
+      console.log('editingPart.type:', editingPart.type);
+    }
+  }, [visible]);
   const getFirstUri = (result: unknown): string | null => {
     if (!result) return null;
     if (Array.isArray(result)) {
@@ -514,6 +526,16 @@ export function EditPartModal({
               <ThemedText style={styles.inputLabel}>Part Type</ThemedText>
               <ThemedText style={styles.typeDisplay}>{getDisplayTypeName(editingPart.type)}</ThemedText>
             </View>
+            {selectedPart && (() => {
+              const match = selectedPart.name.match(/\d+/);
+              const partNum = match ? parseInt(match[0]) : null;
+              return partNum ? (
+                <View style={styles.inputGroup}>
+                  <ThemedText style={styles.inputLabel}>Part Number</ThemedText>
+                  <ThemedText style={styles.typeDisplay}>#{partNum}</ThemedText>
+                </View>
+              ) : null;
+            })()}
           </View>
 
           <View style={styles.editModalSectionCard}>
@@ -617,6 +639,8 @@ export function EditPartModal({
           </View>
         </ScrollView>
       </SafeAreaView>
+
+
     </Modal>
   );
 }
@@ -863,5 +887,98 @@ const styles = StyleSheet.create({
   },
   selectionButtonTextActive: {
     color: '#FFFFFF',
+  },
+  emptyListContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyListText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  syncListContent: {
+    padding: 16,
+    gap: 12,
+  },
+  syncPartItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  syncPartContent: {
+    gap: 6,
+  },
+  syncPartHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  syncPartName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+  },
+  syncPartNumber: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3B82F6',
+    marginLeft: 8,
+  },
+  syncPartDetails: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  syncPartDesigner: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  similarPartLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  similarPartItem: {
+    backgroundColor: '#F0F9FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  similarPartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  similarPartName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E40AF',
+    flex: 1,
+  },
+  similarityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  similarityBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  similarPartDetails: {
+    fontSize: 12,
+    color: '#6B7280',
   },
 });
