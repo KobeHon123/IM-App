@@ -402,7 +402,7 @@ export function PartDetailModal({
                 </View>
               );
             })()}
-            {/* Quantity Section */
+            {/* Quantity Section */}
             {selectedPart && venues.length > 0 && (() => {
               const venuesWithQuantity = venues
                 .map(venue => ({
