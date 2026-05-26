@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Clipboard, Calculator, History } from 'lucide-react-native';
+import { Clipboard, Calculator, History, FlaskConical } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 
@@ -26,6 +26,13 @@ export default function ManagementTab() {
       icon: History,
       route: '/(tabs)/management/resin-record-management',
     },
+    {
+      id: 'quick-test-report',
+      name: 'Quick Test\nReport',
+      icon: FlaskConical,
+      route: null,
+      disabled: true,
+    },
   ];
 
   return (
@@ -40,15 +47,25 @@ export default function ManagementTab() {
             return (
               <TouchableOpacity
                 key={program.id}
-                style={styles.programCard}
+                style={[styles.programCard, program.disabled && styles.programCardDisabled]}
                 onPress={() => {
-                  router.push(program.route as any);
+                  if (!program.disabled && program.route) {
+                    router.push(program.route as any);
+                  }
                 }}
+                disabled={program.disabled}
               >
                 <View style={styles.iconContainer}>
-                  <IconComponent size={48} color="#2563EB" strokeWidth={1.5} />
+                  <IconComponent 
+                    size={48} 
+                    color={program.disabled ? '#9CA3AF' : '#2563EB'} 
+                    strokeWidth={1.5} 
+                    opacity={program.disabled ? 0.5 : 1}
+                  />
                 </View>
-                <ThemedText style={styles.programName}>{program.name}</ThemedText>
+                <ThemedText style={[styles.programName, program.disabled && styles.programNameDisabled]}>
+                  {program.name}
+                </ThemedText>
               </TouchableOpacity>
             );
           })}
@@ -103,6 +120,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  programCardDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+    opacity: 0.5,
+  },
   iconContainer: {
     marginBottom: 12,
   },
@@ -111,5 +133,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     textAlign: 'center',
+  },
+  programNameDisabled: {
+    color: '#9CA3AF',
   },
 });

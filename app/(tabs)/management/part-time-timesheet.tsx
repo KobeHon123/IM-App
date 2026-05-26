@@ -1542,11 +1542,12 @@ export default function PartTimeTimesheet() {
                 styles.symbolSquare,
                 {
                   backgroundColor: 'transparent',
-                  borderWidth: 4,
+                  borderWidth: 2.5,
+                  borderRadius: 20,
                   borderColor: '#111827',
                 }
               ]}>
-                <ThemedText style={styles.legendSymbolText}>OC</ThemedText>
+                <ThemedText style={styles.legendSymbolTextOC}>O</ThemedText>
               </View>
               <ThemedText style={styles.legendText}>On Call</ThemedText>
             </View>
@@ -2556,6 +2557,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  legendSymbolTextOC: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#000000',
   },
   legendSiteSymbol: {
     width: 30,

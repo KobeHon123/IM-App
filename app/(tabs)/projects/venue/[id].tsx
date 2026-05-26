@@ -10,7 +10,8 @@ import {
   Alert,
   FlatList,
   Image,
-  Platform
+  Platform,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -42,6 +43,7 @@ export default function VenueDetailScreen() {
   const [projectVenues, setProjectVenues] = useState<any[]>([]);
   const [partQuantities, setPartQuantities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadVenueData();
@@ -112,6 +114,16 @@ export default function VenueDetailScreen() {
       setLoading(false);
     }
   };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadVenueData();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const [countingMode, setCountingMode] = useState(false);
   const [statusMode, setStatusMode] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
@@ -567,7 +579,11 @@ export default function VenueDetailScreen() {
   };
   const createNewPart = async (partData: any) => {
     try {
+      // Show uploading state
+      Alert.alert('Uploading', 'Uploading part images and information... Please keep the app open.');
+      
       await createPart(partData);
+      
       setNewPart({
         type: 'U shape',
         description: '',
@@ -581,10 +597,20 @@ export default function VenueDetailScreen() {
       setManualPartNumber(null);
       setShowCreatePartModal(false);
       await loadVenueData();
+      
+      Alert.alert('Success', 'Part created successfully with all images uploaded!');
     } catch (error) {
       console.error('Error creating part:', error);
       if (error instanceof Error) {
-        Alert.alert('Error', error.message);
+        // Check if error is image-related
+        if (error.message.includes('upload') || error.message.includes('image') || error.message.includes('timeout')) {
+          Alert.alert(
+            'Upload Failed',
+            `Image upload failed: ${error.message}\n\nPlease check your internet connection and try again. The part information will NOT be saved until all images upload successfully.`
+          );
+        } else {
+          Alert.alert('Error', error.message);
+        }
       } else {
         Alert.alert('Error', 'Failed to create part');
       }
@@ -1386,7 +1412,11 @@ export default function VenueDetailScreen() {
           </TouchableOpacity>
         </View>
       </View>
-      <ScrollView style={styles.partsList} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.partsList} showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
         {Object.entries(groupedParts).map(([type, parts]) => {
           const isCollapsed = collapsedCategories[type];
           return (

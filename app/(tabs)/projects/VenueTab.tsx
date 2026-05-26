@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
   StyleSheet,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -29,6 +30,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [venues, setVenues] = React.useState<Venue[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
 
   React.useEffect(() => {
     loadVenues();
@@ -44,6 +46,19 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
       Alert.alert('Error', 'Failed to load venues');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const venueData = await getVenuesByProject(projectId);
+      setVenues(venueData);
+    } catch (error) {
+      console.error('Error refreshing venues:', error);
+      Alert.alert('Error', 'Failed to refresh venues');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -220,7 +235,11 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.venueList} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.venueList} showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            }
+          >
             {filteredVenues.map((venue) => (
           <ReanimatedSwipeable
             key={venue.id}
@@ -293,7 +312,11 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
           </ScrollView>
         </>
       ) : (
-        <ScrollView style={styles.matrixWrapper} contentContainerStyle={styles.matrixWrapperContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.matrixWrapper} contentContainerStyle={styles.matrixWrapperContent} showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+        >
           {sortedVenues.length === 0 ? (
             <View style={styles.matrixEmptyState}>
               <ThemedText style={styles.matrixEmptyTitle}>No venues yet</ThemedText>

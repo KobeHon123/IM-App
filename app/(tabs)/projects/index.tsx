@@ -11,7 +11,8 @@ import {
   TextInput, 
   Alert,
   Image,
-  ScrollView
+  ScrollView,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -31,6 +32,7 @@ export default function ProjectsScreen() {
   const [sortAsc, setSortAsc] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -66,6 +68,18 @@ export default function ProjectsScreen() {
       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
       return bTime - aTime;
     });
+
+  // Refresh handler
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // The projects will auto-update from the context
+      // Just need to trigger a small delay to show the refresh animation
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Check if project name already exists
   const isProjectNameDuplicate = newProject.name.trim() !== '' && 
@@ -188,6 +202,9 @@ export default function ProjectsScreen() {
       <FlatList
         data={filteredProjects}
         keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
         renderItem={({ item }) => (
           <ReanimatedSwipeable
             containerStyle={{ backgroundColor: '#F9FAFB' }}

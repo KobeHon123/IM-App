@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Calendar, Clock, Package, FileText, Edit2, Trash2 } from 'lucide-react-native';
+import { Calendar, Clock, Package, FileText, Edit2, Trash2, Pencil } from 'lucide-react-native';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Part } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
 
@@ -53,70 +54,94 @@ const EventCardSimplified: React.FC<EventCardSimplifiedProps> = ({ date, type, p
   }
 
   return (
-    <View style={[styles.eventCard, { backgroundColor: bgColor }]}>
-      {/* Header with Type Badge and Action Buttons */}
-      <View style={styles.headerTop}>
-        <View style={[styles.typeBadge, { backgroundColor: color }]}>
-          <ThemedText style={styles.typeLabel}>{type}</ThemedText>
-        </View>
-        <View style={styles.actionButtons}>
+    <ReanimatedSwipeable
+      containerStyle={{ backgroundColor: '#F9FAFB' }}
+      renderLeftActions={(_prog, _drag, swipeable) => (
+        <View style={styles.swipeActionsLeft}>
           {onEdit && (
-            <TouchableOpacity style={styles.iconButton} onPress={onEdit}>
-              <Edit2 color={color} size={18} />
+            <TouchableOpacity
+              style={styles.swipeActionButton}
+              onPress={() => {
+                swipeable.close();
+                onEdit();
+              }}
+            >
+              <View style={[styles.swipeCircle, styles.swipeEditCircle]}>
+                <Pencil color="#FFFFFF" size={20} />
+              </View>
             </TouchableOpacity>
           )}
           {onDelete && (
-            <TouchableOpacity style={[styles.iconButton, styles.deleteButton]} onPress={onDelete}>
-              <Trash2 color="#EF4444" size={18} />
+            <TouchableOpacity
+              style={styles.swipeActionButton}
+              onPress={() => {
+                swipeable.close();
+                onDelete();
+              }}
+            >
+              <View style={[styles.swipeCircle, styles.swipeDeleteCircle]}>
+                <Trash2 color="#FFFFFF" size={20} />
+              </View>
             </TouchableOpacity>
           )}
         </View>
-      </View>
-
-      {/* Date and Time */}
-      <View style={styles.header}>
-        <View style={styles.dateTimeGroup}>
-          <View style={styles.dateGroup}>
-            <Calendar color={color} size={16} />
-            <ThemedText style={styles.dateText}>{date}</ThemedText>
+      )}
+      friction={2}
+      leftThreshold={80}
+    >
+      <View style={[styles.eventCard, { backgroundColor: bgColor }]}>
+        {/* Header with Type Badge and Action Buttons */}
+        <View style={styles.headerTop}>
+          <View style={[styles.typeBadge, { backgroundColor: color }]}>
+            <ThemedText style={styles.typeLabel}>{type}</ThemedText>
           </View>
-          {eventTime && (
-            <View style={styles.timeGroup}>
-              <Clock color={color} size={16} />
-              <ThemedText style={styles.timeText}>{eventTime}</ThemedText>
+        </View>
+
+        {/* Date and Time */}
+        <View style={styles.header}>
+          <View style={styles.dateTimeGroup}>
+            <View style={styles.dateGroup}>
+              <Calendar color={color} size={16} />
+              <ThemedText style={styles.dateText}>{date}</ThemedText>
             </View>
-          )}
-        </View>
-      </View>
-
-      {/* Parts Section */}
-      {parts.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Package color={color} size={18} />
-            <ThemedText style={styles.sectionTitle}>Parts ({parts.length})</ThemedText>
-          </View>
-          <View style={styles.partsList}>
-            {partNames.map((name, index) => (
-              <View key={index} style={[styles.partBadge, { borderColor: color }]}>
-                <ThemedText style={[styles.partText, { color }]}>{name}</ThemedText>
+            {eventTime && (
+              <View style={styles.timeGroup}>
+                <Clock color={color} size={16} />
+                <ThemedText style={styles.timeText}>{eventTime}</ThemedText>
               </View>
-            ))}
+            )}
           </View>
         </View>
-      )}
 
-      {/* Description Section */}
-      {displayDescription && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <FileText color={color} size={18} />
-            <ThemedText style={styles.sectionTitle}>Notes</ThemedText>
+        {/* Parts Section */}
+        {parts.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Package color={color} size={18} />
+              <ThemedText style={styles.sectionTitle}>Parts ({parts.length})</ThemedText>
+            </View>
+            <View style={styles.partsList}>
+              {partNames.map((name, index) => (
+                <View key={index} style={[styles.partBadge, { borderColor: color }]}>
+                  <ThemedText style={[styles.partText, { color }]}>{name}</ThemedText>
+                </View>
+              ))}
+            </View>
           </View>
-          <ThemedText style={styles.descriptionText}>{displayDescription}</ThemedText>
-        </View>
-      )}
-    </View>
+        )}
+
+        {/* Description Section */}
+        {displayDescription && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <FileText color={color} size={18} />
+              <ThemedText style={styles.sectionTitle}>Notes</ThemedText>
+            </View>
+            <ThemedText style={styles.descriptionText}>{displayDescription}</ThemedText>
+          </View>
+        )}
+      </View>
+    </ReanimatedSwipeable>
   );
 };
 
@@ -234,6 +259,34 @@ const styles = StyleSheet.create({
     color: '#374151',
     lineHeight: 20,
     fontWeight: '500',
+  },
+  swipeActionsLeft: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingLeft: 16,
+    marginLeft: 12,
+    marginTop: -10,
+    gap: 8,
+  },
+  swipeActionButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 56,
+  },
+  swipeCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swipeEditCircle: {
+    backgroundColor: '#2563EB',
+  },
+  swipeDeleteCircle: {
+    backgroundColor: '#EF4444',
   },
 });
 

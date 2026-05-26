@@ -36,71 +36,105 @@ const isLocalUri = (uri: string): boolean => {
   return uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/');
 };
 
-export const uploadPartImage = async (uri: string, folder: string = 'parts'): Promise<string> => {
+export const uploadPartImage = async (uri: string, folder: string = 'parts', retries: number = 3): Promise<string> => {
   // If it's already a remote URL, return as-is
   if (!isLocalUri(uri)) {
     return uri;
   }
 
-  try {
-    // Normalize URI - ensure it starts with file://
-    let normalizedUri = uri;
-    if (uri.startsWith('/') && !uri.startsWith('file://')) {
-      normalizedUri = `file://${uri}`;
-    }
+  let lastError: Error | null = null;
 
-    console.log('Attempting to upload image from:', normalizedUri);
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      // Normalize URI - ensure it starts with file://
+      let normalizedUri = uri;
+      if (uri.startsWith('/') && !uri.startsWith('file://')) {
+        normalizedUri = `file://${uri}`;
+      }
 
-    // Check if file exists first
-    const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
-    if (!fileInfo.exists) {
-      console.warn('File does not exist:', normalizedUri);
-      return uri; // Return original URI as fallback
-    }
+      console.log(`[Attempt ${attempt}/${retries}] Uploading image from:`, normalizedUri);
 
-    const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-    const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      // Check if file exists first
+      const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
+      if (!fileInfo.exists) {
+        throw new Error(`File not found: ${normalizedUri}`);
+      }
 
-    // Read file as base64
-    const base64Data = await FileSystem.readAsStringAsync(normalizedUri, {
-      encoding: 'base64',
-    });
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-    if (!base64Data || base64Data.length === 0) {
-      throw new Error('Failed to read image file');
-    }
-
-    console.log('Read base64 data, length:', base64Data.length);
-
-    // Upload to Supabase storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('parts')
-      .upload(fileName, decode(base64Data), {
-        contentType: `image/${fileExt}`,
-        upsert: true,
+      // Read file as base64
+      const base64Data = await FileSystem.readAsStringAsync(normalizedUri, {
+        encoding: 'base64',
       });
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      throw uploadError;
+      if (!base64Data || base64Data.length === 0) {
+        throw new Error('Failed to read image file - empty or invalid');
+      }
+
+      console.log(`[Attempt ${attempt}/${retries}] Read base64 data, length:`, base64Data.length);
+
+      // Upload to Supabase storage with timeout
+      const uploadPromise = supabase.storage
+        .from('parts')
+        .upload(fileName, decode(base64Data), {
+          contentType: `image/${fileExt}`,
+          upsert: true,
+        });
+
+      // Set timeout for upload (30 seconds)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Upload timeout - network too slow')), 30000)
+      );
+
+      const { data: uploadData, error: uploadError } = await Promise.race([
+        uploadPromise,
+        timeoutPromise
+      ]) as any;
+
+      if (uploadError) {
+        console.error(`[Attempt ${attempt}/${retries}] Upload error:`, uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      // Get public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('parts')
+        .getPublicUrl(fileName);
+
+      console.log(`[Attempt ${attempt}/${retries}] Upload successful! Public URL:`, publicUrlData.publicUrl);
+      return publicUrlData.publicUrl;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[Attempt ${attempt}/${retries}] Error uploading image:`, lastError.message);
+      
+      // If this is not the last attempt, wait before retrying
+      if (attempt < retries) {
+        const delayMs = attempt * 1000; // Progressive delay: 1s, 2s, 3s
+        console.log(`Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
     }
-
-    // Get public URL
-    const { data: publicUrlData } = supabase.storage
-      .from('parts')
-      .getPublicUrl(fileName);
-
-    console.log('Uploaded successfully, public URL:', publicUrlData.publicUrl);
-    return publicUrlData.publicUrl;
-  } catch (error) {
-    console.error('Error uploading image:', error);
-    // Return original URI as fallback (will work locally but not across devices)
-    return uri;
   }
+
+  // All retries failed - throw the error
+  throw new Error(`Image upload failed after ${retries} attempts: ${lastError?.message}`);
 };
 
 export const uploadPartImages = async (uris: string[]): Promise<string[]> => {
-  const uploadPromises = uris.map(uri => uploadPartImage(uri, 'pictures'));
+  if (!uris || uris.length === 0) {
+    return [];
+  }
+  
+  // Upload all images in parallel with proper error handling
+  const uploadPromises = uris.map((uri, index) => 
+    uploadPartImage(uri, 'pictures').catch(error => {
+      console.error(`Failed to upload picture ${index + 1}/${uris.length}:`, error.message);
+      throw new Error(`Failed to upload picture ${index + 1} of ${uris.length}: ${error.message}`);
+    })
+  );
+  
+  // If any image fails, the entire operation fails
   return Promise.all(uploadPromises);
 };
 

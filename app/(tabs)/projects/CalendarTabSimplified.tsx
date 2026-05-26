@@ -11,8 +11,8 @@ import {
   Platform,
   StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronDown, ChevronUp, X, CheckSquare, Clock } from 'lucide-react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChevronDown, ChevronUp, X, CheckSquare, Clock, Plus, Calendar } from 'lucide-react-native';
 import EventCardSimplified from '@/components/EventCardSimplified';
 import { useData } from '@/hooks/useData';
 import { Part } from '@/types';
@@ -29,10 +29,12 @@ const eventColors = {
 };
 
 const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
+  const insets = useSafeAreaInsets();
   const { loading, getEventsByProject, createEvent, getPartsByProject, updateEvent, deleteEvent } = useData();
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [isCalendarFolded, setIsCalendarFolded] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showDatePickerInline, setShowDatePickerInline] = useState(false);
   const [selectedDateForCreation, setSelectedDateForCreation] = useState<Date | null>(null);
   const [selectedType, setSelectedType] = useState<'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other'>('Measurement');
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
@@ -41,6 +43,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
   const [timeInput, setTimeInput] = useState('');
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [pickerDate, setPickerDate] = useState<{ day: number; month: number; year: number }>({ day: 1, month: 1, year: 2024 });
 
   const events = getEventsByProject(projectId);
   const projectParts: Part[] = getPartsByProject(projectId); // Fetch parts
@@ -157,6 +160,17 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
 
   const getEventColorForDay = (day: number): string | null => {
     const dayEvents = getMonthEvents().filter((e) => parseDate(e.date).getDate() === day);
+    if (dayEvents.length > 0) {
+      return eventColors[dayEvents[0].type] || null;
+    }
+    return null;
+  };
+
+  const getEventColorForPickerDay = (day: number, month: number, year: number): string | null => {
+    const dayEvents = events.filter((e) => {
+      const [eventDay, eventMonth, eventYear] = e.date.split('-').map(Number);
+      return eventDay === day && eventMonth === month && eventYear === year;
+    });
     if (dayEvents.length > 0) {
       return eventColors[dayEvents[0].type] || null;
     }
@@ -392,9 +406,34 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
 
   return (
     <View style={styles.tabContent}>
-      {renderCalendar()}
+      {/* Calendar hidden - using floating button instead */}
+      {/* {renderCalendar()} */}
       <SectionList
-        sections={[{ title: '', data: getMonthEvents() }]}
+        sections={[{ 
+          title: '', 
+          data: (() => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const upcoming = events.filter(event => {
+              const eventDate = new Date(event.date.split('-').reverse().join('-'));
+              eventDate.setHours(0, 0, 0, 0);
+              return eventDate >= today;
+            });
+            
+            const past = events.filter(event => {
+              const eventDate = new Date(event.date.split('-').reverse().join('-'));
+              eventDate.setHours(0, 0, 0, 0);
+              return eventDate < today;
+            });
+            
+            // Sort both by date
+            upcoming.sort((a, b) => new Date(a.date.split('-').reverse().join('-')).getTime() - new Date(b.date.split('-').reverse().join('-')).getTime());
+            past.sort((a, b) => new Date(a.date.split('-').reverse().join('-')).getTime() - new Date(b.date.split('-').reverse().join('-')).getTime());
+            
+            return [...upcoming, ...past];
+          })()
+        }]}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const eventDate = new Date(item.date.split('-').reverse().join('-'));
@@ -420,6 +459,16 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
         showsVerticalScrollIndicator={false}
       />
 
+      <TouchableOpacity
+        style={styles.floatingAddButton}
+        onPress={() => {
+          setSelectedDateForCreation(new Date());
+          setShowConfirmModal(true);
+        }}
+      >
+        <Plus color="#FFFFFF" size={28} />
+      </TouchableOpacity>
+
       <Modal
         visible={showConfirmModal}
         animationType="slide"
@@ -427,7 +476,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
         onRequestClose={resetModal}
       >
         <SafeAreaView style={styles.modalFullScreen}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { paddingTop: insets.top + 16 }]}>
             <View>
               <ThemedText style={styles.modalTitle}>{editingEventId ? 'Edit Event' : 'Create Event'}</ThemedText>
               <ThemedText style={styles.modalSubtitle}>
@@ -440,6 +489,104 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
           </View>
 
           <ScrollView style={styles.modalInnerContent} showsVerticalScrollIndicator={false}>
+            {/* Date Selection Section */}
+            <View style={styles.sectionContainer}>
+              <ThemedText style={styles.sectionTitle}>Select Date</ThemedText>
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={() => {
+                  if (selectedDateForCreation) {
+                    setPickerDate({
+                      day: selectedDateForCreation.getDate(),
+                      month: selectedDateForCreation.getMonth() + 1,
+                      year: selectedDateForCreation.getFullYear(),
+                    });
+                  }
+                  setShowDatePickerInline(!showDatePickerInline);
+                }}
+              >
+                <Calendar color="#2563EB" size={20} />
+                <ThemedText style={styles.datePickerButtonText}>
+                  {selectedDateForCreation ? formatDate(selectedDateForCreation) : 'Tap to select date'}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Inline Date Picker - Calendar */}
+            {showDatePickerInline && (
+              <View style={styles.inlineCalendarContainer}>
+                <View style={styles.inlineCalendarHeader}>
+                  <TouchableOpacity onPress={() => setPickerDate({ ...pickerDate, month: pickerDate.month === 1 ? 12 : pickerDate.month - 1, year: pickerDate.month === 1 ? pickerDate.year - 1 : pickerDate.year })}>
+                    <ThemedText style={styles.inlineCalendarNavText}>←</ThemedText>
+                  </TouchableOpacity>
+                  <ThemedText style={styles.inlineCalendarTitle}>
+                    {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][pickerDate.month - 1]} {pickerDate.year}
+                  </ThemedText>
+                  <TouchableOpacity onPress={() => setPickerDate({ ...pickerDate, month: pickerDate.month === 12 ? 1 : pickerDate.month + 1, year: pickerDate.month === 12 ? pickerDate.year + 1 : pickerDate.year })}>
+                    <ThemedText style={styles.inlineCalendarNavText}>→</ThemedText>
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.inlineCalendarWeekHeader}>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <ThemedText key={day} style={styles.inlineCalendarWeekDay}>{day}</ThemedText>
+                  ))}
+                </View>
+
+                <View style={styles.inlineCalendarGrid}>
+                  {(() => {
+                    const daysInMonth = new Date(pickerDate.year, pickerDate.month, 0).getDate();
+                    const firstDay = new Date(pickerDate.year, pickerDate.month - 1, 1).getDay();
+                    const days = [];
+                    
+                    for (let i = 0; i < firstDay; i++) {
+                      days.push(<View key={`empty-${i}`} style={styles.inlineCalendarEmptyDay} />);
+                    }
+                    
+                    for (let day = 1; day <= daysInMonth; day++) {
+                      const isSelected = pickerDate.day === day;
+                      const eventColor = getEventColorForPickerDay(day, pickerDate.month, pickerDate.year);
+                      days.push(
+                        <TouchableOpacity
+                          key={day}
+                          style={[
+                            styles.inlineCalendarDay,
+                            isSelected && styles.inlineCalendarDaySelected,
+                          ]}
+                          onPress={() => setPickerDate({ ...pickerDate, day })}
+                        >
+                          {eventColor && (
+                            <View style={[styles.inlineCalendarEventIndicator, { backgroundColor: eventColor }]} />
+                          )}
+                          <ThemedText
+                            style={[
+                              styles.inlineCalendarDayText,
+                              isSelected && styles.inlineCalendarDayTextSelected,
+                            ]}
+                          >
+                            {day}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    }
+                    
+                    return days;
+                  })()}
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.inlineDatePickerButton}
+                  onPress={() => {
+                    const newDate = new Date(pickerDate.year, pickerDate.month - 1, pickerDate.day);
+                    setSelectedDateForCreation(newDate);
+                    setShowDatePickerInline(false);
+                  }}
+                >
+                  <ThemedText style={styles.inlineDatePickerButtonText}>Confirm Date</ThemedText>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Event Type Section */}
             <View style={styles.sectionContainer}>
               <ThemedText style={styles.sectionTitle}>Event Type</ThemedText>
@@ -704,6 +851,22 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+  floatingAddButton: {
+    position: 'absolute',
+    bottom: 32,
+    right: 32,
+    width: 56,
+    height: 56,
+    backgroundColor: '#2563EB',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
   // Modern modal styles
   modalFullScreen: {
     flex: 1,
@@ -714,7 +877,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
@@ -747,6 +911,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 12,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+    gap: 12,
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2563EB',
+    flex: 1,
   },
   eventTypeGrid: {
     flexDirection: 'row',
@@ -991,6 +1177,150 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Inline Date Picker Styles
+  inlineDatePickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginVertical: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  inlineDatePickerFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  inlineDatePickerButton: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 10,
+    borderRadius: 20,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  inlineDatePickerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Inline Calendar Styles
+  inlineCalendarContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginVertical: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 12,
+  },
+  inlineCalendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  inlineCalendarNavText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2563EB',
+    paddingHorizontal: 8,
+  },
+  inlineCalendarTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  inlineCalendarWeekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  inlineCalendarWeekDay: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    width: 44,
+    height: 44,
+    textAlign: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inlineCalendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  inlineCalendarEmptyDay: {
+    width: 44,
+    height: 44,
+  },
+  inlineCalendarDay: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
+    marginVertical: 2,
+  },
+  inlineCalendarDaySelected: {
+    backgroundColor: '#2563EB',
+  },
+  inlineCalendarDayText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  inlineCalendarDayTextSelected: {
+    color: '#FFFFFF',
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    gap: 16,
+  },
+  datePickerColumn: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  datePickerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  datePickerScroll: {
+    flex: 1,
+    maxHeight: 300,
+  },
+  datePickerOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginVertical: 4,
+  },
+  datePickerOptionSelected: {
+    backgroundColor: '#2563EB',
+  },
+  datePickerOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  datePickerOptionTextSelected: {
+    color: '#FFFFFF',
+  },
+  inlineCalendarEventIndicator: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    top: 4,
+    right: 4,
   },
 });
 
