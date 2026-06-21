@@ -577,7 +577,7 @@ export function PartDetailModal({
                     <ThemedText style={styles.sectionTitle}>Similar Previous Versions</ThemedText>
                   </View>
                   {similarParts.map(({ part, similarity }) => {
-                    const similarityPercent = Math.round(similarity * 100);
+                    const similarityPercent = Math.round(similarity);
                     const matchNum = part.name.match(/\d+/);
                     const partNum = matchNum ? parseInt(matchNum[0]) : null;
                     

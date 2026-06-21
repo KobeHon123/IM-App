@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Clipboard, Calculator, History, FlaskConical } from 'lucide-react-native';
+import { Clipboard, Calculator, History, FlaskConical, Hourglass } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 
@@ -32,6 +32,12 @@ export default function ManagementTab() {
       icon: FlaskConical,
       route: null,
       disabled: true,
+    },
+    {
+      id: 'stopwatch',
+      name: 'Stopwatch',
+      icon: Hourglass,
+      route: '/(tabs)/management/stopwatch',
     },
   ];
 
@@ -127,6 +133,8 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginBottom: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   programName: {
     fontSize: 16,
