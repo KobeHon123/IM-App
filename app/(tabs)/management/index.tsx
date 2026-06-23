@@ -61,17 +61,17 @@ export default function ManagementTab() {
                 }}
                 disabled={program.disabled}
               >
-                <View style={styles.iconContainer}>
+                <View style={styles.cardContent}>
                   <IconComponent 
                     size={48} 
                     color={program.disabled ? '#9CA3AF' : '#2563EB'} 
                     strokeWidth={1.5} 
                     opacity={program.disabled ? 0.5 : 1}
                   />
+                  <ThemedText style={[styles.programName, program.disabled && styles.programNameDisabled]}>
+                    {program.name}
+                  </ThemedText>
                 </View>
-                <ThemedText style={[styles.programName, program.disabled && styles.programNameDisabled]}>
-                  {program.name}
-                </ThemedText>
               </TouchableOpacity>
             );
           })}
@@ -108,16 +108,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    justifyContent: 'space-between',
   },
   programCard: {
     width: '47%',
-    aspectRatio: 1,
+    aspectRatio: 1.1,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
@@ -131,10 +128,11 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     opacity: 0.5,
   },
-  iconContainer: {
-    marginBottom: 12,
+  cardContent: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
   programName: {
     fontSize: 16,
