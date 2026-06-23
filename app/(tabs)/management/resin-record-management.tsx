@@ -180,7 +180,7 @@ export default function ResinRecordManagement() {
     }));
   };
 
-  const renderRecordItem = ({ item }: { item: ResinRecord }) => {
+  const renderRecordItem = ({ item, key }: { item: ResinRecord; key?: string }) => {
     const componentNames = getComponentNames(item.material);
     const formattedDate = new Date(item.created_at).toLocaleDateString('en-US', {
       month: 'short',
@@ -265,10 +265,10 @@ export default function ResinRecordManagement() {
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.headerSection}>
+        <ScrollView style={styles.scrollableContent} contentContainerStyle={styles.scrollableContentContainer} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <ArrowLeft size={24} color="#111827" />
+              <ArrowLeft color="#2563EB" size={24} />
             </TouchableOpacity>
             <ThemedText style={styles.headerTitle}>Resin Records</ThemedText>
             <View style={styles.headerPlaceholder} />
@@ -297,7 +297,27 @@ export default function ResinRecordManagement() {
               </TouchableOpacity>
             </View>
           )}
-        </View>
+
+          {/* Records List */}
+          {filteredRecords.length > 0 ? (
+            <View style={styles.recordsList}>
+              {filteredRecords.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => (
+                <View key={item.id}>
+                  {renderRecordItem({ item })}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <ThemedText style={styles.emptyStateTitle}>No Records Found</ThemedText>
+              <ThemedText style={styles.emptyStateText}>
+                {records.length === 0
+                  ? 'Start by creating a resin record in the Resin Record and Calculator'
+                  : 'No records found for the selected project'}
+              </ThemedText>
+            </View>
+          )}
+        </ScrollView>
 
         {/* Project Selection Modal */}
         <Modal
@@ -354,24 +374,6 @@ export default function ResinRecordManagement() {
             </View>
           </TouchableOpacity>
         </Modal>
-
-        <ScrollView style={styles.scrollableContent} showsVerticalScrollIndicator={false}>
-          {/* Records List */}
-          {filteredRecords.length > 0 ? (
-            <View style={styles.recordsList}>
-              {filteredRecords.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => renderRecordItem({ item }))}
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <ThemedText style={styles.emptyStateTitle}>No Records Found</ThemedText>
-              <ThemedText style={styles.emptyStateText}>
-                {records.length === 0
-                  ? 'Start by creating a resin record in the Resin Record and Calculator'
-                  : 'No records found for the selected project'}
-              </ThemedText>
-            </View>
-          )}
-        </ScrollView>
       </SafeAreaView>
 
       {/* Summary Card */}
@@ -473,16 +475,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
+  scrollableContentContainer: {
+    padding: 16,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 0,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 20,
   },
   backButton: {
     padding: 8,
@@ -499,8 +499,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderRadius: 12,
+    marginBottom: 12,
   },
   filterLabel: {
     flexDirection: 'row',

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  Modal, 
-  TextInput, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Modal,
+  TextInput,
   Alert,
   Image,
   ScrollView,
@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, Camera, ArrowUpDown, Pencil, Trash2 } from 'lucide-react-native';
+import { Plus, Camera, ArrowUpDown, Pencil, Trash2, ChevronDown, Calendar, Package, FileText } from 'lucide-react-native';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
@@ -26,7 +26,7 @@ import { Project } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
 
 export default function ProjectsScreen() {
-  const { projects, createProject, updateProject, deleteProject, profiles } = useData();
+  const { projects, createProject, updateProject, deleteProject, profiles, events, parts, refresh } = useData();
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortAsc, setSortAsc] = useState(true);
@@ -50,6 +50,78 @@ export default function ProjectsScreen() {
   });
   const [newProjectPics, setNewProjectPics] = useState<string[]>([]);
   const [editingProjectPics, setEditingProjectPics] = useState<string[]>([]);
+  const [expandUpcomingEvents, setExpandUpcomingEvents] = useState(false);
+
+  // Event type colors (from EventCardSimplified)
+  const eventColors = {
+    Measurement: '#3B82F6',
+    'Test-Fit': '#10B981',
+    Installation: '#F97316',
+    Delivery: '#F59E0B',
+    Meeting: '#EC4899',
+    Other: '#6B7280',
+  };
+
+  // Get upcoming events (sorted by date, closest first)
+  const getUpcomingEvents = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const upcoming = events
+      .filter(event => {
+        try {
+          // Parse DD-MM-YYYY format
+          const parts = event.date.split('-');
+          if (parts.length !== 3) {
+            return false;
+          }
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
+          const year = parseInt(parts[2], 10);
+
+          const eventDate = new Date(year, month, day);
+          if (isNaN(eventDate.getTime())) {
+            return false;
+          }
+          eventDate.setHours(0, 0, 0, 0);
+          const isUpcoming = eventDate >= today;
+          return isUpcoming;
+        } catch (e) {
+          return false;
+        }
+      })
+      .sort((a, b) => {
+        const partsA = a.date.split('-');
+        const dateA = !isNaN(parseInt(partsA[2], 10)) ? new Date(parseInt(partsA[2], 10), parseInt(partsA[1], 10) - 1, parseInt(partsA[0], 10)) : new Date(a.date);
+        const partsB = b.date.split('-');
+        const dateB = !isNaN(parseInt(partsB[2], 10)) ? new Date(parseInt(partsB[2], 10), parseInt(partsB[1], 10) - 1, parseInt(partsB[0], 10)) : new Date(b.date);
+        return dateA.getTime() - dateB.getTime();
+      })
+      .slice(0, 3); // Get top 3 upcoming events
+
+    return upcoming;
+  };
+
+  // Calculate days left
+  const getDaysLeft = (eventDate: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Parse DD-MM-YYYY format
+    const parts = eventDate.split('-');
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    const event = new Date(year, month, day);
+    event.setHours(0, 0, 0, 0);
+
+    const diffTime = event.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const upcomingEvents = getUpcomingEvents();
+  const closestEvent = upcomingEvents[0] || null;
 
   const filteredProjects = [...projects]
     .filter(project =>
@@ -73,9 +145,8 @@ export default function ProjectsScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // The projects will auto-update from the context
-      // Just need to trigger a small delay to show the refresh animation
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Refresh data from the context (this will update events as well)
+      await refresh();
     } finally {
       setRefreshing(false);
     }
@@ -199,6 +270,100 @@ export default function ProjectsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Upcoming Events Card */}
+      {closestEvent && (
+        <View style={styles.upcomingEventsContainer}>
+          <TouchableOpacity
+            onPress={() => setExpandUpcomingEvents(!expandUpcomingEvents)}
+            activeOpacity={0.7}
+          >
+            <View style={[
+              styles.upcomingEventsCard,
+              { borderColor: eventColors[closestEvent.type] || '#6B7280' },
+              getDaysLeft(closestEvent.date) <= 5 && styles.upcomingEventsCardUrgent
+            ]}>
+              {/* Collapsed View */}
+              {!expandUpcomingEvents && (() => {
+                const eventColor = eventColors[closestEvent.type] || '#6B7280';
+                return (
+                  <View style={styles.upcomingEventsCollapsed}>
+                    <View style={styles.upcomingEventInfo}>
+                      <View style={styles.upcomingEventHeader}>
+                        <Calendar color={eventColor} size={18} />
+                        <ThemedText style={[styles.upcomingEventLabel, { color: eventColor }]}>
+                          Upcoming {closestEvent.type} Event
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={[styles.upcomingEventDays, { color: eventColor }]}>
+                        {getDaysLeft(closestEvent.date)} day{getDaysLeft(closestEvent.date) !== 1 ? 's' : ''} left
+                      </ThemedText>
+                    </View>
+                    <ChevronDown
+                      size={20}
+                      color={eventColor}
+                      style={expandUpcomingEvents && styles.expandIconRotated}
+                    />
+                  </View>
+                );
+              })()}
+
+              {/* Expanded View */}
+              {expandUpcomingEvents && (
+                <View style={styles.upcomingEventsExpanded}>
+                  {upcomingEvents.map((event, index) => {
+                    const daysLeft = getDaysLeft(event.date);
+                    const partNames = event.parts.map((id) => parts.find((p) => p.id === id)?.name || 'Unknown');
+                    const project = projects.find(p => p.id === event.projectId);
+                    const eventColor = eventColors[event.type] || '#6B7280';
+                    return (
+                      <View key={event.id} style={styles.upcomingEventItem}>
+                        <View style={styles.upcomingEventItemHeader}>
+                          <View style={[styles.upcomingEventTypeBadge, { backgroundColor: eventColor }]}>
+                            <ThemedText style={styles.upcomingEventTypeText}>{event.type}</ThemedText>
+                          </View>
+                          <ThemedText style={[styles.upcomingEventItemDays, { color: eventColor }]}>
+                            {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                          </ThemedText>
+                        </View>
+                        <View style={styles.upcomingEventItemDetails}>
+                          {project && (
+                            <View style={styles.upcomingEventProjectRow}>
+                              <ThemedText style={[styles.upcomingEventProjectText, { color: eventColor }]}>
+                                {project.name}
+                              </ThemedText>
+                            </View>
+                          )}
+                          <View style={styles.upcomingEventDateRow}>
+                            <Calendar color={eventColor} size={14} />
+                            <ThemedText style={styles.upcomingEventDateText}>{event.date}</ThemedText>
+                          </View>
+                          {partNames.length > 0 && (
+                            <View style={styles.upcomingEventPartsRow}>
+                              <Package color={eventColor} size={14} />
+                              <ThemedText style={styles.upcomingEventPartsText}>
+                                {partNames.join(', ')}
+                              </ThemedText>
+                            </View>
+                          )}
+                          {event.description && (
+                            <View style={styles.upcomingEventDescRow}>
+                              <FileText color={eventColor} size={14} />
+                              <ThemedText style={styles.upcomingEventDescText}>
+                                {event.description}
+                              </ThemedText>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <FlatList
         data={filteredProjects}
         keyExtractor={(item) => item.id}
@@ -260,7 +425,7 @@ export default function ProjectsScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.floatingAddButton}
         onPress={() => {
           console.log('Opening create project modal');
@@ -886,5 +1051,136 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  listFooter: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  upcomingEventsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 2,
+  },
+  upcomingEventsCardUrgent: {
+    backgroundColor: '#FEF2F2',
+  },
+  upcomingEventsCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  upcomingEventInfo: {
+    flex: 1,
+  },
+  upcomingEventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  upcomingEventLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  upcomingEventDays: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  expandIconRotated: {
+    transform: [{ rotate: '180deg' }],
+  },
+  upcomingEventsExpanded: {
+    gap: 12,
+  },
+  upcomingEventItem: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ffffff',
+  },
+  upcomingEventItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  upcomingEventTypeBadge: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  upcomingEventTypeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  upcomingEventItemDays: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  upcomingEventItemDetails: {
+    gap: 6,
+  },
+  upcomingEventProjectRow: {
+    marginBottom: 4,
+  },
+  upcomingEventProjectText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  upcomingEventDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingEventDateText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  upcomingEventPartsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingEventPartsText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  upcomingEventDescRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingEventDescText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  noEventsText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  upcomingEventsContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
 });

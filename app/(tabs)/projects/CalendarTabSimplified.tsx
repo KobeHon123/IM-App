@@ -537,40 +537,49 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
                   {(() => {
                     const daysInMonth = new Date(pickerDate.year, pickerDate.month, 0).getDate();
                     const firstDay = new Date(pickerDate.year, pickerDate.month - 1, 1).getDay();
-                    const days = [];
-                    
-                    for (let i = 0; i < firstDay; i++) {
-                      days.push(<View key={`empty-${i}`} style={styles.inlineCalendarEmptyDay} />);
+                    const weeks = [];
+                    let currentDay = 1;
+                    const numWeeks = Math.ceil((firstDay + daysInMonth) / 7);
+
+                    for (let week = 0; week < numWeeks; week++) {
+                      const days = [];
+                      for (let day = 0; day < 7; day++) {
+                        const dayIndex = week * 7 + day;
+                        if (dayIndex < firstDay || currentDay > daysInMonth) {
+                          days.push(<View key={`empty-${week}-${day}`} style={styles.inlineCalendarEmptyDay} />);
+                        } else {
+                          const dayNum = currentDay;
+                          const isSelected = pickerDate.day === dayNum;
+                          const eventColor = getEventColorForPickerDay(dayNum, pickerDate.month, pickerDate.year);
+                          days.push(
+                            <TouchableOpacity
+                              key={dayNum}
+                              style={[
+                                styles.inlineCalendarDay,
+                                isSelected && styles.inlineCalendarDaySelected,
+                              ]}
+                              onPress={() => setPickerDate({ ...pickerDate, day: dayNum })}
+                            >
+                              {eventColor && (
+                                <View style={[styles.inlineCalendarEventIndicator, { backgroundColor: eventColor }]} />
+                              )}
+                              <ThemedText
+                                style={[
+                                  styles.inlineCalendarDayText,
+                                  isSelected && styles.inlineCalendarDayTextSelected,
+                                ]}
+                              >
+                                {dayNum}
+                              </ThemedText>
+                            </TouchableOpacity>
+                          );
+                          currentDay++;
+                        }
+                      }
+                      weeks.push(<View key={`week-${week}`} style={styles.inlineCalendarWeekRow}>{days}</View>);
                     }
-                    
-                    for (let day = 1; day <= daysInMonth; day++) {
-                      const isSelected = pickerDate.day === day;
-                      const eventColor = getEventColorForPickerDay(day, pickerDate.month, pickerDate.year);
-                      days.push(
-                        <TouchableOpacity
-                          key={day}
-                          style={[
-                            styles.inlineCalendarDay,
-                            isSelected && styles.inlineCalendarDaySelected,
-                          ]}
-                          onPress={() => setPickerDate({ ...pickerDate, day })}
-                        >
-                          {eventColor && (
-                            <View style={[styles.inlineCalendarEventIndicator, { backgroundColor: eventColor }]} />
-                          )}
-                          <ThemedText
-                            style={[
-                              styles.inlineCalendarDayText,
-                              isSelected && styles.inlineCalendarDayTextSelected,
-                            ]}
-                          >
-                            {day}
-                          </ThemedText>
-                        </TouchableOpacity>
-                      );
-                    }
-                    
-                    return days;
+
+                    return weeks;
                   })()}
                 </View>
 
@@ -1247,9 +1256,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   inlineCalendarGrid: {
+    flexDirection: 'column',
+  },
+  inlineCalendarWeekRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginBottom: 2,
   },
   inlineCalendarEmptyDay: {
     width: 44,
