@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, Camera, ArrowUpDown, Pencil, Trash2, ChevronDown, Calendar, Package, FileText } from 'lucide-react-native';
+import { Plus, Camera, ArrowUpDown, Pencil, Trash2, ChevronDown, Calendar, Package, FileText, Clock } from 'lucide-react-native';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
@@ -249,7 +249,7 @@ export default function ProjectsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <ThemedText style={styles.title}>Projects</ThemedText>
       </View>
@@ -279,8 +279,7 @@ export default function ProjectsScreen() {
           >
             <View style={[
               styles.upcomingEventsCard,
-              { borderColor: eventColors[closestEvent.type] || '#6B7280' },
-              getDaysLeft(closestEvent.date) <= 5 && styles.upcomingEventsCardUrgent
+              { borderColor: eventColors[closestEvent.type] || '#6B7280' }
             ]}>
               {/* Collapsed View */}
               {!expandUpcomingEvents && (() => {
@@ -315,6 +314,18 @@ export default function ProjectsScreen() {
                     const partNames = event.parts.map((id) => parts.find((p) => p.id === id)?.name || 'Unknown');
                     const project = projects.find(p => p.id === event.projectId);
                     const eventColor = eventColors[event.type] || '#6B7280';
+                    
+                    // Parse time from description (format: "HH:MM - description")
+                    let eventTime = '';
+                    let displayDescription = event.description;
+                    if (event.description) {
+                      const parts = event.description.split(' - ');
+                      if (parts.length === 2 && /^\d{2}:\d{2}$/.test(parts[0])) {
+                        eventTime = parts[0];
+                        displayDescription = parts[1];
+                      }
+                    }
+                    
                     return (
                       <View key={event.id} style={styles.upcomingEventItem}>
                         <View style={styles.upcomingEventItemHeader}>
@@ -336,6 +347,13 @@ export default function ProjectsScreen() {
                           <View style={styles.upcomingEventDateRow}>
                             <Calendar color={eventColor} size={14} />
                             <ThemedText style={styles.upcomingEventDateText}>{event.date}</ThemedText>
+                            {eventTime && (
+                              <>
+                                <ThemedText style={styles.upcomingEventDateSeparator}>•</ThemedText>
+                                <Clock color={eventColor} size={14} />
+                                <ThemedText style={styles.upcomingEventDateText}>{eventTime}</ThemedText>
+                              </>
+                            )}
                           </View>
                           {partNames.length > 0 && (
                             <View style={styles.upcomingEventPartsRow}>
@@ -345,11 +363,11 @@ export default function ProjectsScreen() {
                               </ThemedText>
                             </View>
                           )}
-                          {event.description && (
+                          {displayDescription && (
                             <View style={styles.upcomingEventDescRow}>
                               <FileText color={eventColor} size={14} />
                               <ThemedText style={styles.upcomingEventDescText}>
-                                {event.description}
+                                {displayDescription}
                               </ThemedText>
                             </View>
                           )}
@@ -364,7 +382,8 @@ export default function ProjectsScreen() {
         </View>
       )}
 
-      <FlatList
+      <View style={styles.listContainer}>
+        <FlatList
         data={filteredProjects}
         keyExtractor={(item) => item.id}
         refreshControl={
@@ -423,7 +442,9 @@ export default function ProjectsScreen() {
         )}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListFooterComponent={<View style={{ height: 0 }} />}
       />
+      </View>
 
       <TouchableOpacity
         style={styles.floatingAddButton}
@@ -746,7 +767,10 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   listContent: {
-    paddingVertical: 4,
+    paddingVertical: 0,
+  },
+  listContainer: {
+    flex: 1,
   },
   modalContainer: {
     flex: 1,
@@ -1104,7 +1128,7 @@ const styles = StyleSheet.create({
   upcomingEventItem: {
     backgroundColor: '#ffffff',
     borderRadius: 8,
-    padding: 12,
+    padding: 1,
     borderWidth: 1,
     borderColor: '#ffffff',
   },
@@ -1152,6 +1176,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: '#374151',
+  },
+  upcomingEventDateSeparator: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    marginHorizontal: 4,
   },
   upcomingEventPartsRow: {
     flexDirection: 'row',

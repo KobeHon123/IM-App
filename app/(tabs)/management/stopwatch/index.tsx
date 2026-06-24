@@ -165,7 +165,7 @@ export default function StopwatchScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <ScrollView 
           ref={scrollViewRef}
           style={styles.content} 

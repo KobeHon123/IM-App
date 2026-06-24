@@ -1230,7 +1230,7 @@ export default function PartTimeTimesheet() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <LoadingSpinner size={50} color="#2563EB" strokeWidth={5} />
         </View>
@@ -1241,7 +1241,7 @@ export default function PartTimeTimesheet() {
   const daysInMonth = getDaysInMonth(currentDate);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}

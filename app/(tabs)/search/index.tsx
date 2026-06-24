@@ -291,7 +291,7 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <ThemedText style={styles.title}>Search Parts</ThemedText>
       </View>

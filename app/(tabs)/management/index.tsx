@@ -42,7 +42,7 @@ export default function ManagementTab() {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <ThemedText style={styles.headerTitle}>Management</ThemedText>
       </View>
