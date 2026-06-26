@@ -186,15 +186,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   listContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     paddingVertical: 16,
   },
   contactCard: {
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: 8,
+    margin: 6,
     marginBottom: 24,
-    maxWidth: '33.33%',
   },
   photoWrapper: {
     marginBottom: 12,

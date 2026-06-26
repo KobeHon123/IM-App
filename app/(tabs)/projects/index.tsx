@@ -57,7 +57,7 @@ export default function ProjectsScreen() {
     Measurement: '#3B82F6',
     'Test-Fit': '#10B981',
     Installation: '#F97316',
-    Delivery: '#F59E0B',
+    Teaching: '#F59E0B',
     Meeting: '#EC4899',
     Other: '#6B7280',
   };
@@ -118,6 +118,13 @@ export default function ProjectsScreen() {
     const diffTime = event.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
+  };
+
+  // Format days left text
+  const getDaysLeftText = (daysLeft: number) => {
+    if (daysLeft === 0) return 'Today';
+    if (daysLeft === 1) return 'Tomorrow';
+    return `${daysLeft} days left`;
   };
 
   const upcomingEvents = getUpcomingEvents();
@@ -294,7 +301,7 @@ export default function ProjectsScreen() {
                         </ThemedText>
                       </View>
                       <ThemedText style={[styles.upcomingEventDays, { color: eventColor }]}>
-                        {getDaysLeft(closestEvent.date)} day{getDaysLeft(closestEvent.date) !== 1 ? 's' : ''} left
+                        {getDaysLeftText(getDaysLeft(closestEvent.date))}
                       </ThemedText>
                     </View>
                     <ChevronDown
@@ -333,7 +340,7 @@ export default function ProjectsScreen() {
                             <ThemedText style={styles.upcomingEventTypeText}>{event.type}</ThemedText>
                           </View>
                           <ThemedText style={[styles.upcomingEventItemDays, { color: eventColor }]}>
-                            {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                            {getDaysLeftText(daysLeft)}
                           </ThemedText>
                         </View>
                         <View style={styles.upcomingEventItemDetails}>
@@ -1091,6 +1098,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderWidth: 2,
+    marginTop: 4,
   },
   upcomingEventsCardUrgent: {
     backgroundColor: '#FEF2F2',

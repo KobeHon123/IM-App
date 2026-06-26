@@ -23,7 +23,7 @@ const eventColors = {
   Measurement: '#3B82F6',
   'Test-Fit': '#10B981',
   Installation: '#F97316',
-  Delivery: '#F59E0B',
+  Teaching: '#F59E0B',
   Meeting: '#EC4899',
   Other: '#6B7280',
 };
@@ -36,7 +36,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDatePickerInline, setShowDatePickerInline] = useState(false);
   const [selectedDateForCreation, setSelectedDateForCreation] = useState<Date | null>(null);
-  const [selectedType, setSelectedType] = useState<'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other'>('Measurement');
+  const [selectedType, setSelectedType] = useState<'Measurement' | 'Test-Fit' | 'Installation' | 'Teaching' | 'Meeting' | 'Other'>('Measurement');
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
@@ -187,7 +187,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
           // Update existing event
           const result = await updateEvent(editingEventId, {
             date: formatDate(selectedDateForCreation),
-            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other',
+            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Teaching' | 'Meeting' | 'Other',
             parts: selectedParts,
             description: finalDescription,
             projectId,
@@ -202,7 +202,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
           // Create new event
           const result = await createEvent({
             date: formatDate(selectedDateForCreation),
-            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other',
+            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Teaching' | 'Meeting' | 'Other',
             parts: selectedParts,
             description: finalDescription,
             projectId,
@@ -600,7 +600,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
             <View style={styles.sectionContainer}>
               <ThemedText style={styles.sectionTitle}>Event Type</ThemedText>
               <View style={styles.eventTypeGrid}>
-                {(['Measurement', 'Test-Fit', 'Installation', 'Delivery', 'Meeting', 'Other'] as const).map((type) => {
+                {(['Measurement', 'Test-Fit', 'Installation', 'Teaching', 'Meeting', 'Other'] as const).map((type) => {
                   const isSelected = selectedType === type;
                   const color = eventColors[type];
                   return (

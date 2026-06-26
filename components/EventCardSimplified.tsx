@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/ThemedText';
 
 interface EventCardSimplifiedProps {
   date: string;
-  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other';
+  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Teaching' | 'Meeting' | 'Other';
   parts: string[];
   projectParts: Part[];
   description?: string;
@@ -21,7 +21,7 @@ const eventColors = {
   Measurement: '#3B82F6',
   'Test-Fit': '#10B981',
   Installation: '#F97316',
-  Delivery: '#F59E0B',
+  Teaching: '#F59E0B',
   Meeting: '#EC4899',
   Other: '#6B7280',
 };
@@ -30,7 +30,7 @@ const eventBgColors = {
   Measurement: '#EFF6FF',
   'Test-Fit': '#F0FDF4',
   Installation: '#FFF7ED',
-  Delivery: '#FFFBEB',
+  Teaching: '#FFFBEB',
   Meeting: '#FCE7F3',
   Other: '#F9FAFB',
 };

@@ -116,7 +116,7 @@ export interface VenuePartQuantity {
 export interface Event {
   id: string;
   date: string;
-  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Meeting' | 'Other' | 'Delivery';
+  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Meeting' | 'Other' | 'Teaching';
   parts: string[];
   description: string;
   projectId: string;
