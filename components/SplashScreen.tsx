@@ -7,10 +7,10 @@ interface SplashScreenProps {
 
 export const SplashScreen = ({ onAnimationComplete }: SplashScreenProps) => {
   useEffect(() => {
-    // Complete after 3 seconds
+    // Complete quickly to reduce startup waiting time
     const timer = setTimeout(() => {
       onAnimationComplete?.();
-    }, 3000);
+    }, 800);
     return () => clearTimeout(timer);
   }, [onAnimationComplete]);
 

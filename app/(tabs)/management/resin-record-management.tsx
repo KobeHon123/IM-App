@@ -190,6 +190,10 @@ export default function ResinRecordManagement() {
       minute: '2-digit',
     });
     const isExpanded = expandedCards[item.id] || false;
+    const totalGrams = Number(item.total_grams || 0);
+    const component1Grams = Number(item.component1_grams || 0);
+    const component2Grams = Number(item.component2_grams || 0);
+    const oilGrams = Number(item.oil_grams || 0);
 
     return (
       <View style={styles.recordCard}>
@@ -203,39 +207,36 @@ export default function ResinRecordManagement() {
             <ThemedText style={styles.recordDate}>{formattedDate}</ThemedText>
           </View>
           <View style={styles.headerActions}>
-            <ThemedText style={styles.totalGrams}>{item.total_grams.toFixed(2)} g</ThemedText>
+            <ThemedText style={styles.totalGrams}>{totalGrams.toFixed(2)} g</ThemedText>
             <ChevronDown
               size={20}
               color="#6B7280"
-              style={[
-                styles.chevron,
-                isExpanded && styles.chevronRotated,
-              ]}
+              style={[styles.chevron, isExpanded && styles.chevronRotated]}
             />
           </View>
         </TouchableOpacity>
 
-        {isExpanded && (
-          <>
+        {isExpanded ? (
+          <View>
             <View style={styles.recordDivider} />
 
             <View style={styles.recordDetails}>
               <View style={styles.detailRow}>
                 <ThemedText style={styles.detailLabel}>{componentNames.component1}</ThemedText>
-                <ThemedText style={styles.detailValue}>{item.component1_grams.toFixed(2)} g</ThemedText>
+                <ThemedText style={styles.detailValue}>{component1Grams.toFixed(2)} g</ThemedText>
               </View>
 
-              {componentNames.hasComponent2 && item.component2_grams > 0 && (
+              {componentNames.hasComponent2 && component2Grams > 0 && (
                 <View style={styles.detailRow}>
                   <ThemedText style={styles.detailLabel}>{componentNames.component2}</ThemedText>
-                  <ThemedText style={styles.detailValue}>{item.component2_grams.toFixed(2)} g</ThemedText>
+                  <ThemedText style={styles.detailValue}>{component2Grams.toFixed(2)} g</ThemedText>
                 </View>
               )}
 
-              {item.with_oil && item.oil_grams > 0 && (
+              {item.with_oil && oilGrams > 0 && (
                 <View style={styles.detailRow}>
                   <ThemedText style={styles.detailLabel}>111 Oil</ThemedText>
-                  <ThemedText style={styles.detailValue}>{item.oil_grams.toFixed(2)} g</ThemedText>
+                  <ThemedText style={styles.detailValue}>{oilGrams.toFixed(2)} g</ThemedText>
                 </View>
               )}
 
@@ -243,21 +244,18 @@ export default function ResinRecordManagement() {
 
               <View style={styles.detailRow}>
                 <ThemedText style={styles.detailLabelTotal}>Total</ThemedText>
-                <ThemedText style={styles.detailValueTotal}>{item.total_grams.toFixed(2)} g</ThemedText>
+                <ThemedText style={styles.detailValueTotal}>{totalGrams.toFixed(2)} g</ThemedText>
               </View>
             </View>
 
             <View style={styles.recordFooter}>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDeleteRecord(item.id)}
-              >
+              <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteRecord(item.id)}>
                 <Trash2 size={18} color="#EF4444" />
                 <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
               </TouchableOpacity>
             </View>
-          </>
-        )}
+          </View>
+        ) : null}
       </View>
     );
   };

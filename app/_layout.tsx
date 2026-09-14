@@ -32,11 +32,7 @@ function RootLayoutNav() {
   useEffect(() => {
     // Only allow navigation after splash animation completes AND auth is fully loaded
     if (splashAnimationComplete && !isLoading) {
-      // Add 500ms buffer to ensure all auth state is settled
-      const timer = setTimeout(() => {
-        setAllowNavigation(true);
-      }, 500);
-      return () => clearTimeout(timer);
+      setAllowNavigation(true);
     }
   }, [splashAnimationComplete, isLoading]);
 

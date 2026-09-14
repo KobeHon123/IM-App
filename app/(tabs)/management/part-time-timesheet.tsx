@@ -47,6 +47,7 @@ interface TimesheetEntry {
 
 const TEAM_MEMBERS = ['Kobe', 'Joyce', 'Cynthia'];
 const VENUES = ['Office', 'PolyU', 'Site'];
+const ACTIVE_TEAM_MEMBERS = TEAM_MEMBERS.filter(member => member !== 'Cynthia');
 
 const WORKER_SYMBOLS = {
   'Kobe': { symbol: 'K' },
@@ -1230,7 +1231,7 @@ export default function PartTimeTimesheet() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
           <LoadingSpinner size={50} color="#2563EB" strokeWidth={5} />
         </View>
@@ -1241,7 +1242,7 @@ export default function PartTimeTimesheet() {
   const daysInMonth = getDaysInMonth(currentDate);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -1506,7 +1507,7 @@ export default function PartTimeTimesheet() {
         <View style={styles.legend}>
           <ThemedText style={styles.legendTitle}>Workers</ThemedText>
           <View style={styles.legendItems}>
-            {Object.entries(WORKER_SYMBOLS).map(([name, info]) => (
+            {Object.entries(WORKER_SYMBOLS).filter(([name]) => name !== 'Cynthia').map(([name, info]) => (
               <View key={name} style={styles.legendItem}>
                 <View style={[styles.legendSymbol, { backgroundColor: '#9CA3AF' }]}>
                   <ThemedText style={styles.legendSymbolText}>{info.symbol}</ThemedText>
@@ -1696,7 +1697,7 @@ export default function PartTimeTimesheet() {
             <View style={styles.formGroup}>
               <ThemedText style={styles.formLabel}>Team Member *</ThemedText>
               <View style={styles.memberButtons}>
-                {TEAM_MEMBERS.map(member => (
+                {ACTIVE_TEAM_MEMBERS.map(member => (
                   <TouchableOpacity
                     key={member}
                     style={[

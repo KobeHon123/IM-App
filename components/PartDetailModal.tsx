@@ -301,7 +301,7 @@ export function PartDetailModal({
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <FileText color="#6B7280" size={20} />
-                <ThemedText style={styles.sectionTitle}>CAD Drawing</ThemedText>
+                <ThemedText style={styles.sectionTitle}>Installation Picture</ThemedText>
               </View>
               {selectedPart.cadDrawing ? (
                 <TouchableOpacity onPress={() => handleImagePress(selectedPart.cadDrawing!)}>

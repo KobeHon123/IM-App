@@ -312,7 +312,7 @@ export default function VenueDetailScreen() {
 
   if (!venue || !project) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <ThemedText>Venue not found</ThemedText>
       </SafeAreaView>
     );
@@ -1385,7 +1385,7 @@ export default function VenueDetailScreen() {
     }
   };
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
