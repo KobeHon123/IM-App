@@ -113,7 +113,10 @@ export default function ProjectsScreen() {
       pic: editingProjectPics.join(', '),
     };
     console.log('Editing project ID:', selectedProject.id, projectToUpdate);
-    await updateProject(selectedProject.id, projectToUpdate);
+    const updatedProject = await updateProject(selectedProject.id, projectToUpdate);
+    if (!updatedProject) {
+      return;
+    }
     setShowEditModal(false);
     setSelectedProject(null);
   };

@@ -203,24 +203,36 @@ export function useDataInternal() {
       return null;
     }
 
-    const thumbnail = project.thumbnail ? await uploadProjectThumbnail(project.thumbnail) : null;
-    const { data, error } = await supabase.from('projects').insert({
-      ...project,
-      thumbnail,
-    }).select().single();
-    if (handleSupabaseError(error, 'project')) return null;
-    return triggerRefresh(setProjects, { ...data, createdAt: new Date(data.created_at) });
+    try {
+      const thumbnail = project.thumbnail ? await uploadProjectThumbnail(project.thumbnail) : null;
+      const { data, error } = await supabase.from('projects').insert({
+        ...project,
+        thumbnail,
+      }).select().single();
+      if (handleSupabaseError(error, 'project')) return null;
+      return triggerRefresh(setProjects, { ...data, createdAt: new Date(data.created_at) });
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to upload project thumbnail');
+      console.error('Error creating project:', error);
+      return null;
+    }
   };
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
-    const nextUpdates = { ...updates } as Partial<Project>;
-    if (typeof nextUpdates.thumbnail === 'string' && nextUpdates.thumbnail) {
-      nextUpdates.thumbnail = await uploadProjectThumbnail(nextUpdates.thumbnail);
-    }
+    try {
+      const nextUpdates = { ...updates } as Partial<Project>;
+      if (typeof nextUpdates.thumbnail === 'string' && nextUpdates.thumbnail) {
+        nextUpdates.thumbnail = await uploadProjectThumbnail(nextUpdates.thumbnail);
+      }
 
-    const { data, error } = await supabase.from('projects').update(nextUpdates).eq('id', id).select().single();
-    if (handleSupabaseError(error, 'project update')) return null;
-    return triggerRefresh(setProjects, data, prev => prev.map(p => p.id === id ? { ...p, ...data, createdAt: new Date(data.created_at) } : p));
+      const { data, error } = await supabase.from('projects').update(nextUpdates).eq('id', id).select().single();
+      if (handleSupabaseError(error, 'project update')) return null;
+      return triggerRefresh(setProjects, data, prev => prev.map(p => p.id === id ? { ...p, ...data, createdAt: new Date(data.created_at) } : p));
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to update project thumbnail');
+      console.error('Error updating project:', error);
+      return null;
+    }
   };
 
   const deleteProject = async (id: string) => {

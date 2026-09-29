@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { Project } from '@/types';
-import { FolderOpen, User } from 'lucide-react-native';
+import { User } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
 
 interface ProjectCardProps {
@@ -12,39 +12,58 @@ interface ProjectCardProps {
 export function ProjectCard({ project, onPress }: ProjectCardProps) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={1}>
-      <View style={styles.header}>
-        <View style={styles.thumbnailContainer}>
-          {project.thumbnail ? (
-            <Image source={{ uri: project.thumbnail }} style={styles.thumbnail} />
-          ) : (
-            <View style={styles.iconContainer}>
-              <FolderOpen color="#2563EB" size={24} />
+      {project.thumbnail ? (
+        <ImageBackground
+          source={{ uri: project.thumbnail }}
+          style={styles.background}
+          imageStyle={styles.backgroundImage}
+        >
+          <View style={styles.overlay}>
+            <View style={styles.content}>
+              <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
+              {project.description ? (
+                <ThemedText style={styles.description} numberOfLines={2}>
+                  {project.description}
+                </ThemedText>
+              ) : null}
+              <View style={styles.footer}>
+                <User color="#6B7280" size={16} />
+                <ThemedText style={styles.pic}> {project.pic}</ThemedText>
+              </View>
             </View>
-          )}
-        </View>
-        <View style={styles.content}>
-          <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
-          {project.description ? (
-            <ThemedText style={styles.description} numberOfLines={2}>
-              {project.description}
-            </ThemedText>
-          ) : null}
-          <View style={styles.footer}>
-            <User color="#6B7280" size={16} />
-            <ThemedText style={styles.pic}>PIC: {project.pic}</ThemedText>
+          </View>
+        </ImageBackground>
+      ) : (
+        <View style={styles.plainCard}>
+          <View style={styles.overlayPlain}>
+            <View style={styles.content}>
+            <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
+            {project.description ? (
+              <ThemedText style={styles.description} numberOfLines={2}>
+                {project.description}
+              </ThemedText>
+            ) : null}
+            <View style={styles.footer}>
+              <User color="#6B7280" size={16} />
+              <ThemedText style={styles.pic}>{project.pic}</ThemedText>
+            </View>
+          </View>
           </View>
         </View>
-
-      </View>
+      )}
     </TouchableOpacity>
   );
 }
 
+const textShadow = {
+  textShadowColor: 'rgba(0, 0, 0, 0.15)',
+  textShadowOffset: { width: 1, height: 1 },
+  textShadowRadius: 2,
+};
+
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
     marginHorizontal: 16,
     marginVertical: 8,
     shadowColor: '#000',
@@ -60,30 +79,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  thumbnailContainer: {
-    marginRight: 12,
-  },
-  thumbnail: {
-    width: 48,
-    height: 48,
+  background: {
+    minHeight: 120,
     borderRadius: 12,
+    overflow: 'hidden',
   },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#EFF6FF',
+  plainCard: {
+    minHeight: 120,
     borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  backgroundImage: {
+    opacity: 0.4,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.6)',
     justifyContent: 'center',
-    alignItems: 'center',
+    padding: 16,
+  },
+  overlayPlain: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    padding: 18,
   },
   content: {
     flex: 1,
+    justifyContent: 'center',
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
+    ...textShadow,
   },
   titleNoDescription: {
     marginBottom: 8,
@@ -93,6 +124,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
     marginBottom: 8,
+    ...textShadow,
   },
   footer: {
     flexDirection: 'row',
@@ -102,6 +134,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 4,
+    ...textShadow,
   },
 
 });

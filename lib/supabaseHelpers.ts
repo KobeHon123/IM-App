@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { Project, Venue, Part, Event, Comment } from '@/types';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { decode } from 'base64-arraybuffer';
 
 // A single place to convert database snake_case to app camelCase
@@ -65,11 +66,30 @@ const uploadImageToBucket = async (
         throw new Error(`File not found: ${normalizedUri}`);
       }
 
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const originalExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const shouldConvertToJpeg = originalExt === 'heic' || originalExt === 'heif';
+
+      let uploadUri = normalizedUri;
+      let fileExt = originalExt;
+
+      if (shouldConvertToJpeg) {
+        const converted = await ImageManipulator.manipulateAsync(
+          normalizedUri,
+          [],
+          {
+            compress: 0.9,
+            format: ImageManipulator.SaveFormat.JPEG,
+          }
+        );
+        uploadUri = converted.uri;
+        fileExt = 'jpg';
+        console.log(`[Attempt ${attempt}/${retries}] Converted ${originalExt.toUpperCase()} to JPEG for upload:`, uploadUri);
+      }
+
       const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
       // Read file as base64
-      const base64Data = await FileSystem.readAsStringAsync(normalizedUri, {
+      const base64Data = await FileSystem.readAsStringAsync(uploadUri, {
         encoding: 'base64',
       });
 
