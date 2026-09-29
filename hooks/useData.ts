@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Project, Venue, Part, PartType, PartStatus, Event, Comment, Profile } from '@/types';
 import { Alert } from 'react-native';
 import * as h from '@/lib/supabaseHelpers';
-import { uploadPartImage, uploadPartImages } from '@/lib/supabaseHelpers';
+import { uploadPartImage, uploadPartImages, uploadProjectThumbnail } from '@/lib/supabaseHelpers';
 
 // Helper to check if a URI is a local file
 const isLocalUri = (uri: string): boolean => {
@@ -203,13 +203,22 @@ export function useDataInternal() {
       return null;
     }
 
-    const { data, error } = await supabase.from('projects').insert(project).select().single();
+    const thumbnail = project.thumbnail ? await uploadProjectThumbnail(project.thumbnail) : null;
+    const { data, error } = await supabase.from('projects').insert({
+      ...project,
+      thumbnail,
+    }).select().single();
     if (handleSupabaseError(error, 'project')) return null;
     return triggerRefresh(setProjects, { ...data, createdAt: new Date(data.created_at) });
   };
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
-    const { data, error } = await supabase.from('projects').update(updates).eq('id', id).select().single();
+    const nextUpdates = { ...updates } as Partial<Project>;
+    if (typeof nextUpdates.thumbnail === 'string' && nextUpdates.thumbnail) {
+      nextUpdates.thumbnail = await uploadProjectThumbnail(nextUpdates.thumbnail);
+    }
+
+    const { data, error } = await supabase.from('projects').update(nextUpdates).eq('id', id).select().single();
     if (handleSupabaseError(error, 'project update')) return null;
     return triggerRefresh(setProjects, data, prev => prev.map(p => p.id === id ? { ...p, ...data, createdAt: new Date(data.created_at) } : p));
   };

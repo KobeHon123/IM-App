@@ -47,7 +47,8 @@ interface TimesheetEntry {
 
 const TEAM_MEMBERS = ['Kobe', 'Joyce', 'Cynthia'];
 const VENUES = ['Office', 'PolyU', 'Site'];
-const ACTIVE_TEAM_MEMBERS = TEAM_MEMBERS.filter(member => member !== 'Cynthia');
+const ACTIVE_TEAM_MEMBERS = TEAM_MEMBERS.filter(member => member !== 'Joyce' && member !== 'Cynthia');
+const ACTIVE_VENUES = VENUES.filter(venue => venue !== 'Office');
 
 const WORKER_SYMBOLS = {
   'Kobe': { symbol: 'K' },
@@ -1507,7 +1508,7 @@ export default function PartTimeTimesheet() {
         <View style={styles.legend}>
           <ThemedText style={styles.legendTitle}>Workers</ThemedText>
           <View style={styles.legendItems}>
-            {Object.entries(WORKER_SYMBOLS).filter(([name]) => name !== 'Cynthia').map(([name, info]) => (
+            {Object.entries(WORKER_SYMBOLS).filter(([name]) => name !== 'Joyce' && name !== 'Cynthia').map(([name, info]) => (
               <View key={name} style={styles.legendItem}>
                 <View style={[styles.legendSymbol, { backgroundColor: '#9CA3AF' }]}>
                   <ThemedText style={styles.legendSymbolText}>{info.symbol}</ThemedText>
@@ -1556,12 +1557,6 @@ export default function PartTimeTimesheet() {
 
           <ThemedText style={[styles.legendTitle, { marginTop: 16 }]}>Location Shapes</ThemedText>
           <View style={styles.legendItems}>
-            <View style={styles.legendItem}>
-              <View style={[{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#9CA3AF', justifyContent: 'center', alignItems: 'center' }]}>
-                <ThemedText style={styles.legendSymbolText}>O</ThemedText>
-              </View>
-              <ThemedText style={styles.legendText}>Office</ThemedText>
-            </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendSymbol, styles.symbolSquare, { backgroundColor: '#9CA3AF' }]}>
                 <ThemedText style={styles.legendSymbolText}>P</ThemedText>
@@ -1721,7 +1716,7 @@ export default function PartTimeTimesheet() {
             <View style={styles.formGroup}>
               <ThemedText style={styles.formLabel}>Venue (optional for Kobe on call)</ThemedText>
               <View style={styles.memberButtons}>
-                {VENUES.map(venue => (
+                {ACTIVE_VENUES.map(venue => (
                   <TouchableOpacity
                     key={venue}
                     style={[

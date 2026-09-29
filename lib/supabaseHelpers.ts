@@ -36,7 +36,12 @@ const isLocalUri = (uri: string): boolean => {
   return uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/');
 };
 
-export const uploadPartImage = async (uri: string, folder: string = 'parts', retries: number = 3): Promise<string> => {
+const uploadImageToBucket = async (
+  uri: string,
+  bucket: string,
+  folder: string,
+  retries: number = 3
+): Promise<string> => {
   // If it's already a remote URL, return as-is
   if (!isLocalUri(uri)) {
     return uri;
@@ -76,7 +81,7 @@ export const uploadPartImage = async (uri: string, folder: string = 'parts', ret
 
       // Upload to Supabase storage with timeout
       const uploadPromise = supabase.storage
-        .from('parts')
+        .from(bucket)
         .upload(fileName, decode(base64Data), {
           contentType: `image/${fileExt}`,
           upsert: true,
@@ -99,7 +104,7 @@ export const uploadPartImage = async (uri: string, folder: string = 'parts', ret
 
       // Get public URL
       const { data: publicUrlData } = supabase.storage
-        .from('parts')
+        .from(bucket)
         .getPublicUrl(fileName);
 
       console.log(`[Attempt ${attempt}/${retries}] Upload successful! Public URL:`, publicUrlData.publicUrl);
@@ -119,6 +124,14 @@ export const uploadPartImage = async (uri: string, folder: string = 'parts', ret
 
   // All retries failed - throw the error
   throw new Error(`Image upload failed after ${retries} attempts: ${lastError?.message}`);
+};
+
+export const uploadPartImage = async (uri: string, folder: string = 'parts', retries: number = 3): Promise<string> => {
+  return uploadImageToBucket(uri, 'parts', folder, retries);
+};
+
+export const uploadProjectThumbnail = async (uri: string, folder: string = 'thumbnails', retries: number = 3): Promise<string> => {
+  return uploadImageToBucket(uri, 'projects', folder, retries);
 };
 
 export const uploadPartImages = async (uris: string[]): Promise<string[]> => {
