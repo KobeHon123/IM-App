@@ -2,11 +2,13 @@ import { View, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider as NavigationThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { useEffect, useState } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { EasterEggProvider } from '@/context/EasterEggContext';
 import { StopwatchProvider } from '@/context/StopwatchContext';
 import { LoginScreen } from '@/components/LoginScreen';
@@ -16,6 +18,7 @@ import { NoConnectionScreen } from '@/components/NoConnectionScreen';
 import { SplashScreen } from '@/components/SplashScreen';
 
 function RootLayoutNav() {
+  const { isDark, colors } = useTheme();
   const { user, isAuthorized, hasName, isLoading } = useAuth();
   const [isConnected, setIsConnected] = useState<boolean | null>(true);
   const [checkingConnection, setCheckingConnection] = useState(false);
@@ -48,6 +51,19 @@ function RootLayoutNav() {
     setSplashAnimationComplete(true);
   };
 
+  const base = isDark ? DarkTheme : DefaultTheme;
+  const navigationTheme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.surface,
+      text: colors.text,
+      border: colors.border,
+    },
+  };
+
   // Show splash screen while loading, checking connection, or animation is playing
   if (isLoading || checkingConnection || !allowNavigation) {
     return <SplashScreen onAnimationComplete={handleSplashAnimationComplete} />;
@@ -70,13 +86,13 @@ function RootLayoutNav() {
   }
 
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }}>
+    <NavigationThemeProvider value={navigationTheme}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />
       </Stack>
-      <StatusBar style="auto" />
-    </>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </NavigationThemeProvider>
   );
 }
 export default function RootLayout() {
@@ -85,13 +101,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={StyleSheet.absoluteFill}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <EasterEggProvider>
-            <StopwatchProvider>
-              <RootLayoutNav />
-            </StopwatchProvider>
-          </EasterEggProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <EasterEggProvider>
+              <StopwatchProvider>
+                <RootLayoutNav />
+              </StopwatchProvider>
+            </EasterEggProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

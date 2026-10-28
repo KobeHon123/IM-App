@@ -47,3 +47,21 @@ export const getFloorQuantity = (quantities: Record<string, number>, partId: str
 
 export const getButtonSetTotal = (quantities: Record<string, number>, partId: string, floors: string[]) =>
   floors.reduce((sum, floor) => sum + getFloorQuantity(quantities, partId, floor), 0);
+
+export const LIFT_SURFACES = ['Convex', 'Flat', 'Concave'] as const;
+export const LIFT_BRAILLE = ['With', 'Without'] as const;
+
+export interface LiftBadge {
+  label: string;
+  kind: 'surface' | 'braille';
+}
+
+export const getLiftBadges = (part: Pick<Part, 'type' | 'dimensions'>): LiftBadge[] => {
+  if (part.type !== 'Button') return [];
+  const dims = part.dimensions as Record<string, any>;
+  if (dims?.buttonType !== 'Lift') return [];
+  const badges: LiftBadge[] = [];
+  if (typeof dims.surface === 'string' && dims.surface) badges.push({ label: dims.surface, kind: 'surface' });
+  if (dims.braille === 'With') badges.push({ label: 'Braille', kind: 'braille' });
+  return badges;
+};

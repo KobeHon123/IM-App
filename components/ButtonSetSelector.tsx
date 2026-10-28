@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronRight } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { STANDARD_FLOORS, normalizeFloorInput, sortFloors } from '@/lib/floorUtils';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface ButtonSetSelectorProps {
   buttonSet: boolean;
@@ -14,6 +16,9 @@ interface ButtonSetSelectorProps {
 }
 
 export function ButtonSetSelector({ buttonSet, floors, disabled, onChange, onOpenPicker }: ButtonSetSelectorProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const sorted = sortFloors(floors);
   return (
     <View style={styles.inputGroup}>
@@ -49,7 +54,7 @@ export function ButtonSetSelector({ buttonSet, floors, disabled, onChange, onOpe
               {sorted.length > 0 ? `${sorted.length} selected: ${sorted.join(', ')}` : 'Tap to select floors'}
             </ThemedText>
           </View>
-          {!disabled && <ChevronRight color="#6B7280" size={20} />}
+          {!disabled && <ChevronRight color={colors.textSecondary} size={20} />}
         </TouchableOpacity>
       )}
     </View>
@@ -63,6 +68,9 @@ interface FloorPickerProps {
 }
 
 export function FloorPicker({ selected, onChange, onClose }: FloorPickerProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [customInput, setCustomInput] = useState('');
   const selectedSet = new Set(selected);
   const standardSet = new Set(STANDARD_FLOORS);
@@ -154,46 +162,46 @@ export function FloorPicker({ selected, onChange, onClose }: FloorPickerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   inputGroup: { marginBottom: 20 },
-  inputLabel: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 8 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 },
   row: { flexDirection: 'row', gap: 8 },
   optionButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
   },
   optionButtonSelected: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
   optionButtonDisabled: { opacity: 0.5 },
-  optionText: { fontSize: 14, fontWeight: '500', color: '#374151' },
+  optionText: { fontSize: 14, fontWeight: '500', color: colors.textStrong },
   optionTextSelected: { color: '#FFFFFF' },
   floorBox: {
     marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   floorBoxContent: { flex: 1 },
-  floorBoxLabel: { fontSize: 12, color: '#6B7280', marginBottom: 2 },
-  floorBoxValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  floorBoxLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 2 },
+  floorBoxValue: { fontSize: 14, fontWeight: '600', color: colors.text },
   overlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     zIndex: 1000,
   },
-  pickerContainer: { flex: 1, backgroundColor: '#FFFFFF' },
+  pickerContainer: { flex: 1, backgroundColor: colors.surface },
   pickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -201,29 +209,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
-  pickerTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
-  pickerDone: { fontSize: 16, color: '#3B82F6', fontWeight: '600' },
+  pickerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  pickerDone: { fontSize: 16, color: colors.primaryText, fontWeight: '600' },
   pickerInfo: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
-  pickerInfoText: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  pickerInfoSub: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  pickerInfoText: { fontSize: 16, fontWeight: '600', color: colors.text },
+  pickerInfoSub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   customRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 12 },
   customInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
   },
   addButton: {
     paddingHorizontal: 18,
@@ -234,8 +242,8 @@ const styles = StyleSheet.create({
   addButtonDisabled: { opacity: 0.4 },
   addButtonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 14 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingTop: 10 },
-  chip: { backgroundColor: '#DBEAFE', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
-  chipText: { color: '#1D4ED8', fontSize: 13, fontWeight: '600' },
+  chip: { backgroundColor: colors.primaryMuted, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
+  chipText: { color: colors.primaryStrongText, fontSize: 13, fontWeight: '600' },
   matrix: { paddingHorizontal: 8, paddingTop: 12 },
   matrixRow: { flexDirection: 'row' },
   cell: {
@@ -244,12 +252,12 @@ const styles = StyleSheet.create({
     margin: 2,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 6,
   },
-  cellSelected: { backgroundColor: '#3B82F6', borderColor: '#2563EB' },
-  cellText: { fontSize: 12, fontWeight: '500', color: '#111827' },
+  cellSelected: { backgroundColor: '#3B82F6', borderColor: colors.primary },
+  cellText: { fontSize: 12, fontWeight: '500', color: colors.text },
   cellTextSelected: { color: '#FFFFFF', fontWeight: '700' },
 });

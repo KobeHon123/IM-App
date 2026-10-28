@@ -1,20 +1,64 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Linking, ScrollView, Clipboard, Alert, Animated } from 'react-native';
 import { User, Phone, Mail, X } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { updateUserRole } from '@/lib/supabaseHelpers';
+import { ROLE_LABELS, UserRole, assignableRoles, canChangeRoleOf, normalizeRole } from '@/lib/roles';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface PublicProfileProps {
   profile: any;
   onClose: () => void;
   onBioTap?: () => void;
+  onRoleChanged?: (userId: string, role: UserRole) => void;
 }
 
-const PublicProfile = ({ profile, onClose, onBioTap }: PublicProfileProps) => {
+const PublicProfile = ({ profile, onClose, onBioTap, onRoleChanged }: PublicProfileProps) => {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const opacityAnim = useRef(new Animated.Value(1)).current;
   const isAdmin = profile?.role === 'admin';
+  const { role: viewerRole, user: viewer, canManageUsers } = useAuth();
+  const [savingRole, setSavingRole] = useState(false);
 
   if (!profile) return null;
+
+  const targetRole = normalizeRole(profile.role);
+  const canChangeRole = canChangeRoleOf(viewerRole, viewer?.id, profile.id, targetRole);
+
+  const changeRole = (newRole: UserRole) => {
+    if (newRole === targetRole || savingRole) return;
+    Alert.alert(
+      'Change Role',
+      `Change ${profile.full_name || 'this user'}'s role from ${ROLE_LABELS[targetRole]} to ${ROLE_LABELS[newRole]}?${
+        newRole === 'not_authorized' ? '\n\nThis user will lose access to everything in the app.' : ''
+      }`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Change',
+          style: newRole === 'not_authorized' ? 'destructive' : 'default',
+          onPress: async () => {
+            setSavingRole(true);
+            try {
+              const ok = await updateUserRole(profile.id, newRole);
+              if (!ok) throw new Error('No permission');
+              onRoleChanged?.(profile.id, newRole);
+            } catch (error) {
+              console.error('Error changing role:', error);
+              Alert.alert('Error', 'Failed to change role. Please check your permission and try again.');
+            } finally {
+              setSavingRole(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleCall = () => {
     if (profile.phone_number) Linking.openURL(`tel:${profile.phone_number}`);
@@ -51,7 +95,7 @@ const PublicProfile = ({ profile, onClose, onBioTap }: PublicProfileProps) => {
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-        <X color="#6B7280" size={24} />
+        <X color={colors.textSecondary} size={24} />
       </TouchableOpacity>
 
       {copiedMessage && (
@@ -67,11 +111,11 @@ const PublicProfile = ({ profile, onClose, onBioTap }: PublicProfileProps) => {
           {profile.avatar_url ? (
             <Image
               source={{ uri: profile.avatar_url }}
-              style={[styles.profilePhoto, { borderColor: isAdmin ? '#2563EB' : '#E5E7EB' }]}
+              style={[styles.profilePhoto, { borderColor: isAdmin ? colors.primary : colors.border }]}
             />
           ) : (
-            <View style={[styles.placeholderPhoto, { borderColor: isAdmin ? '#2563EB' : '#E5E7EB' }]}>
-              <User color="#6B7280" size={60} />
+            <View style={[styles.placeholderPhoto, { borderColor: isAdmin ? colors.primary : colors.border }]}>
+              <User color={colors.textSecondary} size={60} />
             </View>
           )}
         </View>
@@ -96,7 +140,7 @@ const PublicProfile = ({ profile, onClose, onBioTap }: PublicProfileProps) => {
               onPress={handleCopyEmail}
               onLongPress={handleCopyEmail}
             >
-              <View style={[styles.iconCircle, { backgroundColor: '#FEF3C7' }]}>
+              <View style={[styles.iconCircle, { backgroundColor: colors.warningSoft }]}>
                 <Mail color="#D97706" size={20} />
               </View>
               <View>
@@ -112,8 +156,8 @@ const PublicProfile = ({ profile, onClose, onBioTap }: PublicProfileProps) => {
               onPress={handleCall}
               onLongPress={handleCopyPhone}
             >
-              <View style={[styles.iconCircle, { backgroundColor: '#EFF6FF' }]}>
-                <Phone color="#2563EB" size={20} />
+              <View style={[styles.iconCircle, { backgroundColor: colors.primarySoft }]}>
+                <Phone color={colors.primaryText} size={20} />
               </View>
               <View>
                 <ThemedText style={styles.contactLabel}>Phone</ThemedText>
@@ -126,13 +170,55 @@ const PublicProfile = ({ profile, onClose, onBioTap }: PublicProfileProps) => {
             <ThemedText style={styles.noInfo}>No contact information provided.</ThemedText>
           )}
         </View>
+
+        {canManageUsers && (
+          <View style={styles.contactSection}>
+            <ThemedText style={styles.sectionTitle}>User Role</ThemedText>
+            <ThemedText style={styles.currentRole}>{ROLE_LABELS[targetRole]}</ThemedText>
+            {canChangeRole ? (
+              <View style={styles.roleRow}>
+                {assignableRoles(viewerRole).map(option => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.roleChip, targetRole === option && styles.roleChipActive]}
+                    onPress={() => changeRole(option)}
+                    disabled={savingRole}
+                  >
+                    <ThemedText style={[styles.roleChipText, targetRole === option && styles.roleChipTextActive]}>
+                      {ROLE_LABELS[option]}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <ThemedText style={styles.noInfo}>
+                {viewer?.id === profile.id
+                  ? 'You cannot change your own role.'
+                  : 'The Dev role cannot be changed here.'}
+              </ThemedText>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  currentRole: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 12 },
+  roleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  roleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  roleChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  roleChipText: { fontSize: 13, fontWeight: '500', color: colors.textStrong },
+  roleChipTextActive: { color: '#FFFFFF', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.surface },
   closeButton: { position: 'absolute', top: 20, right: 20, zIndex: 10, padding: 8 },
   messageOverlay: {
     position: 'absolute',
@@ -157,7 +243,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   messageText: {
-    color: '#065F46',
+    color: colors.successStrong,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
@@ -165,16 +251,16 @@ const styles = StyleSheet.create({
   content: { alignItems: 'center', paddingTop: 60, paddingBottom: 40 },
   photoContainer: { marginBottom: 20 },
   profilePhoto: { width: 120, height: 120, borderRadius: 60, borderWidth: 3 },
-  placeholderPhoto: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderWidth: 3 },
-  userName: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  bioText: { fontSize: 16, fontStyle: 'italic', color: '#4B5563', textAlign: 'center', marginHorizontal: 40, marginBottom: 30 },
+  placeholderPhoto: { width: 120, height: 120, borderRadius: 60, backgroundColor: colors.surfaceMuted, justifyContent: 'center', alignItems: 'center', borderWidth: 3 },
+  userName: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  bioText: { fontSize: 16, fontStyle: 'italic', color: colors.textSecondary, textAlign: 'center', marginHorizontal: 40, marginBottom: 30 },
   contactSection: { width: '100%', paddingHorizontal: 24 },
-  sectionTitle: { fontSize: 14, fontWeight: '600', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
-  contactItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', padding: 16, borderRadius: 12, marginBottom: 12, gap: 16 },
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
+  contactItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 16, borderRadius: 12, marginBottom: 12, gap: 16 },
   iconCircle: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  contactLabel: { fontSize: 12, color: '#6B7280' },
-  contactValue: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  noInfo: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', marginTop: 10 }
+  contactLabel: { fontSize: 12, color: colors.textSecondary },
+  contactValue: { fontSize: 16, fontWeight: '600', color: colors.text },
+  noInfo: { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 10 }
 });
 
 export default PublicProfile;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,8 +18,15 @@ import { PartCard } from '@/components/PartCard';
 import { PartDetailModal } from '@/components/PartDetailModal';
 import { PartType, Part, Project, Comment } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { Lock } from 'lucide-react-native';
+import type { ThemeColors } from '@/constants/Colors';
 
-export default function SearchScreen() {
+function SearchContent() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { getAllPartsWithProjects, getCommentsByPart, deleteComment, getPendingCommentsCountByPart, parts: globalParts } = useData();
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchFilters, setSearchFilters] = useState({
@@ -274,7 +281,7 @@ export default function SearchScreen() {
                     <Image key={item.cadDrawing} source={{ uri: item.cadDrawing }} style={styles.cadImage} />
                   ) : (
                     <View style={styles.placeholderCAD}>
-                      <Package color="#6B7280" size={32} />
+                      <Package color={colors.textSecondary} size={32} />
                     </View>
                   )}
                   <ThemedText style={styles.cadImageLabel}>
@@ -301,16 +308,16 @@ export default function SearchScreen() {
           style={styles.searchBar}
           onPress={() => setShowFilterModal(true)}
         >
-          <Search color="#6B7280" size={20} />
+          <Search color={colors.textSecondary} size={20} />
           <ThemedText style={styles.searchPlaceholder}>
             {isSearchActive ? `Searching ${searchFilters.type}` : 'Search parts by type and dimensions...'}
           </ThemedText>
-          <Filter color="#6B7280" size={20} />
+          <Filter color={colors.textSecondary} size={20} />
         </TouchableOpacity>
         
         {isSearchActive && (
           <TouchableOpacity style={styles.clearButton} onPress={clearSearch}>
-            <X color="#6B7280" size={20} />
+            <X color={colors.textSecondary} size={20} />
           </TouchableOpacity>
         )}
       </View>
@@ -418,46 +425,65 @@ export default function SearchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+export default function SearchScreen() {
+  const colors = useColors();
+  const { role } = useAuth();
+
+  if (role === 'fuhong_worker') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+        <Lock color={colors.textMuted} size={48} />
+        <ThemedText style={{ marginTop: 16, fontSize: 18, fontWeight: '600', color: colors.text }}>Gallery is not available</ThemedText>
+        <ThemedText style={{ marginTop: 8, fontSize: 14, color: colors.textSecondary, textAlign: 'center' }}>
+          Your role does not have access to the gallery.
+        </ThemedText>
+      </SafeAreaView>
+    );
+  }
+
+  return <SearchContent />;
+}
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   searchPlaceholder: {
     flex: 1,
     marginLeft: 8,
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   clearButton: {
     marginLeft: 8,
@@ -473,7 +499,7 @@ const styles = StyleSheet.create({
   typeSectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 12,
   },
   horizontalList: {
@@ -487,19 +513,19 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   placeholderCAD: {
     width: 120,
     height: 120,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cadImageLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 4,
     textAlign: 'center',
     maxWidth: 120,
@@ -511,12 +537,12 @@ const styles = StyleSheet.create({
   resultsTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginVertical: 16,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -525,16 +551,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalClose: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modalContent: {
     flex: 1,
@@ -546,18 +572,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   typeContainer: {
     flexDirection: 'row',
@@ -565,22 +591,22 @@ const styles = StyleSheet.create({
   typeButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     marginRight: 8,
   },
   selectedTypeButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   typeButtonText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   selectedTypeButtonText: {
     color: '#FFFFFF',
   },
   searchButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
@@ -595,7 +621,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -610,13 +636,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
     paddingBottom: 8,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginLeft: 8,
   },
   fieldRow: {
@@ -626,14 +652,14 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 8,
     marginRight: 4,
   },
   fieldValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
   },
   descriptionSection: {
@@ -641,7 +667,7 @@ const styles = StyleSheet.create({
   },
   descriptionValue: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   imagePreview: {
@@ -652,7 +678,7 @@ const styles = StyleSheet.create({
   },
   noContentText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 8,
   },
@@ -673,20 +699,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
   },
   dimensionKey: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'capitalize',
   },
   dimensionValue: {
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
   },
   commentItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -700,7 +726,7 @@ const styles = StyleSheet.create({
   commentText: {
     flex: 1,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     marginRight: 8,
   },
   commentStatusButton: {
@@ -718,21 +744,21 @@ const styles = StyleSheet.create({
   },
   commentDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   commentSeparator: {
     fontSize: 12,
-    color: '#D1D5DB',
+    color: colors.textDisabled,
     marginHorizontal: 6,
   },
   commentVenue: {
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '500',
   },
   commentDeleteText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.danger,
     fontWeight: '500',
   },
 });

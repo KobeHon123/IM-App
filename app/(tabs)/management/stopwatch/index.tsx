@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Text, TextInput, Alert, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Trash2, Play, Pause, RotateCcw } from 'lucide-react-native';
@@ -11,8 +11,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useStopwatches, MAX_STOPWATCHES } from '@/context/StopwatchContext';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 export default function StopwatchScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const {
     stopwatches,
     addStopwatch: addToContext,
@@ -134,7 +139,7 @@ export default function StopwatchScreen() {
             <TextInput
               style={[styles.input, styles.labelInput]}
               placeholder="Stopwatch name (optional)"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textMuted}
               value={inputLabel}
               onChangeText={setInputLabel}
               returnKeyType="done"
@@ -149,22 +154,22 @@ export default function StopwatchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   content: {
     flex: 1,
@@ -174,9 +179,9 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   createSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
     shadowColor: '#000',
@@ -186,14 +191,14 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   input: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   inputRow: {
     flexDirection: 'row',
@@ -203,7 +208,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 24,
     width: 48,
     height: 48,
@@ -217,20 +222,20 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   stopwatchesList: {
     gap: 12,
   },
   stopwatchCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -254,14 +259,14 @@ const styles = StyleSheet.create({
   stopwatchLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
   },
   timeText: {
     fontSize: 24,
     fontWeight: '700',
     fontFamily: 'monospace',
-    color: '#2563EB',
+    color: colors.primaryText,
     marginLeft: 12,
   },
   deleteAction: {

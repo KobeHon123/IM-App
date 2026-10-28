@@ -1,10 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { supabase } from '@/lib/supabase';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface ResinRecord {
   id: string;
@@ -43,6 +45,9 @@ const getComponentNames = (material: string) => {
 };
 
 const ResinRecordTab = ({ projectId }: { projectId: string }) => {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [records, setRecords] = useState<ResinRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [resinSummaries, setResinSummaries] = useState<ResinSummary[]>([]);
@@ -120,7 +125,7 @@ const ResinRecordTab = ({ projectId }: { projectId: string }) => {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
-          <LoadingSpinner size={50} color="#2563EB" strokeWidth={5} />
+          <LoadingSpinner size={50} color={colors.primaryText} strokeWidth={5} />
         </View>
       </SafeAreaView>
     );
@@ -180,10 +185,10 @@ const ResinRecordTab = ({ projectId }: { projectId: string }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -206,21 +211,21 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   placeholderSubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginTop: 8,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 16,
   },
   summaryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -239,13 +244,13 @@ const styles = StyleSheet.create({
   materialName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   recordCountBadge: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    color: colors.primaryText,
+    backgroundColor: colors.primarySoft,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 12,
@@ -257,7 +262,7 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
@@ -265,11 +270,11 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   divider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     marginVertical: 12,
   },
   componentsSection: {
@@ -283,12 +288,12 @@ const styles = StyleSheet.create({
   componentLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   componentValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
 });
 

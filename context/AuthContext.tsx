@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { AppState } from 'react-native';
+import { UserRole, normalizeRole, canManageUsers as roleCanManageUsers } from '@/lib/roles';
 
 interface Profile {
   id: string;
@@ -8,6 +10,7 @@ interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   is_authorized: boolean;
+  role?: string | null;
   phone_number?: string | null;
   bio?: string | null;
   created_at: string;
@@ -21,6 +24,9 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthorized: boolean;
   hasName: boolean;
+  role: UserRole;
+  canManageUsers: boolean;
+  canEdit: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -32,6 +38,9 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   isAuthorized: false,
   hasName: false,
+  role: 'user',
+  canManageUsers: false,
+  canEdit: true,
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -173,6 +182,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        fetchProfile(user.id).then((profileData) => {
+          if (profileData) setProfile(profileData);
+        });
+      }
+    });
+    return () => subscription.remove();
+  }, [user?.id]);
+
   const signOut = async () => {
     console.log('[AuthContext] Starting signOut...');
     try {
@@ -195,7 +216,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const isAuthorized = profile?.is_authorized ?? false;
+  const role = normalizeRole(profile?.role);
+  const isAuthorized = (profile?.is_authorized ?? false) && role !== 'not_authorized';
+  const canManageUsers = roleCanManageUsers(role);
+  const canEdit = role !== 'fuhong_worker';
   const profileName = profile?.full_name?.trim() || '';
   const metadataName = String(user?.user_metadata?.full_name || user?.user_metadata?.name || '').trim();
   const hasName = profileName.length > 0 || metadataName.length > 0;
@@ -209,6 +233,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isLoading,
         isAuthorized,
         hasName,
+        role,
+        canManageUsers,
+        canEdit,
         signOut,
         refreshProfile,
       }}

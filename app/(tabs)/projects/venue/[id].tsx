@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
-import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers, updateVenueFloorQuantity } from '@/lib/supabaseHelpers';
+import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers, updateVenueFloorQuantities, updateVenue } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
 import { PartCard } from '@/components/PartCard';
@@ -33,9 +33,17 @@ import { Part, PartType, Comment } from '@/types';
 import { calculateDimensionSimilarity, findSimilarPart } from '@/lib/similarityDetection';
 import { ButtonSetSelector, FloorPicker } from '@/components/ButtonSetSelector';
 import { ButtonSetFloors } from '@/components/ButtonSetFloors';
+import { LiftOptions } from '@/components/LiftOptions';
 import { getPartFloors, getFloorQuantity, getButtonSetTotal, isButtonSet } from '@/lib/floorUtils';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import type { ThemeColors } from '@/constants/Colors';
 export default function VenueDetailScreen() {
+  const colors = useColors();
+  const { canEdit } = useAuth();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { id } = useLocalSearchParams();
   const { updatePart, parts: globalParts, profiles } = useData();
   const { impactAsync, notificationAsync } = usePlatformHaptics();
@@ -45,6 +53,12 @@ export default function VenueDetailScreen() {
   const [projectParts, setProjectParts] = useState<Part[]>([]);
   const [projectVenues, setProjectVenues] = useState<any[]>([]);
   const [partQuantities, setPartQuantities] = useState<Record<string, number>>({});
+
+  const partQuantitiesRef = useRef(partQuantities);
+  useEffect(() => {
+    partQuantitiesRef.current = partQuantities;
+  }, [partQuantities]);
+  const floorSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -372,22 +386,36 @@ export default function VenueDetailScreen() {
     }
   };
 
-  const handleFloorQuantityChange = async (part: Part, floor: string, quantity: number) => {
-    await impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const changeFloorQuantities = (
+    part: Part,
+    compute: (current: number) => number,
+    onlyFloor?: string
+  ) => {
+    impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const floors = getPartFloors(part);
-    const previous = partQuantities;
-    const optimistic = { ...partQuantities, [`${part.id}::${floor}`]: quantity };
-    optimistic[part.id] = getButtonSetTotal(optimistic, part.id, floors);
-    setPartQuantities(optimistic);
+    const targets = onlyFloor ? [onlyFloor] : floors;
+    const next = { ...partQuantitiesRef.current };
+    const updates: Record<string, number> = {};
 
-    try {
-      const saved = await updateVenueFloorQuantity(venue.id, part.id, floors, floor, quantity);
-      setPartQuantities(saved || optimistic);
-    } catch (error) {
-      console.error('Error updating floor quantity:', error);
-      setPartQuantities(previous);
-    }
+    targets.forEach((floor) => {
+      const quantity = Math.max(0, compute(getFloorQuantity(next, part.id, floor)));
+      updates[floor] = quantity;
+      next[`${part.id}::${floor}`] = quantity;
+    });
+    next[part.id] = getButtonSetTotal(next, part.id, floors);
+
+    partQuantitiesRef.current = next;
+    setPartQuantities(next);
+
+    // Save one change at a time so quick taps never overwrite each other
+    floorSaveQueue.current = floorSaveQueue.current
+      .then(() => updateVenueFloorQuantities(venue.id, part.id, floors, updates))
+      .then(() => undefined)
+      .catch(async (error) => {
+        console.error('Error updating floor quantities:', error);
+        await loadVenueData();
+      });
   };
 
   const handleStatusChange = async (partId: string, newStatus: string) => {
@@ -1003,10 +1031,16 @@ export default function VenueDetailScreen() {
                       newPart.dimensions.buttonType === type && styles.selectedShapeButton,
                       usingSimilarPart && styles.disabledShapeButton
                     ]}
-                    onPress={() => !usingSimilarPart && setNewPart(prev => ({
-                      ...prev,
-                      dimensions: { ...prev.dimensions, buttonType: prev.dimensions.buttonType === type ? undefined : type }
-                    }))}
+                    onPress={() => !usingSimilarPart && setNewPart(prev => {
+                      const nextType = prev.dimensions.buttonType === type ? undefined : type;
+                      const { surface: _s, braille: _br, ...rest } = prev.dimensions;
+                      return {
+                        ...prev,
+                        dimensions: nextType === 'Lift'
+                          ? { ...prev.dimensions, buttonType: nextType }
+                          : { ...rest, buttonType: nextType },
+                      };
+                    })}
                     disabled={usingSimilarPart}
                   >
                     <ThemedText style={[
@@ -1020,6 +1054,17 @@ export default function VenueDetailScreen() {
               </View>
               {usingSimilarPart && <ThemedText style={styles.lockedIndicator}>Fixed from existing part</ThemedText>}
             </View>
+            {newPart.dimensions.buttonType === 'Lift' && (
+              <LiftOptions
+                surface={newPart.dimensions.surface}
+                braille={newPart.dimensions.braille}
+                disabled={usingSimilarPart}
+                onChange={({ surface, braille }) => setNewPart(prev => {
+                  const { surface: _s, braille: _br, ...rest } = prev.dimensions;
+                  return { ...prev, dimensions: { ...rest, ...(surface ? { surface } : {}), ...(braille ? { braille } : {}) } };
+                })}
+              />
+            )}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Shape</ThemedText>
               <View style={styles.buttonShapeContainer}>
@@ -1429,24 +1474,26 @@ export default function VenueDetailScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <ArrowLeft color="#6B7280" size={24} />
+          <ArrowLeft color={colors.textSecondary} size={24} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <ThemedText style={styles.headerTitle}>{venue.name}</ThemedText>
           <ThemedText style={styles.headerSubtitle}>{project.name} • PIC: {venue.pic}</ThemedText>
         </View>
         <View style={styles.modeButtons}>
+          {canEdit && (
           <TouchableOpacity
             style={[styles.modeButton, countingMode && styles.modeButtonActive]}
             onPress={handleCountingModeToggle}
           >
-            <Hash color={countingMode ? '#FFFFFF' : '#6B7280'} size={20} />
+            <Hash color={countingMode ? '#FFFFFF' : colors.textSecondary} size={20} />
           </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.modeButton, showPhotos && styles.modeButtonActive]}
             onPress={() => setShowPhotos(!showPhotos)}
           >
-            <ImageIcon color={showPhotos ? '#FFFFFF' : '#6B7280'} size={20} />
+            <ImageIcon color={showPhotos ? '#FFFFFF' : colors.textSecondary} size={20} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1465,9 +1512,9 @@ export default function VenueDetailScreen() {
               >
                 <ThemedText style={styles.categoryTitle}>{type} ({parts.length})</ThemedText>
                 {isCollapsed ? (
-                  <ChevronRight color="#6B7280" size={20} />
+                  <ChevronRight color={colors.textSecondary} size={20} />
                 ) : (
-                  <ChevronDown color="#6B7280" size={20} />
+                  <ChevronDown color={colors.textSecondary} size={20} />
                 )}
               </TouchableOpacity>
               {!isCollapsed && parts.map((part) => {
@@ -1483,8 +1530,8 @@ export default function VenueDetailScreen() {
                 return (
                   <View key={part.id}>
                     <ReanimatedSwipeable
-                      containerStyle={{ backgroundColor: '#F9FAFB' }}
-                      renderLeftActions={(_prog, _drag, swipeable) => (
+                      containerStyle={{ backgroundColor: colors.background }}
+                      renderLeftActions={!canEdit ? undefined : (_prog, _drag, swipeable) => (
                         <View style={[styles.swipeActionsLeft, styles.swipeActionsLeftMain]}>
                           <GHTouchableOpacity
                             style={styles.swipeActionButton}
@@ -1548,6 +1595,7 @@ export default function VenueDetailScreen() {
                           allowPressInCountingMode={showPhotos}
                           venueName={venue.name}
                           simplifyDisplay={true}
+                          showCommentButton={canEdit}
                           onQuantityChange={partIsSet ? undefined : (delta) => handleQuantityChange(part.id, delta)}
                           onCommentSend={(text) => handleCommentSend(part.id, text)}
                           onPress={() => {
@@ -1563,7 +1611,9 @@ export default function VenueDetailScreen() {
                             floors={partFloors}
                             getQuantity={(floor) => getFloorQuantity(partQuantities, part.id, floor)}
                             countingMode={countingMode}
-                            onQuantityChange={(floor, qty) => handleFloorQuantityChange(part, floor, qty)}
+                            onQuantitySet={(floor, qty) => changeFloorQuantities(part, () => qty, floor)}
+                            onQuantityDelta={(floor, delta) => changeFloorQuantities(part, (current) => current + delta, floor)}
+                            onBulkDelta={(delta) => changeFloorQuantities(part, (current) => current + delta)}
                           />
                         </View>
                       ) : (
@@ -1577,6 +1627,7 @@ export default function VenueDetailScreen() {
                         allowPressInCountingMode={showPhotos}
                         venueName={venue.name}
                         simplifyDisplay={true}
+                        showCommentButton={canEdit}
                         onQuantityChange={partIsSet ? undefined : (delta) => handleQuantityChange(part.id, delta)}
                         onCommentSend={(text) => handleCommentSend(part.id, text)}
                         onPress={() => {
@@ -1597,8 +1648,8 @@ export default function VenueDetailScreen() {
                       return (
                         <ReanimatedSwipeable
                           key={subPart.id}
-                          containerStyle={{ backgroundColor: '#F9FAFB' }}
-                          renderLeftActions={(_prog, _drag, swipeable) => (
+                          containerStyle={{ backgroundColor: colors.background }}
+                          renderLeftActions={!canEdit ? undefined : (_prog, _drag, swipeable) => (
                             <View style={[styles.swipeActionsLeft, styles.swipeActionsLeftSubPart]}>
                               <GHTouchableOpacity
                                 style={styles.swipeActionButton}
@@ -1647,6 +1698,7 @@ export default function VenueDetailScreen() {
                               allowPressInCountingMode={showPhotos}
                               venueName={venue.name}
                               simplifyDisplay={true}
+                              showCommentButton={canEdit}
                               onQuantityChange={(delta) => handleQuantityChange(subPart.id, delta)}
                               onCommentSend={(text) => handleCommentSend(subPart.id, text)}
                               onPress={() => {
@@ -1703,7 +1755,7 @@ export default function VenueDetailScreen() {
           )}
         </View>
       )}
-      {!countingMode && !selectedPartIdForPhotos && (
+      {canEdit && !countingMode && !selectedPartIdForPhotos && (
         <TouchableOpacity
           style={styles.floatingAddButton}
           onPress={() => setShowCreatePartModal(true)}
@@ -1798,7 +1850,7 @@ export default function VenueDetailScreen() {
                     </ThemedText>
                   </View>
                   {!usingSimilarPart && !isToiletCapLifter(newPart.type, newPart.dimensions) && (
-                    <ChevronRightIcon color="#6B7280" size={20} />
+                    <ChevronRightIcon color={colors.textSecondary} size={20} />
                   )}
                 </TouchableOpacity>
                 {!usingSimilarPart && !isToiletCapLifter(newPart.type, newPart.dimensions) && (
@@ -1847,7 +1899,7 @@ export default function VenueDetailScreen() {
                       width: manualPartNumber === 3 ? 75 : 100,
                       aspectRatio: manualPartNumber === 1 ? 1 : manualPartNumber === 2 ? (10/15) : (7.5/15)
                     }]}>
-                      <Ionicons name="hand-right-outline" size={50} color="#3B82F6" />
+                      <Ionicons name="hand-right-outline" size={50} color={colors.primaryText} />
                     </View>
                     <View style={styles.dimensionLabelContainer}>
                       <ThemedText style={styles.dimensionText}>
@@ -1924,7 +1976,7 @@ export default function VenueDetailScreen() {
                   style={styles.pictureButton}
                   onPress={() => handleSelectCADDrawing(false)}
                 >
-                  <Camera color="#6B7280" size={24} />
+                  <Camera color={colors.textSecondary} size={24} />
                   <ThemedText style={styles.pictureButtonText}>Add CAD Drawing</ThemedText>
                 </TouchableOpacity>
               )}
@@ -1950,7 +2002,7 @@ export default function VenueDetailScreen() {
                 style={styles.pictureButton}
                 onPress={() => handleSelectPictures(false)}
               >
-                <Camera color="#6B7280" size={24} />
+                <Camera color={colors.textSecondary} size={24} />
                 <ThemedText style={styles.pictureButtonText}>Add Pictures</ThemedText>
               </TouchableOpacity>
               <FlatList
@@ -2194,11 +2246,11 @@ export default function VenueDetailScreen() {
     </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   similarPartContainer: {
     marginBottom: 16,
     padding: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.dangerSoft,
     borderRadius: 8,
     borderLeftWidth: 4,
     borderLeftColor: '#EF4444',
@@ -2208,7 +2260,7 @@ const styles = StyleSheet.create({
   },
   similarPartMessage: {
     fontSize: 14,
-    color: '#7F1D1D',
+    color: colors.dangerStrong,
     fontWeight: '500',
   },
   useSimilarPartButton: {
@@ -2231,23 +2283,23 @@ const styles = StyleSheet.create({
   },
   sameProjectWarning: {
     fontSize: 12,
-    color: '#DC2626',
+    color: colors.danger,
     textAlign: 'center',
     marginTop: 8,
     fontWeight: '500',
   },
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   backButton: {
     marginRight: 16,
@@ -2258,11 +2310,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modeButtons: {
     flexDirection: 'row',
@@ -2272,12 +2324,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modeButtonActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   // Removed duplicate sectionHeader and sectionTitle
   partsList: {
@@ -2292,7 +2344,7 @@ const styles = StyleSheet.create({
   categoryTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.text,
     letterSpacing: 0.3,
   },
   categoryHeader: {
@@ -2306,7 +2358,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2315,16 +2367,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalClose: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modalContent: {
     flex: 1,
@@ -2336,59 +2388,59 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   helperText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 4,
     fontStyle: 'italic',
   },
   autoGeneratedBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     padding: 12,
     marginTop: 4,
   },
   autoGeneratedLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginRight: 8,
   },
   autoGeneratedValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   lockedFieldBox: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.warningSoft,
     borderLeftWidth: 3,
     borderLeftColor: '#F59E0B',
   },
   lockedPartNumber: {
-    color: '#DC2626',
+    color: colors.danger,
     fontWeight: '700',
   },
   disabledInput: {
-    backgroundColor: '#F3F4F6',
-    color: '#9CA3AF',
+    backgroundColor: colors.surfaceMuted,
+    color: colors.textMuted,
   },
   lockedIndicator: {
     fontSize: 12,
-    color: '#DC2626',
+    color: colors.danger,
     marginTop: 4,
     fontWeight: '500',
   },
@@ -2416,16 +2468,16 @@ const styles = StyleSheet.create({
   typeButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     marginRight: 8,
   },
   selectedTypeButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   typeButtonText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   selectedTypeButtonText: {
     color: '#FFFFFF',
@@ -2435,10 +2487,10 @@ const styles = StyleSheet.create({
   },
   disabledTypeButton: {
     opacity: 0.6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
   },
   disabledTypeButtonText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   buttonShapeContainer: {
     flexDirection: 'row',
@@ -2446,16 +2498,16 @@ const styles = StyleSheet.create({
   shapeButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     marginRight: 8,
   },
   selectedShapeButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   shapeButtonText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   selectedShapeButtonText: {
     color: '#FFFFFF',
@@ -2469,17 +2521,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 20,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderStyle: 'dashed',
     borderRadius: 8,
   },
   pictureButtonText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   createButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
@@ -2495,7 +2547,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   disabledButtonHint: {
-    color: '#EF4444',
+    color: colors.danger,
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
@@ -2507,7 +2559,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionModal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     minWidth: 200,
@@ -2515,11 +2567,11 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   actionButtonText: {
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
   },
   swipeActionsLeft: {
@@ -2545,7 +2597,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   swipeEditCircle: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   swipeDeleteCircle: {
     backgroundColor: '#EF4444',
@@ -2557,7 +2609,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -2567,20 +2619,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    paddingBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginLeft: 8,
-  },
   fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2588,14 +2626,14 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 8,
     marginRight: 4,
   },
   fieldValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
   },
   descriptionSection: {
@@ -2608,7 +2646,7 @@ const styles = StyleSheet.create({
   },
   descriptionValue: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   fullImageModalContainer: {
@@ -2655,7 +2693,7 @@ const styles = StyleSheet.create({
   },
   noContentText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 8,
   },
@@ -2699,20 +2737,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
   },
   dimensionKey: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'capitalize',
   },
   dimensionValue: {
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
   },
   buttonSetCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     marginHorizontal: 16,
     marginVertical: 5,
@@ -2725,13 +2763,13 @@ const styles = StyleSheet.create({
   subPartContainer: {
     marginLeft: 32,
     borderLeftWidth: 2,
-    borderLeftColor: '#E5E7EB',
+    borderLeftColor: colors.border,
     paddingLeft: 16,
   },
   actionModalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -2741,7 +2779,7 @@ const styles = StyleSheet.create({
     right: 32,
     width: 56,
     height: 56,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2752,7 +2790,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   commentItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -2772,22 +2810,22 @@ const styles = StyleSheet.create({
   commentText: {
     flex: 1,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     marginRight: 8,
   },
   commentTextCompleted: {
     textDecorationLine: 'line-through',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   commentEditInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
     borderRadius: 6,
     padding: 8,
     fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
     minHeight: 60,
     textAlignVertical: 'top',
   },
@@ -2805,20 +2843,20 @@ const styles = StyleSheet.create({
   commentAuthor: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   commentDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   commentSeparator: {
     fontSize: 12,
-    color: '#D1D5DB',
+    color: colors.textDisabled,
     marginHorizontal: 6,
   },
   commentVenue: {
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '500',
   },
   commentActions: {
@@ -2831,12 +2869,12 @@ const styles = StyleSheet.create({
   },
   commentDeleteText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.danger,
     fontWeight: '500',
   },
   commentCancelText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   commentSaveText: {
@@ -2846,7 +2884,7 @@ const styles = StyleSheet.create({
   },
   pendingBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.warningSoft,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -2854,7 +2892,7 @@ const styles = StyleSheet.create({
   },
   pendingText: {
     fontSize: 11,
-    color: '#92400E',
+    color: colors.warningStrong,
     fontWeight: '600',
   },
   partNumberPickerOverlay: {
@@ -2863,12 +2901,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     zIndex: 1000,
   },
   partNumberPickerContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   partNumberContent: {
     flex: 1,
@@ -2878,18 +2916,18 @@ const styles = StyleSheet.create({
   partNumberPickerInfo: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   partNumberPickerInfoText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   partNumberPickerSubtext: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   partNumberPickerContent: {
@@ -2906,15 +2944,15 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 8,
     margin: '1%',
   },
   partNumberButtonUsed: {
-    backgroundColor: '#F9FAFB',
-    borderColor: '#F3F4F6',
+    backgroundColor: colors.background,
+    borderColor: colors.borderSubtle,
     opacity: 0.5,
   },
   partNumberButtonSelected: {
@@ -2924,10 +2962,10 @@ const styles = StyleSheet.create({
   partNumberButtonText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
   },
   partNumberButtonTextUsed: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   partNumberButtonTextSelected: {
     color: '#78350F',
@@ -2940,7 +2978,7 @@ const styles = StyleSheet.create({
   dimensionRectangle: {
     borderWidth: 2,
     borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -2949,10 +2987,10 @@ const styles = StyleSheet.create({
   dimensionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.text,
   },
   dimensionLabelContainer: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 4,
@@ -2960,7 +2998,7 @@ const styles = StyleSheet.create({
   dimensionText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.textStrong,
   },
   selectionContainer: {
     flexDirection: 'row',
@@ -2971,28 +3009,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   selectionButtonActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   selectionButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   selectionButtonTextActive: {
     color: '#FFFFFF',
   },
   photoGallerySection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
     marginBottom: -32,
   },
   photoGalleryContent: {
@@ -3011,7 +3049,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 16,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -3021,7 +3059,7 @@ const styles = StyleSheet.create({
   photoGalleryLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.textStrong,
     textAlign: 'center',
   },
   photoGalleryHeader: {
@@ -3035,11 +3073,11 @@ const styles = StyleSheet.create({
   photoGalleryHeaderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   photoGalleryClose: {
     fontSize: 28,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '400',
   },
   photoNotFoundContainer: {
@@ -3050,8 +3088,8 @@ const styles = StyleSheet.create({
   },
   photoNotFoundText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
     textAlign: 'center',
   },
-}); 
+});

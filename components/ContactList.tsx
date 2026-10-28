@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,10 @@ import { supabase } from '@/lib/supabase';
 import PublicProfile from './PublicProfile';
 import { useEasterEgg } from '@/context/EasterEggContext';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { ROLE_LABELS, normalizeRole } from '@/lib/roles';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface ContactProfile {
   id: string;
@@ -24,6 +28,7 @@ interface ContactProfile {
   email: string | null;
   phone_number: string | null;
   role?: string;
+  is_authorized?: boolean;
 }
 
 interface ContactListProps {
@@ -32,11 +37,15 @@ interface ContactListProps {
 }
 
 const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [contacts, setContacts] = useState<ContactProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedContact, setSelectedContact] = useState<ContactProfile | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const { showOffWorkCounter, setShowOffWorkCounter, handleBioTap } = useEasterEgg();
+  const { canManageUsers } = useAuth();
 
   useEffect(() => {
     fetchContacts();
@@ -45,11 +54,16 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
   const fetchContacts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, bio, email, phone_number, role')
-        .neq('id', currentUserId || 'null')
-        .order('full_name', { ascending: true });
+        .select('id, full_name, avatar_url, bio, email, phone_number, role, is_authorized')
+        .neq('id', currentUserId || 'null');
+
+      query = canManageUsers
+        ? query.or('is_authorized.eq.true,role.eq.not_authorized')
+        : query.eq('is_authorized', true);
+
+      const { data, error } = await query.order('full_name', { ascending: true });
 
       if (error) {
         console.error('Error fetching contacts:', error);
@@ -71,7 +85,7 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
 
   const renderContactItem = ({ item }: { item: ContactProfile }) => {
     const isAdmin = item.role === 'admin';
-    const borderColor = isAdmin ? '#2563EB' : '#E5E7EB';
+    const borderColor = isAdmin ? colors.primary : colors.border;
 
     return (
       <TouchableOpacity
@@ -86,7 +100,7 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
             />
           ) : (
             <View style={[styles.placeholderPhoto, { borderColor }]}>
-              <User color="#6B7280" size={40} />
+              <User color={colors.textSecondary} size={40} />
             </View>
           )}
           {isAdmin && <View style={styles.adminBadge} />}
@@ -94,6 +108,14 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
         <ThemedText style={styles.contactName} numberOfLines={2}>
           {item.full_name}
         </ThemedText>
+        {canManageUsers && (
+          <ThemedText
+            style={[styles.roleCaption, normalizeRole(item.role) === 'not_authorized' && styles.roleCaptionDanger]}
+            numberOfLines={1}
+          >
+            {ROLE_LABELS[normalizeRole(item.role)]}
+          </ThemedText>
+        )}
       </TouchableOpacity>
     );
   };
@@ -105,17 +127,17 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
       <View style={styles.header}>
         <ThemedText style={styles.headerTitle}>Contacts</ThemedText>
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <X color="#6B7280" size={24} />
+          <X color={colors.textSecondary} size={24} />
         </TouchableOpacity>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={colors.primaryText} />
         </View>
       ) : contacts.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <User color="#D1D5DB" size={60} />
+          <User color={colors.textDisabled} size={60} />
           <ThemedText style={styles.emptyText}>No contacts found</ThemedText>
         </View>
       ) : (
@@ -125,6 +147,7 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
           keyExtractor={(item) => item.id}
           numColumns={3}
           contentContainerStyle={styles.listContent}
+          columnWrapperStyle={styles.columnWrapper}
           scrollEnabled={true}
         />
       )}
@@ -138,6 +161,10 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
         <View style={styles.modalContainer}>
           <PublicProfile
             profile={selectedContact}
+            onRoleChanged={(userId, newRole) => {
+              setContacts(prev => prev.map(c => (c.id === userId ? { ...c, role: newRole, is_authorized: newRole !== 'not_authorized' } : c)));
+              setSelectedContact(prev => (prev && prev.id === userId ? { ...prev, role: newRole } : prev));
+            }}
             onClose={() => setShowPreview(false)}
             onBioTap={handleBioTap}
           />
@@ -147,10 +174,10 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -158,17 +185,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   closeButton: {
     padding: 8,
+  },
+  roleCaption: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  roleCaptionDanger: {
+    color: colors.danger,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
@@ -182,19 +219,22 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginTop: 12,
   },
   listContent: {
     paddingHorizontal: 8,
     paddingVertical: 16,
   },
+  columnWrapper: {
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
   contactCard: {
-    flex: 1,
+    width: '31%',
     alignItems: 'center',
-    marginHorizontal: 8,
-    marginBottom: 24,
-    maxWidth: '33.33%',
+    marginHorizontal: 4,
   },
   photoWrapper: {
     marginBottom: 12,
@@ -207,26 +247,26 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   contactPhoto: {
     width: 100,
     height: 100,
     borderRadius: 50,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   placeholderPhoto: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   modalContainer: {
     flex: 1,
@@ -234,7 +274,7 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
   },
 });

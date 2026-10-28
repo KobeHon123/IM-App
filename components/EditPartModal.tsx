@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,8 +18,11 @@ import { DesignerSelector } from '@/components/DesignerSelector';
 import { Part, PartType, Profile } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
 import { ButtonSetSelector, FloorPicker } from '@/components/ButtonSetSelector';
+import { LiftOptions } from '@/components/LiftOptions';
 import { analyzeFloorChange, applyFloorChange } from '@/lib/supabaseHelpers';
 import { isButtonSet, getPartFloors } from '@/lib/floorUtils';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface EditPartModalProps {
   visible: boolean;
@@ -49,6 +52,9 @@ export function EditPartModal({
   onSave,
   onEditingPartChange,
 }: Omit<EditPartModalProps, 'onSyncWithPart'>) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [showFloorPicker, setShowFloorPicker] = React.useState(false);
   
@@ -367,9 +373,15 @@ export function EditPartModal({
                       styles.shapeButton,
                       editingPart.dimensions.buttonType === type && styles.selectedShapeButton
                     ]}
-                    onPress={() => onEditingPartChange({
-                      dimensions: { ...editingPart.dimensions, buttonType: editingPart.dimensions.buttonType === type ? undefined : type }
-                    })}
+                    onPress={() => {
+                      const nextType = editingPart.dimensions.buttonType === type ? undefined : type;
+                      const { surface: _s, braille: _br, ...rest } = editingPart.dimensions;
+                      onEditingPartChange({
+                        dimensions: nextType === 'Lift'
+                          ? { ...editingPart.dimensions, buttonType: nextType }
+                          : { ...rest, buttonType: nextType },
+                      });
+                    }}
                   >
                     <ThemedText style={[
                       styles.shapeButtonText,
@@ -381,6 +393,18 @@ export function EditPartModal({
                 ))}
               </View>
             </View>
+            {editingPart.dimensions.buttonType === 'Lift' && (
+              <LiftOptions
+                surface={editingPart.dimensions.surface}
+                braille={editingPart.dimensions.braille}
+                onChange={({ surface, braille }) => {
+                  const { surface: _s, braille: _br, ...rest } = editingPart.dimensions;
+                  onEditingPartChange({
+                    dimensions: { ...rest, ...(surface ? { surface } : {}), ...(braille ? { braille } : {}) },
+                  });
+                }}
+              />
+            )}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Shape</ThemedText>
               <View style={styles.buttonShapeContainer}>
@@ -650,7 +674,7 @@ export function EditPartModal({
                 style={styles.editPictureButton}
                 onPress={handleSelectCADDrawing}
               >
-                <Camera color="#334155" size={22} />
+                <Camera color={colors.textStrong} size={22} />
                 <ThemedText style={styles.editPictureButtonText}>Change CAD Drawing</ThemedText>
               </TouchableOpacity>
               {editingPart.cadDrawing && (
@@ -672,7 +696,7 @@ export function EditPartModal({
                 style={styles.editPictureButton}
                 onPress={handleSelectPictures}
               >
-                <Camera color="#334155" size={22} />
+                <Camera color={colors.textStrong} size={22} />
                 <ThemedText style={styles.editPictureButtonText}>Add Pictures</ThemedText>
               </TouchableOpacity>
               <FlatList
@@ -725,14 +749,14 @@ export function EditPartModal({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   editModalContainer: {
     flex: 1,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: colors.background,
   },
   editModalScroll: {
     flex: 1,
@@ -742,31 +766,31 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   editModalIntroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editModalEyebrow: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   editModalTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   editModalSectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -775,16 +799,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalClose: {
     fontSize: 16,
-    color: '#3B82F6',
+    color: colors.primaryText,
     fontWeight: '500',
   },
   modalContent: {
@@ -797,22 +821,22 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 8,
   },
   typeDisplay: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     paddingVertical: 10,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
   },
   textArea: {
     paddingVertical: 12,
@@ -823,14 +847,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingVertical: 12,
     gap: 8,
   },
   pictureButtonText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   previewList: {
@@ -841,15 +865,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
     paddingVertical: 12,
     gap: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   editPictureButtonText: {
     fontSize: 14,
-    color: '#334155',
+    color: colors.textStrong,
     fontWeight: '600',
   },
   previewContainer: {
@@ -895,13 +919,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
   },
   editSecondaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    color: colors.textStrong,
   },
   editPrimaryButton: {
     flex: 1,
@@ -925,21 +949,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     alignItems: 'center',
   },
   selectedShapeButton: {
     borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
   },
   shapeButtonText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   selectedShapeButtonText: {
-    color: '#3B82F6',
+    color: colors.primaryText,
   },
   selectionContainer: {
     flexDirection: 'row',
@@ -950,20 +974,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   selectionButtonActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   selectionButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   selectionButtonTextActive: {
     color: '#FFFFFF',
@@ -976,7 +1000,7 @@ const styles = StyleSheet.create({
   },
   emptyListText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   syncListContent: {
@@ -984,10 +1008,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   syncPartItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     padding: 14,
   },
   syncPartContent: {
@@ -1001,33 +1025,33 @@ const styles = StyleSheet.create({
   syncPartName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#0F172A',
+    color: colors.text,
     flex: 1,
   },
   syncPartNumber: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#3B82F6',
+    color: colors.primaryText,
     marginLeft: 8,
   },
   syncPartDetails: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   syncPartDesigner: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
   similarPartLabel: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   similarPartItem: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: colors.primarySoft,
     borderLeftWidth: 4,
     borderLeftColor: '#3B82F6',
     borderRadius: 8,
@@ -1043,7 +1067,7 @@ const styles = StyleSheet.create({
   similarPartName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E40AF',
+    color: colors.primaryStrongText,
     flex: 1,
   },
   similarityBadge: {
@@ -1059,6 +1083,6 @@ const styles = StyleSheet.create({
   },
   similarPartDetails: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
 });

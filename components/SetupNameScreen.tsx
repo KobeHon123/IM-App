@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 export function SetupNameScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { user, profile, refreshProfile } = useAuth();
   const [fullName, setFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,7 +75,7 @@ export function SetupNameScreen() {
       >
         <View style={styles.headerSection}>
           <View style={styles.iconContainer}>
-            <User color="#2563EB" size={48} />
+            <User color={colors.primaryText} size={48} />
           </View>
           <ThemedText style={styles.title}>Welcome!</ThemedText>
           <ThemedText style={styles.subtitle}>
@@ -90,7 +95,7 @@ export function SetupNameScreen() {
             <TextInput
               style={styles.input}
               placeholder="Enter your full name"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textMuted}
               value={fullName}
               onChangeText={(text) => {
                 setFullName(text);
@@ -120,10 +125,10 @@ export function SetupNameScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -138,7 +143,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
@@ -146,13 +151,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -160,13 +165,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   errorContainer: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.dangerSoft,
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   errorText: {
-    color: '#DC2626',
+    color: colors.danger,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -176,21 +181,21 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
   },
   saveButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,

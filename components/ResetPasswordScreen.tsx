@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lock } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 export function ResetPasswordScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -94,11 +99,11 @@ export function ResetPasswordScreen() {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputWrapper}>
-              <Lock color="#6B7280" size={20} />
+              <Lock color={colors.textSecondary} size={20} />
               <TextInput
                 style={styles.input}
                 placeholder="New Password"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textMuted}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);
@@ -112,11 +117,11 @@ export function ResetPasswordScreen() {
             </View>
 
             <View style={styles.inputWrapper}>
-              <Lock color="#6B7280" size={20} />
+              <Lock color={colors.textSecondary} size={20} />
               <TextInput
                 style={styles.input}
                 placeholder="Confirm New Password"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textMuted}
                 value={confirmPassword}
                 onChangeText={(text) => {
                   setConfirmPassword(text);
@@ -148,10 +153,10 @@ export function ResetPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -170,19 +175,19 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#2563EB',
+    color: colors.primaryText,
     letterSpacing: -0.5,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -190,24 +195,24 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   errorContainer: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.dangerSoft,
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   errorText: {
-    color: '#DC2626',
+    color: colors.danger,
     fontSize: 14,
     textAlign: 'center',
   },
   successContainer: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: colors.successSoft,
     padding: 16,
     borderRadius: 12,
     marginTop: 24,
   },
   successText: {
-    color: '#065F46',
+    color: colors.successStrong,
     fontSize: 16,
     textAlign: 'center',
     fontWeight: '600',
@@ -218,9 +223,9 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
     paddingHorizontal: 16,
     marginBottom: 16,
@@ -230,10 +235,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 12,
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
   },
   updateButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,

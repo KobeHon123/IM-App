@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   TextInput,
@@ -12,6 +12,8 @@ import {
 import { X } from 'lucide-react-native';
 import { Profile } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface DesignerSelectorProps {
   value: string;
@@ -35,6 +37,9 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
   inputStyle,
   editable = true,
 }) => {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredProfiles, setFilteredProfiles] = useState<Profile[]>([]);
   const [isSelected, setIsSelected] = useState(() => {
@@ -110,7 +115,7 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
               onPress={handleClearSelection}
               style={styles.clearButton}
             >
-              <X color="#111827" size={18} />
+              <X color={colors.text} size={18} />
             </TouchableOpacity>
           )}
         </View>
@@ -180,27 +185,27 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     position: 'relative',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   selectedDesignerBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -208,7 +213,7 @@ const styles = StyleSheet.create({
   },
   selectedDesignerText: {
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '600',
     flex: 1,
   },
@@ -221,9 +226,9 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderTopWidth: 0,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
@@ -235,29 +240,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   suggestionName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   suggestionEmail: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   customSuggestionItem: {
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#F3F4F6',
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
   },
   customSuggestionText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontStyle: 'italic',
   },
 });

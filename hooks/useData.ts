@@ -50,7 +50,7 @@ export function useDataInternal() {
       if (profilesError) throw new Error(`Profiles Error: ${profilesError.message}`);
       
       // Convert date strings back to Date objects and snake_case to camelCase
-      const typedProjects = projectsData?.map(p => ({ ...p, createdAt: new Date(p.created_at) })) || [];
+      const typedProjects = projectsData?.map(p => ({ ...p, fuhongVisible: !!(p as any).fuhong_visible, createdAt: new Date(p.created_at) })) || [];
       const typedVenues = venuesData?.map(v => ({
         ...v,
         projectId: v.project_id,
@@ -205,12 +205,14 @@ export function useDataInternal() {
 
     try {
       const thumbnail = project.thumbnail ? await uploadProjectThumbnail(project.thumbnail) : null;
+      const { fuhongVisible, ...projectFields } = project;
       const { data, error } = await supabase.from('projects').insert({
-        ...project,
+        ...projectFields,
+        fuhong_visible: !!fuhongVisible,
         thumbnail,
       }).select().single();
       if (handleSupabaseError(error, 'project')) return null;
-      return triggerRefresh(setProjects, { ...data, createdAt: new Date(data.created_at) });
+      return triggerRefresh(setProjects, { ...data, fuhongVisible: !!data.fuhong_visible, createdAt: new Date(data.created_at) });
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to upload project thumbnail');
       console.error('Error creating project:', error);
@@ -225,9 +227,12 @@ export function useDataInternal() {
         nextUpdates.thumbnail = await uploadProjectThumbnail(nextUpdates.thumbnail);
       }
 
-      const { data, error } = await supabase.from('projects').update(nextUpdates).eq('id', id).select().single();
+      const { fuhongVisible, ...dbUpdates } = nextUpdates;
+      const payload: Record<string, any> = { ...dbUpdates };
+      if (fuhongVisible !== undefined) payload.fuhong_visible = fuhongVisible;
+      const { data, error } = await supabase.from('projects').update(payload).eq('id', id).select().single();
       if (handleSupabaseError(error, 'project update')) return null;
-      return triggerRefresh(setProjects, data, prev => prev.map(p => p.id === id ? { ...p, ...data, createdAt: new Date(data.created_at) } : p));
+      return triggerRefresh(setProjects, data, prev => prev.map(p => p.id === id ? { ...p, ...data, fuhongVisible: !!data.fuhong_visible, createdAt: new Date(data.created_at) } : p));
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to update project thumbnail');
       console.error('Error updating project:', error);

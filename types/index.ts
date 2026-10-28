@@ -107,6 +107,7 @@ export interface Project {
   description: string;
   pic: string; // Person in charge
   thumbnail?: string; // Optional project thumbnail
+  fuhongVisible?: boolean; // Visible to FuHong Worker role
   createdAt: Date;
 }
 
@@ -135,4 +136,27 @@ export interface Comment {
   venueId?: string;
   venueName?: string;
   userId?: string;
+}
+
+export type QuickTestStatus = 'pending' | 'passed' | 'failed';
+
+export interface QuickTestReport {
+  id: string;
+  userId: string | null;
+  applicantName: string;
+  materialInfo: string;
+  vendor: string;
+  testingSurface: string;
+  sampleQuantity: string;
+  sampleDimensions: string;
+  antimicrobialInfo: string;
+  finalApplication: string;
+  projectId: string | null;
+  projectName: string | null;
+  pictureUrl: string | null;
+  status: QuickTestStatus;
+  resultUpdatedBy: string | null;
+  resultUpdatedByName: string | null;
+  resultUpdatedAt: Date | null;
+  createdAt: Date;
 }

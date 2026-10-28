@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,10 +23,17 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import PublicProfile from '@/components/PublicProfile';
 import ContactList from '@/components/ContactList';
+import { PendingApprovals } from '@/components/PendingApprovals';
 import { useEasterEgg } from '@/context/EasterEggContext';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors, useTheme, type ThemeMode } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 const ProfileScreen = () => {
+  const colors = useColors();
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { profile, signOut, refreshProfile, user } = useAuth();
   const appVersion = Constants.expoConfig?.version ?? 'N/A';
   const { showOffWorkCounter, setShowOffWorkCounter, handleBioTap, timeLeft, isOffTime } = useEasterEgg();
@@ -405,7 +412,7 @@ const ProfileScreen = () => {
               <Image source={{ uri: userPhoto }} style={styles.profilePhoto} />
             ) : (
               <View style={styles.placeholderPhoto}>
-                <User color="#6B7280" size={60} />
+                <User color={colors.textSecondary} size={60} />
               </View>
             )}
             <TouchableOpacity
@@ -428,7 +435,7 @@ const ProfileScreen = () => {
   {/* Added display for Phone and Bio */}
   {phone ? (
     <View style={styles.infoRow}>
-      <Phone color="#4B5563" size={16} />
+      <Phone color={colors.textSecondary} size={16} />
       <ThemedText style={styles.infoText}>{phone}</ThemedText>
     </View>
   ) : null}
@@ -437,7 +444,7 @@ const ProfileScreen = () => {
   {/* New Row for Edit and Preview Buttons */}
   <View style={styles.buttonRow}>
     <TouchableOpacity style={styles.editButton} onPress={handleEditName}>
-      <Edit2 color="#2563EB" size={18} />
+      <Edit2 color={colors.primaryText} size={18} />
       <ThemedText style={styles.editButtonText}>Edit</ThemedText>
     </TouchableOpacity>
 
@@ -445,21 +452,40 @@ const ProfileScreen = () => {
       style={styles.previewButton}
       onPress={() => setShowPreviewModal(true)}
     >
-      <User color="#4B5563" size={18} />
+      <User color={colors.textSecondary} size={18} />
       <ThemedText style={styles.previewButtonText}>Preview</ThemedText>
     </TouchableOpacity>
   </View>
 </View>
         </View> 
 
+        <PendingApprovals />
+
         <View style={styles.contactListButtonSection}>
           <TouchableOpacity
             style={styles.contactListButton}
             onPress={() => setShowContactListModal(true)}
           >
-            <User color="#2563EB" size={20} />
+            <User color={colors.primaryText} size={20} />
             <ThemedText style={styles.contactListButtonText}>View Contacts</ThemedText>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.themeSection}>
+          <ThemedText style={styles.themeSectionTitle}>Appearance</ThemedText>
+          <View style={styles.themeOptions}>
+            {([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']] as [ThemeMode, string][]).map(([value, label]) => (
+              <TouchableOpacity
+                key={value}
+                style={[styles.themeOption, themeMode === value && styles.themeOptionSelected]}
+                onPress={() => setThemeMode(value)}
+              >
+                <ThemedText style={[styles.themeOptionText, themeMode === value && styles.themeOptionTextSelected]}>
+                  {label}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         <View style={styles.actionsSection}>
@@ -467,7 +493,7 @@ const ProfileScreen = () => {
             style={styles.logoutButton}
             onPress={handleLogout}
           >
-            <LogOut color="#EF4444" size={20} />
+            <LogOut color={colors.danger} size={20} />
             <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
           </TouchableOpacity>
         </View>
@@ -505,7 +531,7 @@ const ProfileScreen = () => {
                 disabled={isUpdating || !!emailError}
               >
                 {isUpdating ? (
-                  <ActivityIndicator color="#2563EB" size="small" />
+                  <ActivityIndicator color={colors.primaryText} size="small" />
                 ) : (
                   <ThemedText style={styles.saveButtonTopText}>Save</ThemedText>
                 )}
@@ -583,7 +609,7 @@ const ProfileScreen = () => {
           />
           <View style={styles.logoutModal}>
             <View style={styles.logoutModalIcon}>
-              <LogOut color="#DC2626" size={32} />
+              <LogOut color={colors.danger} size={32} />
             </View>
             <ThemedText style={styles.logoutModalTitle}>Logout?</ThemedText>
             <ThemedText style={styles.confirmText}>Are you sure you want to logout?</ThemedText>
@@ -633,22 +659,22 @@ const ProfileScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   content: {
     flex: 1,
@@ -656,9 +682,9 @@ const styles = StyleSheet.create({
   profileSection: {
     alignItems: 'center',
     paddingVertical: 32,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   photoContainer: {
     position: 'relative',
@@ -669,17 +695,17 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 3,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
   },
   placeholderPhoto: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   cameraButton: {
     position: 'absolute',
@@ -688,11 +714,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -705,12 +731,12 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   userEmail: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   editButton: {
@@ -719,14 +745,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: colors.primaryBorder,
   },
   editButtonText: {
     fontSize: 14,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
   actionsSection: {
@@ -741,8 +767,43 @@ const styles = StyleSheet.create({
   },
   versionText: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '500',
+  },
+  themeSection: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    marginBottom: 16,
+  },
+  themeSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  themeOptions: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 10,
+    padding: 3,
+  },
+  themeOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  themeOptionSelected: {
+    backgroundColor: colors.surface,
+  },
+  themeOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  themeOptionTextSelected: {
+    color: colors.text,
+    fontWeight: '600',
   },
   logoutButton: {
     flexDirection: 'row',
@@ -750,14 +811,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     paddingVertical: 14,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.dangerSoft,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#FECACA',
+    borderColor: colors.dangerBorder,
   },
   logoutButtonText: {
     fontSize: 16,
-    color: '#DC2626',
+    color: colors.danger,
     fontWeight: '600',
   },
   modalOverlay: {
@@ -768,7 +829,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoutModal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 24,
     width: '100%',
@@ -784,7 +845,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.dangerSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -792,13 +853,13 @@ const styles = StyleSheet.create({
   logoutModalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   confirmText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 21,
@@ -810,15 +871,15 @@ const styles = StyleSheet.create({
   },
   logoutCancelButton: {
     paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 9,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   logoutCancelButtonText: {
     fontSize: 14,
-    color: '#374151',
+    color: colors.textStrong,
     fontWeight: '600',
   },
   logoutConfirmButton: {
@@ -838,12 +899,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     zIndex: 100,
   },
   editScreenContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -855,12 +916,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   editScreenTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   closeButtonTop: {
     width: 40,
@@ -868,17 +929,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   closeButtonText: {
     fontSize: 20,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '300',
   },
   saveButtonTop: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 8,
   },
   saveButtonTopText: {
@@ -893,13 +954,13 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
+    color: colors.text,
+    backgroundColor: colors.background,
     marginBottom: 22,
   },
   scrollContainer: {
@@ -909,27 +970,27 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   successBanner: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: colors.successSoft,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#A7F3D0',
+    borderBottomColor: colors.border,
   },
   successText: {
-    color: '#065F46',
+    color: colors.successStrong,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
   },
   errorBanner: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.dangerSoft,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#FECACA',
+    borderBottomColor: colors.dangerBorder,
   },
   errorText: {
-    color: '#991B1B',
+    color: colors.dangerStrong,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
@@ -946,7 +1007,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   successMessageBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: colors.surface,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
@@ -957,13 +1018,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   successMessageText: {
-    color: '#065F46',
+    color: colors.successStrong,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
   },
   errorMessageBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: colors.surface,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
@@ -974,7 +1035,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   errorMessageText: {
-    color: '#991B1B',
+    color: colors.dangerStrong,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
@@ -982,7 +1043,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
     textTransform: 'capitalize',
     letterSpacing: 0.3,
@@ -992,21 +1053,21 @@ const styles = StyleSheet.create({
   },
   formErrorText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.danger,
     fontWeight: '500',
     marginTop: -14,
     marginBottom: 14,
   },
   infoText: {
     fontSize: 14,
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginTop: 2,
     marginBottom: 2,
   },
   bioText: {
     fontSize: 14,
     fontStyle: 'italic',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 6,
     paddingHorizontal: 20,
@@ -1029,20 +1090,20 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
   },
   previewButtonText: {
     fontSize: 14,
-    color: '#4B5563',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   contactListButtonSection: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   contactListButton: {
     flexDirection: 'row',
@@ -1050,10 +1111,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -1062,7 +1123,7 @@ const styles = StyleSheet.create({
   },
   contactListButtonText: {
     fontSize: 16,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
 });

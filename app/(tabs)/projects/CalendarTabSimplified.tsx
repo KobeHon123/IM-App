@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,9 @@ import { useData } from '@/hooks/useData';
 import { Part } from '@/types';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 const eventColors = {
   Measurement: '#3B82F6',
@@ -29,6 +32,10 @@ const eventColors = {
 };
 
 const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
+  const colors = useColors();
+  const { canEdit } = useAuth();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const insets = useSafeAreaInsets();
   const { loading, getEventsByProject, createEvent, getPartsByProject, updateEvent, deleteEvent } = useData();
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -347,6 +354,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
           const tappedDate = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), dayNum);
           days.push(
             renderCalendarDay(dayNum, true, () => {
+              if (!canEdit) return;
               setSelectedDateForCreation(tappedDate);
               setShowConfirmModal(true);
             }, keyParam)
@@ -384,9 +392,9 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
             <ThemedText style={styles.navText}>Next</ThemedText>
           </TouchableOpacity>
           {isCalendarFolded ? (
-            <ChevronDown color="#6B7280" size={20} />
+            <ChevronDown color={colors.textSecondary} size={20} />
           ) : (
-            <ChevronUp color="#6B7280" size={20} />
+            <ChevronUp color={colors.textSecondary} size={20} />
           )}
         </TouchableOpacity>
         {!isCalendarFolded && renderCalendarGrid()}
@@ -449,8 +457,8 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
               parts={item.parts || []}
               projectParts={projectParts}
               description={item.description}
-              onEdit={() => handleEditEvent(item.id)}
-              onDelete={() => handleDeleteEvent(item.id)}
+              onEdit={canEdit ? () => handleEditEvent(item.id) : undefined}
+              onDelete={canEdit ? () => handleDeleteEvent(item.id) : undefined}
               isPast={isPast}
             />
           );
@@ -459,6 +467,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
         showsVerticalScrollIndicator={false}
       />
 
+      {canEdit && (
       <TouchableOpacity
         style={styles.floatingAddButton}
         onPress={() => {
@@ -468,6 +477,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
       >
         <Plus color="#FFFFFF" size={28} />
       </TouchableOpacity>
+      )}
 
       <Modal
         visible={showConfirmModal}
@@ -484,7 +494,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
               </ThemedText>
             </View>
             <TouchableOpacity style={styles.closeButton} onPress={resetModal}>
-              <X color="#6B7280" size={24} />
+              <X color={colors.textSecondary} size={24} />
             </TouchableOpacity>
           </View>
 
@@ -505,7 +515,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
                   setShowDatePickerInline(!showDatePickerInline);
                 }}
               >
-                <Calendar color="#2563EB" size={20} />
+                <Calendar color={colors.primaryText} size={20} />
                 <ThemedText style={styles.datePickerButtonText}>
                   {selectedDateForCreation ? formatDate(selectedDateForCreation) : 'Tap to select date'}
                 </ThemedText>
@@ -623,7 +633,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
                 <TextInput
                   style={styles.timeInputField}
                   placeholder="HH:MM"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textMuted}
                   value={timeInput || (selectedTime ? formatTime(selectedTime) : '')}
                   onChangeText={handleTimeInput}
                   maxLength={5}
@@ -672,9 +682,9 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
                             <ThemedText style={styles.categoryBadgeText}>{parts.length}</ThemedText>
                           </View>
                           {isExpanded ? (
-                            <ChevronUp color="#6B7280" size={18} />
+                            <ChevronUp color={colors.textSecondary} size={18} />
                           ) : (
-                            <ChevronDown color="#6B7280" size={18} />
+                            <ChevronDown color={colors.textSecondary} size={18} />
                           )}
                         </TouchableOpacity>
                         {isExpanded && (
@@ -726,7 +736,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Add notes or details about this event..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
@@ -753,10 +763,10 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   tabContent: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -765,7 +775,7 @@ const styles = StyleSheet.create({
   },
   calendarContainer: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     marginLeft: 12,
     marginRight: 12,
@@ -788,7 +798,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -808,7 +818,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   inactiveDay: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   eventDay: {
     borderRadius: 24,
@@ -819,10 +829,10 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
   },
   inactiveText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   monthNavContainer: {
     flexDirection: 'row',
@@ -836,18 +846,18 @@ const styles = StyleSheet.create({
   monthNav: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
   },
   navText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   monthTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
     textAlign: 'center',
   },
@@ -857,7 +867,7 @@ const styles = StyleSheet.create({
     right: 32,
     width: 56,
     height: 56,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
@@ -870,7 +880,7 @@ const styles = StyleSheet.create({
   // Modern modal styles
   modalFullScreen: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -879,19 +889,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   closeButton: {
@@ -909,7 +919,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 12,
   },
   datePickerButton: {
@@ -917,10 +927,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -931,7 +941,7 @@ const styles = StyleSheet.create({
   datePickerButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primaryText,
     flex: 1,
   },
   eventTypeGrid: {
@@ -942,17 +952,17 @@ const styles = StyleSheet.create({
   eventTypeOption: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     flex: 1,
     minWidth: '45%',
     alignItems: 'center',
   },
   eventTypeOptionText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   timeButtonModern: {
@@ -961,10 +971,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -981,10 +991,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -996,7 +1006,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     padding: 0,
   },
   timeClearButton: {
@@ -1005,12 +1015,12 @@ const styles = StyleSheet.create({
   },
   timeClearText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '600',
   },
   timeFormatLabel: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '500',
     marginLeft: 4,
   },
@@ -1043,27 +1053,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     gap: 8,
   },
   categoryTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
     flex: 1,
   },
   categoryBadge: {
     width: 20,
     height: 20,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   categoryBadgeText: {
     fontSize: 11,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '600',
     lineHeight: 13,
   },
@@ -1075,10 +1085,10 @@ const styles = StyleSheet.create({
   partListItem: {
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -1095,7 +1105,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1110,28 +1120,28 @@ const styles = StyleSheet.create({
   partListName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   partListType: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginTop: 2,
   },
   noContentText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     textAlign: 'center',
     marginVertical: 20,
   },
   textAreaModern: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 14,
     height: 110,
     textAlignVertical: 'top',
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
     fontSize: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1143,22 +1153,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
     gap: 12,
   },
   cancelButton: {
     flex: 1,
     paddingVertical: 14,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
   },
   cancelButtonText: {
-    color: '#374151',
+    color: colors.textStrong,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1180,21 +1190,21 @@ const styles = StyleSheet.create({
   },
   // Inline Date Picker Styles
   inlineDatePickerContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     marginVertical: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   inlineDatePickerFooter: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
   },
   inlineDatePickerButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 10,
     borderRadius: 20,
     alignItems: 'center',
@@ -1207,12 +1217,12 @@ const styles = StyleSheet.create({
   },
   // Inline Calendar Styles
   inlineCalendarContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     marginVertical: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     padding: 12,
   },
   inlineCalendarHeader: {
@@ -1224,13 +1234,13 @@ const styles = StyleSheet.create({
   inlineCalendarNavText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primaryText,
     paddingHorizontal: 8,
   },
   inlineCalendarTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   inlineCalendarWeekHeader: {
     flexDirection: 'row',
@@ -1239,7 +1249,7 @@ const styles = StyleSheet.create({
   inlineCalendarWeekDay: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     width: 44,
     height: 44,
     textAlign: 'center',
@@ -1264,19 +1274,19 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   inlineCalendarDaySelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   inlineCalendarDayText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   inlineCalendarDayTextSelected: {
     color: '#FFFFFF',
   },
   datePickerContent: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 20,
     gap: 16,
@@ -1288,7 +1298,7 @@ const styles = StyleSheet.create({
   datePickerLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -1303,12 +1313,12 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   datePickerOptionSelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   datePickerOptionText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
   },
   datePickerOptionTextSelected: {

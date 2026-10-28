@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Modal, Animated, Platform, Dimensions } from 'react-native';
 import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { Part, Project } from '@/types';
 import { EllipsisVertical, Package, MessageCircle, Send, Check, Minus, Plus, ChevronRight, ImageIcon } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
-import { isButtonSet } from '@/lib/floorUtils';
+import { isButtonSet, getLiftBadges } from '@/lib/floorUtils';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface PartCardProps {
   part: Part;
@@ -53,6 +55,9 @@ export function PartCard({
   onStatusChange,
   onCommentSend
 }: PartCardProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { impactAsync, notificationAsync } = usePlatformHaptics();
   const statusColors = {
     measured: '#EF4444',
@@ -155,7 +160,7 @@ export function PartCard({
           />
         ) : (
           <View style={styles.gridCardPlaceholder}>
-            <ImageIcon color="#9CA3AF" size={48} />
+            <ImageIcon color={colors.textMuted} size={48} />
           </View>
         )}
         
@@ -176,7 +181,20 @@ export function PartCard({
         {/* Content */}
         <View style={styles.gridCardContent}>
           <View style={styles.gridCardFooter}>
-            <ThemedText style={styles.gridCardName}>{part.name}{isButtonSet(part) ? ' · SET' : ''}</ThemedText>
+            <View style={styles.gridCardNameBlock}>
+              <ThemedText style={styles.gridCardName}>{part.name}{isButtonSet(part) ? ' · SET' : ''}</ThemedText>
+              {getLiftBadges(part).length > 0 && (
+                <View style={styles.gridBadgeRow}>
+                  {getLiftBadges(part).map((badge) => (
+                    <View key={badge.kind} style={[styles.gridBadge, badge.kind === 'surface' ? styles.gridSurfaceBadge : styles.gridBrailleBadge]}>
+                      <ThemedText style={[styles.gridBadgeText, badge.kind === 'surface' ? styles.gridSurfaceBadgeText : styles.gridBrailleBadgeText]}>
+                        {badge.label.toUpperCase()}
+                      </ThemedText>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
             {showQuantity && (
               <View style={styles.gridCardQuantityBadge}>
                 <ThemedText style={styles.gridCardQuantityText}>{isPartTab ? 'Total Qty:' : 'Qty:'} {quantity}</ThemedText>
@@ -209,7 +227,7 @@ export function PartCard({
                 <Image key={part.pictures[0]} source={{ uri: part.pictures[0] }} style={styles.thumbnail} />
               ) : (
                 <View style={styles.placeholderImage}>
-                  <Package color="#6B7280" size={24} />
+                  <Package color={colors.textSecondary} size={24} />
                 </View>
               )}
             </View>
@@ -224,6 +242,13 @@ export function PartCard({
                     <ThemedText style={styles.setBadgeText}>SET</ThemedText>
                   </View>
                 )}
+                {getLiftBadges(part).map((badge) => (
+                  <View key={badge.kind} style={[styles.setBadge, badge.kind === 'surface' ? styles.surfaceBadge : styles.brailleBadge]}>
+                    <ThemedText style={[styles.setBadgeText, badge.kind === 'surface' ? styles.surfaceBadgeText : styles.brailleBadgeText]}>
+                      {badge.label.toUpperCase()}
+                    </ThemedText>
+                  </View>
+                ))}
               </View>
             </View>
             {simplifyDisplay && part.description && (
@@ -254,7 +279,7 @@ export function PartCard({
               <ThemedText style={styles.statusModeText}>
                 {part.status ? part.status.charAt(0).toUpperCase() + part.status.slice(1) : 'Set'}
               </ThemedText>
-              <ChevronRight color="#9CA3AF" size={14} />
+              <ChevronRight color={colors.textMuted} size={14} />
             </TouchableOpacity>
           ) : countingMode && onQuantityChange ? (
             <View style={styles.countingModeContainer}>
@@ -266,7 +291,7 @@ export function PartCard({
                 }}
                 activeOpacity={0.7}
               >
-                <Minus color="#EF4444" size={20} strokeWidth={2.5} />
+                <Minus color={colors.danger} size={20} strokeWidth={2.5} />
               </TouchableOpacity>
               {isEditing ? (
                 <TextInput
@@ -296,7 +321,7 @@ export function PartCard({
                 }}
                 activeOpacity={0.7}
               >
-                <Plus color="#3B82F6" size={20} strokeWidth={2.5} />
+                <Plus color={colors.primaryText} size={20} strokeWidth={2.5} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -312,13 +337,13 @@ export function PartCard({
                   style={styles.commentButton}
                   onPress={() => setShowCommentInput(true)}
                 >
-                  <MessageCircle color={hasComments ? '#2563EB' : '#6B7280'} size={20} />
+                  <MessageCircle color={hasComments ? colors.primaryText : colors.textSecondary} size={20} />
                   {hasComments && <View style={styles.commentBadge} />}
                 </TouchableOpacity>
               )}
               {onMorePress && (
                 <TouchableOpacity style={styles.moreButton} onPress={onMorePress}>
-                  <EllipsisVertical color="#6B7280" size={20} />
+                  <EllipsisVertical color={colors.textSecondary} size={20} />
                 </TouchableOpacity>
               )}
             </View>
@@ -419,10 +444,10 @@ export function PartCard({
 const { width: screenWidth } = Dimensions.get('window');
 const gridCardSize = (screenWidth - 24 - 16) / 2; // (screenWidth - padding - margins) / 2 columns
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Grid layout styles
   gridCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     margin: 4,
     overflow: 'hidden',
@@ -440,8 +465,8 @@ const styles = StyleSheet.create({
   },
   gridCardSelected: {
     borderWidth: 2,
-    borderColor: '#2563EB',
-    backgroundColor: '#DBEAFE',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
   },
   gridCardBackground: {
     width: '100%',
@@ -452,7 +477,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'absolute',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -470,6 +495,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     gap: 8,
+  },
+  gridCardNameBlock: {
+    flex: 1,
+  },
+  gridBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  gridBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  gridBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  gridSurfaceBadge: {
+    backgroundColor: 'rgba(254, 243, 199, 0.95)',
+  },
+  gridSurfaceBadgeText: {
+    color: '#78350F',
+  },
+  gridBrailleBadge: {
+    backgroundColor: 'rgba(254, 226, 226, 0.95)',
+  },
+  gridBrailleBadgeText: {
+    color: '#991B1B',
   },
   gridCardName: {
     fontSize: 14,
@@ -503,7 +558,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -547,7 +602,7 @@ const styles = StyleSheet.create({
   placeholderImage: {
     width: 56,
     height: 56,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -563,24 +618,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
   },
   name: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.text,
     marginBottom: 2,
     letterSpacing: 0.3,
     flexShrink: 1,
   },
   type: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   description: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginBottom: 0,
   },
   statusContainer: {
@@ -600,7 +655,7 @@ const styles = StyleSheet.create({
   },
   quantity: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   qtyContainer: {
     flexDirection: 'row',
@@ -613,14 +668,14 @@ const styles = StyleSheet.create({
   qtyLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   qtyValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   rightSection: {
     marginLeft: 12,
@@ -644,7 +699,7 @@ const styles = StyleSheet.create({
   qtyText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#3B82F6',
+    color: colors.primaryText,
     minWidth: 24,
     textAlign: 'right',
   },
@@ -656,16 +711,28 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   setBadge: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryMuted,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginLeft: 8,
   },
+  surfaceBadge: {
+    backgroundColor: colors.warningSoft,
+  },
+  surfaceBadgeText: {
+    color: colors.warningStrong,
+  },
+  brailleBadge: {
+    backgroundColor: colors.dangerSoft,
+  },
+  brailleBadgeText: {
+    color: colors.dangerStrong,
+  },
   setBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#1D4ED8',
+    color: colors.primaryStrongText,
   },
   // Modern Counting Mode Styles
   countingModeContainer: {
@@ -698,25 +765,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 12,
   },
   countValue: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.text,
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   countInput: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.text,
     minWidth: 48,
     height: 40,
     textAlign: 'center',
     textAlignVertical: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#6366F1',
@@ -726,13 +793,13 @@ const styles = StyleSheet.create({
   statusModeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 10,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   statusIndicator: {
     width: 10,
@@ -742,7 +809,7 @@ const styles = StyleSheet.create({
   statusModeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
     textTransform: 'capitalize',
     textAlign: 'center',
     textAlignVertical: 'center',
@@ -751,12 +818,12 @@ const styles = StyleSheet.create({
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -771,7 +838,7 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 6,
     margin: 2,
   },
@@ -787,7 +854,7 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     margin: 0,
     shadowColor: '#000',
@@ -805,28 +872,28 @@ const styles = StyleSheet.create({
   quantityValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginHorizontal: 6,
     minWidth: 32,
     textAlign: 'center',
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   quantityInput: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginHorizontal: 12,
     minWidth: 32,
     textAlign: 'center',
     borderWidth: 1,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   statusButton: {
     paddingHorizontal: 16,
@@ -855,7 +922,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusModal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 24,
     padding: 0,
     minWidth: 300,
@@ -868,21 +935,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   statusModalHeader: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     paddingVertical: 20,
     paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: colors.border,
   },
   statusModalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   statusModalSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   statusOptionsContainer: {
     padding: 16,
@@ -894,12 +961,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
     marginBottom: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     position: 'relative',
     overflow: 'hidden',
   },
   statusOptionSelected: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: colors.primarySoft,
     borderWidth: 2,
     borderColor: '#6366F1',
   },
@@ -918,7 +985,7 @@ const styles = StyleSheet.create({
   },
   statusOptionText: {
     fontSize: 16,
-    color: '#374151',
+    color: colors.textStrong,
     fontWeight: '500',
     textTransform: 'capitalize',
   },
@@ -949,26 +1016,26 @@ const styles = StyleSheet.create({
     right: 6,
     width: 8,
     height: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   commentInputContainer: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
   },
   commentInput: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
     minHeight: 60,
     maxHeight: 120,
     textAlignVertical: 'top',
@@ -983,11 +1050,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   commentCancelText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   commentSendButton: {
@@ -997,7 +1064,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   commentSendButtonDisabled: {
     backgroundColor: '#9CA3AF',
@@ -1008,8 +1075,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cardSelected: {
-    backgroundColor: '#DBEAFE',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primaryMuted,
+    borderColor: colors.primary,
     borderWidth: 2,
   },
   selectedCheckmark: {

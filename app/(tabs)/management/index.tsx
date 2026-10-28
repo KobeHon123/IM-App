@@ -3,11 +3,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clipboard, Calculator, History, FlaskConical, Hourglass } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
+import { useMemo } from 'react';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 export default function ManagementTab() {
+  const colors = useColors();
+  const { role } = useAuth();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const router = useRouter();
 
-  const managementPrograms = [
+  const managementPrograms: {
+    id: string;
+    name: string;
+    icon: typeof Clipboard;
+    route: string | null;
+    disabled?: boolean;
+  }[] = [
     {
       id: 'part-time-timesheet',
       name: 'Part Time\nTimeSheet',
@@ -30,12 +44,11 @@ export default function ManagementTab() {
       id: 'quick-test-report',
       name: 'Quick Test\nReport',
       icon: FlaskConical,
-      route: null,
-      disabled: true,
+      route: '/(tabs)/management/quick-test-report',
     },
     {
       id: 'stopwatch',
-      name: 'Stopwatch',
+      name: 'Stopwatch\nTimer',
       icon: Hourglass,
       route: '/(tabs)/management/stopwatch',
     },
@@ -48,7 +61,7 @@ export default function ManagementTab() {
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         <View style={styles.grid}>
-          {managementPrograms.map((program) => {
+          {managementPrograms.filter((program) => !(role === 'fuhong_worker' && program.id === 'part-time-timesheet')).map((program) => {
             const IconComponent = program.icon;
             return (
               <TouchableOpacity
@@ -64,7 +77,7 @@ export default function ManagementTab() {
                 <View style={styles.iconContainer}>
                   <IconComponent 
                     size={48} 
-                    color={program.disabled ? '#9CA3AF' : '#2563EB'} 
+                    color={program.disabled ? colors.textMuted : colors.primaryText} 
                     strokeWidth={1.5} 
                     opacity={program.disabled ? 0.5 : 1}
                   />
@@ -81,22 +94,22 @@ export default function ManagementTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   content: {
     flex: 1,
@@ -113,13 +126,13 @@ const styles = StyleSheet.create({
   programCard: {
     width: '47%',
     aspectRatio: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -127,8 +140,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   programCardDisabled: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#D1D5DB',
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.borderStrong,
     opacity: 0.5,
   },
   iconContainer: {
@@ -139,10 +152,11 @@ const styles = StyleSheet.create({
   programName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
+    lineHeight: 20,
   },
   programNameDisabled: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
 });

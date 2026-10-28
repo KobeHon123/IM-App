@@ -1,18 +1,24 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { Project } from '@/types';
 import { User } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface ProjectCardProps {
   project: Project;
   onPress: () => void;
+  isFinished?: boolean;
 }
 
-export function ProjectCard({ project, onPress }: ProjectCardProps) {
+export function ProjectCard({ project, onPress, isFinished = false }: ProjectCardProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={1}>
-      <View style={styles.cardShell}>
+      <View style={[styles.cardShell, isFinished && styles.cardShellFinished]}>
         {project.thumbnail ? (
           <ImageBackground
             source={{ uri: project.thumbnail }}
@@ -28,7 +34,7 @@ export function ProjectCard({ project, onPress }: ProjectCardProps) {
                   </ThemedText>
                 ) : null}
                 <View style={styles.footer}>
-                  <User color="#6B7280" size={16} />
+                  <User color="#4B5563" size={16} />
                   <ThemedText style={styles.pic}> {project.pic}</ThemedText>
                 </View>
               </View>
@@ -45,7 +51,7 @@ export function ProjectCard({ project, onPress }: ProjectCardProps) {
                   </ThemedText>
                 ) : null}
                 <View style={styles.footer}>
-                  <User color="#6B7280" size={16} />
+                  <User color="#4B5563" size={16} />
                   <ThemedText style={styles.pic}>{project.pic}</ThemedText>
                 </View>
               </View>
@@ -63,7 +69,7 @@ const textShadow = {
   textShadowRadius: 2,
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     borderRadius: 12,
     marginHorizontal: 16,
@@ -81,6 +87,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
+  },
+  cardShellFinished: {
+    borderWidth: 4,
+    borderColor: '#10B981',
   },
   header: {
     flexDirection: 'row',
@@ -129,7 +139,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#4B5563',
     lineHeight: 20,
     marginBottom: 8,
     ...textShadow,
@@ -140,7 +150,7 @@ const styles = StyleSheet.create({
   },
   pic: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#4B5563',
     marginLeft: 4,
     ...textShadow,
   },

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, TextInput, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface SearchBarProps {
   value: string;
@@ -12,9 +14,12 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ value, onChangeText, placeholder = "Search...", rightAction, containerStyle }: SearchBarProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.container, containerStyle]}>
-      <Search color="#6B7280" size={20} style={styles.icon} />
+      <Search color={colors.textSecondary} size={20} style={styles.icon} />
       <TextInput
         style={styles.input}
         value={value}
@@ -31,18 +36,18 @@ export function SearchBar({ value, onChangeText, placeholder = "Search...", righ
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginHorizontal: 16,
     marginVertical: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   icon: {
     marginRight: 8,
@@ -50,7 +55,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
     paddingVertical: 8,
   },
   rightButton: {
@@ -64,11 +69,11 @@ const styles = StyleSheet.create({
     // no background; icon/text color indicates active state
   },
   rightButtonText: {
-    color: '#374151',
+    color: colors.textStrong,
     fontSize: 14,
     fontWeight: '600',
   },
   rightButtonTextActive: {
-    color: '#2563EB',
+    color: colors.primaryText,
   },
 });

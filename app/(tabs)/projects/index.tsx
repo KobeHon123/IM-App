@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
 import { 
@@ -12,7 +12,8 @@ import {
   Alert,
   Image,
   ScrollView,
-  RefreshControl
+  RefreshControl,
+  Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -24,12 +25,31 @@ import { SearchBar } from '@/components/SearchBar';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Project } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 export default function ProjectsScreen() {
-  const { projects, createProject, updateProject, deleteProject, profiles } = useData();
+  const colors = useColors();
+  const { canEdit, canManageUsers } = useAuth();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const { projects, venues, parts, createProject, updateProject, deleteProject, profiles } = useData();
+
+  const finishedProjectIds = useMemo(() => {
+    const finished = new Set<string>();
+    for (const project of projects) {
+      const projectParts = parts.filter(part => part.projectId === project.id);
+      const hasVenue = venues.some(venue => venue.projectId === project.id);
+      if (hasVenue && projectParts.length > 0 && projectParts.every(part => part.status === 'installed')) {
+        finished.add(project.id);
+      }
+    }
+    return finished;
+  }, [projects, venues, parts]);
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sortAsc, setSortAsc] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,12 +61,14 @@ export default function ProjectsScreen() {
     description: '',
     pic: '',
     thumbnail: '',
+    fuhongVisible: false,
   });
   const [editingProject, setEditingProject] = useState({
     name: '',
     description: '',
     pic: '',
     thumbnail: '',
+    fuhongVisible: false,
   });
   const [newProjectPics, setNewProjectPics] = useState<string[]>([]);
   const [editingProjectPics, setEditingProjectPics] = useState<string[]>([]);
@@ -97,7 +119,7 @@ export default function ProjectsScreen() {
     };
     console.log('Creating project:', projectToCreate);
     await createProject(projectToCreate);
-    setNewProject({ name: '', description: '', pic: '', thumbnail: '' });
+    setNewProject({ name: '', description: '', pic: '', thumbnail: '', fuhongVisible: false });
     setNewProjectPics([]);
     setShowCreateModal(false);
   };
@@ -198,7 +220,7 @@ export default function ProjectsScreen() {
           onPress={() => setSortAsc(prev => !prev)}
           accessibilityLabel="Toggle sort order"
         >
-          <ArrowUpDown color={sortAsc ? '#2563EB' : '#374151'} size={20} />
+          <ArrowUpDown color={sortAsc ? colors.primaryText : colors.textStrong} size={20} />
         </TouchableOpacity>
       </View>
 
@@ -210,8 +232,8 @@ export default function ProjectsScreen() {
         }
         renderItem={({ item }) => (
           <ReanimatedSwipeable
-            containerStyle={{ backgroundColor: '#F9FAFB' }}
-            renderLeftActions={(_prog, _drag, swipeable) => (
+            containerStyle={{ backgroundColor: colors.background }}
+            renderLeftActions={!canEdit ? undefined : (_prog, _drag, swipeable) => (
               <View style={styles.swipeActionsLeft}>
                 <GHTouchableOpacity
                   style={styles.swipeActionButton}
@@ -223,6 +245,7 @@ export default function ProjectsScreen() {
                       description: item.description,
                       pic: '',
                       thumbnail: item.thumbnail || '',
+                      fuhongVisible: !!item.fuhongVisible,
                     });
                     setEditingProjectPics(item.pic.split(', ').filter(p => p.trim()));
                     setShowEditModal(true);
@@ -252,6 +275,7 @@ export default function ProjectsScreen() {
           >
             <ProjectCard
               project={item}
+              isFinished={finishedProjectIds.has(item.id)}
               onPress={() => {
                 console.log('Navigating to project ID:', item.id);
                 router.push(`/(tabs)/projects/${item.id}`);
@@ -263,6 +287,7 @@ export default function ProjectsScreen() {
         showsVerticalScrollIndicator={false}
       />
 
+      {canEdit && (
       <TouchableOpacity 
         style={styles.floatingAddButton}
         onPress={() => {
@@ -272,6 +297,7 @@ export default function ProjectsScreen() {
       >
         <Plus color="#FFFFFF" size={28} />
       </TouchableOpacity>
+      )}
 
       <Modal
         visible={showCreateModal}
@@ -359,7 +385,7 @@ export default function ProjectsScreen() {
                   style={styles.editPictureButton}
                   onPress={() => handleSelectThumbnail(false)}
                 >
-                  <Camera color="#334155" size={22} />
+                  <Camera color={colors.textStrong} size={22} />
                   <ThemedText style={styles.editPictureButtonText}>Add Thumbnail</ThemedText>
                 </TouchableOpacity>
                 {newProject.thumbnail && (
@@ -367,6 +393,21 @@ export default function ProjectsScreen() {
                 )}
               </View>
             </View>
+
+            {canManageUsers && (
+              <View style={styles.editModalSectionCard}>
+                <View style={styles.fuhongRow}>
+                  <View style={styles.fuhongText}>
+                    <ThemedText style={styles.inputLabel}>Visible to FuHong Workers</ThemedText>
+                    <ThemedText style={styles.fuhongHint}>FuHong Worker accounts can only see projects with this switched on.</ThemedText>
+                  </View>
+                  <Switch
+                    value={newProject.fuhongVisible}
+                    onValueChange={(value) => setNewProject(prev => ({ ...prev, fuhongVisible: value }))}
+                  />
+                </View>
+              </View>
+            )}
 
             {isProjectNameDuplicate && (
               <ThemedText style={styles.duplicateWarning}>A project with this name already exists</ThemedText>
@@ -481,7 +522,7 @@ export default function ProjectsScreen() {
                   style={styles.editPictureButton}
                   onPress={() => handleSelectThumbnail(true)}
                 >
-                  <Camera color="#334155" size={22} />
+                  <Camera color={colors.textStrong} size={22} />
                   <ThemedText style={styles.editPictureButtonText}>Change Thumbnail</ThemedText>
                 </TouchableOpacity>
                 {editingProject.thumbnail && (
@@ -489,6 +530,21 @@ export default function ProjectsScreen() {
                 )}
               </View>
             </View>
+
+            {canManageUsers && (
+              <View style={styles.editModalSectionCard}>
+                <View style={styles.fuhongRow}>
+                  <View style={styles.fuhongText}>
+                    <ThemedText style={styles.inputLabel}>Visible to FuHong Workers</ThemedText>
+                    <ThemedText style={styles.fuhongHint}>FuHong Worker accounts can only see projects with this switched on.</ThemedText>
+                  </View>
+                  <Switch
+                    value={editingProject.fuhongVisible}
+                    onValueChange={(value) => setEditingProject(prev => ({ ...prev, fuhongVisible: value }))}
+                  />
+                </View>
+              </View>
+            )}
 
             <View style={styles.editActionRow}>
               <TouchableOpacity
@@ -536,7 +592,7 @@ export default function ProjectsScreen() {
 
           <View style={styles.modalContent}>
             <ThemedText style={styles.inputLabel}>Type the project name to confirm deletion:</ThemedText>
-            <ThemedText style={{ marginBottom: 12, color: '#111827', fontWeight: '700' }}>{selectedProject?.name}</ThemedText>
+            <ThemedText style={{ marginBottom: 12, color: colors.text, fontWeight: '700' }}>{selectedProject?.name}</ThemedText>
             <TextInput
               style={styles.input}
               value={deleteConfirmText}
@@ -563,10 +619,10 @@ export default function ProjectsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -574,21 +630,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   listContent: {
     paddingVertical: 4,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -597,16 +653,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalClose: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modalContent: {
     flex: 1,
@@ -614,27 +670,27 @@ const styles = StyleSheet.create({
   },
   editModalContainer: {
     flex: 1,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: colors.background,
   },
   editModalIntroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editModalEyebrow: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   editModalTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   editModalScroll: {
     flex: 1,
@@ -644,11 +700,11 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   editModalSectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editPictureButton: {
     flexDirection: 'row',
@@ -657,14 +713,14 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   editPictureButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    color: colors.textStrong,
   },
   editThumbnailPreview: {
     width: 128,
@@ -673,7 +729,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editActionRow: {
     flexDirection: 'row',
@@ -688,13 +744,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
   },
   editSecondaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    color: colors.textStrong,
   },
   editPrimaryButton: {
     flex: 1,
@@ -710,10 +766,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   editPrimaryButtonDisabled: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.surfaceStrong,
   },
   editPrimaryButtonTextDisabled: {
-    color: '#94A3B8',
+    color: colors.textMuted,
+  },
+  fuhongRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  fuhongText: {
+    flex: 1,
+  },
+  fuhongHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 17,
   },
   inputGroup: {
     marginBottom: 20,
@@ -721,24 +791,24 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   textArea: {
     height: 100,
   },
   createProjectButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
@@ -752,13 +822,13 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
   },
   disabledButtonText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   duplicateWarning: {
-    color: '#EF4444',
+    color: colors.danger,
     fontSize: 12,
     marginTop: 4,
     marginBottom: 8,
@@ -769,14 +839,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 20,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderStyle: 'dashed',
     borderRadius: 8,
   },
   pictureButtonText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   thumbnailPreview: {
     width: 100,
@@ -803,14 +873,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   swipeEditCircle: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   swipeDeleteCircle: {
     backgroundColor: '#EF4444',
   },
   disabledInput: {
-    backgroundColor: '#F3F4F6',
-    color: '#9CA3AF',
+    backgroundColor: colors.surfaceMuted,
+    color: colors.textMuted,
   },
   selectedPicsContainer: {
     marginTop: 12,
@@ -821,7 +891,7 @@ const styles = StyleSheet.create({
   picTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryMuted,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -829,12 +899,12 @@ const styles = StyleSheet.create({
   },
   picTagText: {
     fontSize: 14,
-    color: '#1E40AF',
+    color: colors.primaryStrongText,
     fontWeight: '500',
   },
   picRemoveText: {
     fontSize: 18,
-    color: '#1E40AF',
+    color: colors.primaryStrongText,
     fontWeight: 'bold',
   },
   floatingAddButton: {
@@ -843,7 +913,7 @@ const styles = StyleSheet.create({
     right: 32,
     width: 56,
     height: 56,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
@@ -877,16 +947,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   disabledPrimaryButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 20,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   disabledPrimaryButtonText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 16,
     fontWeight: '600',
   },

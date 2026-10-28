@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -42,6 +42,9 @@ import { updateComment, deleteComment, toggleCommentCompletion, createComment } 
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
 import { calculateDimensionSimilarity } from '@/lib/similarityDetection';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface PartDetailModalProps {
   visible: boolean;
@@ -67,7 +70,11 @@ export function PartDetailModal({
   onClose,
   onCommentsChange,
 }: PartDetailModalProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { profiles } = useData();
+  const { canEdit } = useAuth();
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
@@ -279,7 +286,7 @@ export function PartDetailModal({
             {/* Pictures Section (Moved to Top) */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <ImageIcon color="#6B7280" size={20} />
+                <ImageIcon color={colors.textSecondary} size={20} />
                 <ThemedText style={styles.sectionTitle}>Pictures</ThemedText>
               </View>
               {selectedPart.pictures?.length ? (
@@ -301,7 +308,7 @@ export function PartDetailModal({
             {/* CAD Drawing Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <FileText color="#6B7280" size={20} />
+                <FileText color={colors.textSecondary} size={20} />
                 <ThemedText style={styles.sectionTitle}>Installation Picture</ThemedText>
               </View>
               {selectedPart.cadDrawing ? (
@@ -319,21 +326,21 @@ export function PartDetailModal({
             {/* Basic Info Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Info color="#6B7280" size={20} />
+                <Info color={colors.textSecondary} size={20} />
                 <ThemedText style={styles.sectionTitle}>Basic Info</ThemedText>
               </View>
               <View style={styles.fieldRow}>
-                <Package color="#6B7280" size={18} />
+                <Package color={colors.textSecondary} size={18} />
                 <ThemedText style={styles.fieldLabel}>Name:</ThemedText>
                 <ThemedText style={styles.fieldValue}>{selectedPart.name}</ThemedText>
               </View>
               <View style={styles.fieldRow}>
-                <FileText color="#6B7280" size={18} />
+                <FileText color={colors.textSecondary} size={18} />
                 <ThemedText style={styles.fieldLabel}>Type:</ThemedText>
                 <ThemedText style={styles.fieldValue}>{selectedPart.type === 'U shape' ? 'U/Curved shape' : selectedPart.type === 'X - Special Design' ? 'X - Special Handle' : selectedPart.type === 'Push Pad' ? 'Push Plate' : selectedPart.type}</ThemedText>
               </View>
               <View style={styles.fieldRow}>
-                <AlertCircle color="#6B7280" size={18} />
+                <AlertCircle color={colors.textSecondary} size={18} />
                 <ThemedText style={styles.fieldLabel}>Status:</ThemedText>
                 <View style={[styles.statusBadge, { backgroundColor: {
                   measured: '#EF4444',
@@ -348,19 +355,19 @@ export function PartDetailModal({
                 </View>
               </View>
               <View style={styles.fieldRow}>
-                <User color="#6B7280" size={18} />
+                <User color={colors.textSecondary} size={18} />
                 <ThemedText style={styles.fieldLabel}>Designer:</ThemedText>
                 <ThemedText style={styles.fieldValue}>{selectedPart.designer || 'Not assigned'}</ThemedText>
               </View>
               {projectNames && projectNames.length > 0 && (
                 <View style={styles.fieldRow}>
-                  <Package color="#6B7280" size={18} />
+                  <Package color={colors.textSecondary} size={18} />
                   <ThemedText style={styles.fieldLabel}>Projects:</ThemedText>
                   <ThemedText style={styles.fieldValue}>{projectNames.join(' / ')}</ThemedText>
                 </View>
               )}
               <View style={styles.descriptionRow}>
-                <AlignLeft color="#6B7280" size={18} />
+                <AlignLeft color={colors.textSecondary} size={18} />
                 <ThemedText style={styles.fieldLabel}>Location/Description:</ThemedText>
                 <ThemedText style={[styles.fieldValue, { flex: 2 }]}>{selectedPart.description || 'No description available'}</ThemedText>
               </View>
@@ -386,7 +393,7 @@ export function PartDetailModal({
               return (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Ruler color="#6B7280" size={20} />
+                    <Ruler color={colors.textSecondary} size={20} />
                     <ThemedText style={styles.sectionTitle}>Dimensions</ThemedText>
                   </View>
                   <FlatList
@@ -432,7 +439,7 @@ export function PartDetailModal({
               return (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Package color="#6B7280" size={20} />
+                    <Package color={colors.textSecondary} size={20} />
                     <ThemedText style={styles.sectionTitle}>Quantity</ThemedText>
                   </View>
                   <FlatList
@@ -454,11 +461,12 @@ export function PartDetailModal({
             {/* Comments Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <MessageCircle color="#6B7280" size={20} />
+                <MessageCircle color={colors.textSecondary} size={20} />
                 <ThemedText style={styles.sectionTitle}>Comments ({comments.length})</ThemedText>
               </View>
 
               {/* Comment Input Form */}
+              {canEdit && (
               <View style={styles.commentInputContainer}>
                 <View style={styles.commentInputWrapper}>
                   <TextInput
@@ -474,10 +482,11 @@ export function PartDetailModal({
                     onPress={handleCommentSend}
                     disabled={!newCommentText.trim() || isSubmittingComment}
                   >
-                    <Send color={newCommentText.trim() && !isSubmittingComment ? '#2563EB' : '#9CA3AF'} size={20} />
+                    <Send color={newCommentText.trim() && !isSubmittingComment ? colors.primaryText : colors.textMuted} size={20} />
                   </TouchableOpacity>
                 </View>
               </View>
+              )}
 
               {/* Existing Comments */}
               {comments.length > 0 ? (
@@ -491,11 +500,12 @@ export function PartDetailModal({
                         <TouchableOpacity
                           style={styles.commentCheckbox}
                           onPress={() => handleToggleCommentCompletion(comment.id)}
+                          disabled={!canEdit}
                         >
                           {comment.isCompleted ? (
                             <CheckSquare color="#10B981" size={24} />
                           ) : (
-                            <Square color="#6B7280" size={24} />
+                            <Square color={colors.textSecondary} size={24} />
                           )}
                         </TouchableOpacity>
                         {editingCommentId === comment.id ? (
@@ -516,7 +526,7 @@ export function PartDetailModal({
                         )}
                       </View>
                       <View style={styles.commentHeaderActions}>
-                        {editingCommentId === comment.id ? (
+                        {!canEdit ? null : editingCommentId === comment.id ? (
                           <>
                             <TouchableOpacity
                               style={styles.commentActionButton}
@@ -543,13 +553,13 @@ export function PartDetailModal({
                                 setEditingCommentText(comment.text);
                               }}
                             >
-                              <Edit2 color="#2563EB" size={16} />
+                              <Edit2 color={colors.primaryText} size={16} />
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={styles.commentActionButton}
                               onPress={() => handleDeleteComment(comment.id)}
                             >
-                              <Trash color="#EF4444" size={16} />
+                              <Trash color={colors.danger} size={16} />
                             </TouchableOpacity>
                           </>
                         )}
@@ -582,7 +592,7 @@ export function PartDetailModal({
               return similarParts.length > 0 ? (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <GitBranch color="#6B7280" size={20} />
+                    <GitBranch color={colors.textSecondary} size={20} />
                     <ThemedText style={styles.sectionTitle}>Similar Previous Versions</ThemedText>
                   </View>
                   {similarParts.map(({ part, similarity }) => {
@@ -664,10 +674,10 @@ export function PartDetailModal({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -676,23 +686,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalClose: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modalContent: {
     flex: 1,
     padding: 16,
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -707,13 +717,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
     paddingBottom: 8,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginLeft: 8,
   },
   fieldRow: {
@@ -723,14 +733,14 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 8,
     marginRight: 4,
   },
   fieldValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
   },
   descriptionRow: {
@@ -745,7 +755,7 @@ const styles = StyleSheet.create({
   },
   noContentText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 8,
   },
@@ -766,16 +776,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
   },
   dimensionKey: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'capitalize',
   },
   dimensionValue: {
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
   },
   quantityRow: {
@@ -784,23 +794,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
   },
   quantityVenueName: {
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
   },
   quantityValue: {
     fontSize: 14,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
   quantityZero: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   commentItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -832,22 +842,22 @@ const styles = StyleSheet.create({
   commentText: {
     flex: 1,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     marginRight: 8,
   },
   commentTextCompleted: {
     textDecorationLine: 'line-through',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   commentEditInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
     borderRadius: 6,
     padding: 8,
     fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
     minHeight: 60,
     textAlignVertical: 'top',
   },
@@ -865,20 +875,20 @@ const styles = StyleSheet.create({
   commentAuthor: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   commentDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   commentSeparator: {
     fontSize: 12,
-    color: '#D1D5DB',
+    color: colors.textDisabled,
     marginHorizontal: 6,
   },
   commentVenue: {
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '500',
   },
   commentActionButton: {
@@ -887,12 +897,12 @@ const styles = StyleSheet.create({
   },
   commentDeleteText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.danger,
     fontWeight: '500',
   },
   commentCancelText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   commentSaveText: {
@@ -901,7 +911,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   commentInputContainer: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 0,
     marginBottom: 16,
@@ -912,14 +922,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   commentInput: {
     flex: 1,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     minHeight: 40,
     maxHeight: 100,
     textAlignVertical: 'top',
@@ -942,7 +952,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   commentSendButtonDisabled: {
     backgroundColor: '#9CA3AF',
@@ -1000,7 +1010,7 @@ const styles = StyleSheet.create({
   },
   similarPartItem: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
     paddingVertical: 12,
   },
   similarPartHeader: {
@@ -1012,7 +1022,7 @@ const styles = StyleSheet.create({
   similarPartName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
   },
   similarityBadge: {
@@ -1028,6 +1038,6 @@ const styles = StyleSheet.create({
   },
   similarPartDetails: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
 });

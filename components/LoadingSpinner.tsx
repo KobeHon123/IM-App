@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, {
@@ -9,6 +9,8 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface LoadingSpinnerProps {
   size?: number;
@@ -21,6 +23,9 @@ export default function LoadingSpinner({
   color = '#007AFF',
   strokeWidth = 4
 }: LoadingSpinnerProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const rotation = useSharedValue(0);
 
   useEffect(() => {
@@ -63,7 +68,7 @@ export default function LoadingSpinner({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',

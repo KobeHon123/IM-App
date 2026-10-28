@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,17 +8,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WifiOff, RefreshCw } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface NoConnectionScreenProps {
   onRetry: () => void;
 }
 
 export function NoConnectionScreen({ onRetry }: NoConnectionScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <WifiOff color="#EF4444" size={80} strokeWidth={1.5} />
+          <WifiOff color={colors.danger} size={80} strokeWidth={1.5} />
         </View>
         <ThemedText style={styles.title}>No Internet Connection</ThemedText>
         <ThemedText style={styles.description}>
@@ -33,10 +38,10 @@ export function NoConnectionScreen({ onRetry }: NoConnectionScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   content: {
     flex: 1,
@@ -48,7 +53,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.dangerSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 32,
@@ -56,13 +61,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 12,
   },
   description: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
@@ -70,7 +75,7 @@ const styles = StyleSheet.create({
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,

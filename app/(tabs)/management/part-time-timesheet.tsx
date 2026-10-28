@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info, Download, ArrowLeft } from 'lucide-react-native';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,8 @@ import { useData } from '@/hooks/useData';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 type Period = 'full' | 'am' | 'pm' | 'off' | 'other' | 'on_call';
 
@@ -58,6 +60,8 @@ const WORKER_SYMBOLS = {
 
 // Star shape component for Site location
 const TriangleShape = ({ color, confirmed }: { color: string; confirmed?: boolean }) => {
+  const colors = useColors();
+
   // Create a cross/plus shape with even thicker arms
   const crossPoints = "5,1 13,1 13,5 17,5 17,13 13,13 13,17 5,17 5,13 1,13 1,5 5,5";
   
@@ -66,7 +70,7 @@ const TriangleShape = ({ color, confirmed }: { color: string; confirmed?: boolea
       <Polygon 
         points={crossPoints} 
         fill={color}
-        stroke={confirmed ? '#334155' : 'none'}
+        stroke={confirmed ? colors.textStrong : 'none'}
         strokeWidth={confirmed ? 1.5 : 0}
       />
     </Svg>
@@ -90,7 +94,7 @@ const WHEEL_VISIBLE_ITEMS = 5; // must be odd
 
 // WheelPickerModal removed — duty hours now use a plain TextInput (decimal-pad)
 
-const wheelStyles = StyleSheet.create({
+const createWheelStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {
     position: 'absolute',
     top: 0,
@@ -126,8 +130,8 @@ const wheelStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
@@ -136,7 +140,7 @@ const wheelStyles = StyleSheet.create({
   },
   cancelText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   confirmText: {
     fontSize: 16,
@@ -147,14 +151,14 @@ const wheelStyles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
     textAlign: 'center',
   },
   wheelContainer: {
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: 'rgba(255,255,255,0.75)', // ← adjust 0.75 for transparency (0 = clear, 1 = solid white)
+    backgroundColor: colors.surface,
   },
   selectionIndicator: {
     position: 'absolute',
@@ -162,7 +166,7 @@ const wheelStyles = StyleSheet.create({
     right: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     backgroundColor: 'rgba(0,122,255,0.06)',
     zIndex: 1,
   },
@@ -172,10 +176,10 @@ const wheelStyles = StyleSheet.create({
   },
   wheelItemText: {
     fontSize: 20,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   wheelItemTextSelected: {
-    color: '#111827',
+    color: colors.text,
     fontSize: 22,
     fontWeight: '700',
   },
@@ -211,6 +215,9 @@ interface TimeWheelPickerModalProps {
 }
 
 const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCancel }: TimeWheelPickerModalProps) => {
+  const colors = useColors();
+  const wheelStyles = useMemo(() => createWheelStyles(colors), [colors]);
+
   const hourRef = useRef<ScrollViewInstance>(null);
   const minuteRef = useRef<ScrollViewInstance>(null);
   const ampmRef = useRef<ScrollViewInstance>(null);
@@ -312,7 +319,7 @@ const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCance
             </ScrollView>
             {/* Colon */}
             <View style={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
-              <Text style={{ fontSize: 26, fontWeight: '700', color: '#111827' }}>:</Text>
+              <Text style={{ fontSize: 26, fontWeight: '700', color: colors.text }}>:</Text>
             </View>
             {/* Minutes */}
             <ScrollView
@@ -365,6 +372,9 @@ const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCance
 // ──────────────────────────────────────────────────────────────────────────────
 
 export default function PartTimeTimesheet() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const router = useRouter();
   const { user } = useAuth();
   const { projects } = useData();
@@ -1049,7 +1059,7 @@ export default function PartTimeTimesheet() {
   };
 
   const getPeriodColor = (period: Period, entry?: TimesheetEntry) => {
-    if (entry && isOnCallEntry(entry)) return '#111827'; // Black for on-call Kobe
+    if (entry && isOnCallEntry(entry)) return '#4B5563'; // Black for on-call Kobe
 
     // If it's a full day period, show green
     if (period === 'full') return '#10B981';
@@ -1062,7 +1072,7 @@ export default function PartTimeTimesheet() {
       case 'am': return '#EF4444';     // Red
       case 'pm': return '#3B82F6';     // Blue
       case 'other': return '#9CA3AF';  // Grey
-      case 'on_call': return '#111827'; // Black
+      case 'on_call': return '#4B5563'; // Black
       default: return '#9CA3AF';
     }
   };
@@ -1234,7 +1244,7 @@ export default function PartTimeTimesheet() {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
-          <LoadingSpinner size={50} color="#2563EB" strokeWidth={5} />
+          <LoadingSpinner size={50} color={colors.primaryText} strokeWidth={5} />
         </View>
       </SafeAreaView>
     );
@@ -1249,7 +1259,7 @@ export default function PartTimeTimesheet() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <ArrowLeft color="#2563EB" size={24} />
+          <ArrowLeft color={colors.primaryText} size={24} />
         </TouchableOpacity>
         <ThemedText style={styles.headerTitle}>Part Time Timesheet</ThemedText>
         <View style={styles.headerPlaceholder} />
@@ -1258,13 +1268,13 @@ export default function PartTimeTimesheet() {
       {/* Month Navigator */}
       <View style={styles.monthNavigator}>
         <TouchableOpacity onPress={goToPreviousMonth} style={styles.navButton}>
-          <ChevronLeft size={24} color="#2563EB" />
+          <ChevronLeft size={24} color={colors.primaryText} />
         </TouchableOpacity>
         <ThemedText style={styles.monthLabel}>
           {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </ThemedText>
         <TouchableOpacity onPress={goToNextMonth} style={styles.navButton}>
-          <ChevronRight size={24} color="#2563EB" />
+          <ChevronRight size={24} color={colors.primaryText} />
         </TouchableOpacity>
       </View>
 
@@ -1329,12 +1339,12 @@ export default function PartTimeTimesheet() {
                                 {
                                   backgroundColor: 'transparent',
                                   borderWidth: 2,
-                                  borderColor: '#111827',
+                                  borderColor: colors.text,
                                 },
                                 entry.confirmed && styles.confirmedSymbol,
                               ]}
                             >
-                              <ThemedText style={[styles.symbolText, { color: '#111827' }]}>K</ThemedText>
+                              <ThemedText style={[styles.symbolText, { color: colors.text }]}>K</ThemedText>
                             </View>
                           );
                         }
@@ -1393,7 +1403,7 @@ export default function PartTimeTimesheet() {
                 })}
               </ThemedText>
               <TouchableOpacity onPress={() => setSelectedCalendarDate(null)}>
-                <X size={20} color="#6B7280" />
+                <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -1424,13 +1434,13 @@ export default function PartTimeTimesheet() {
                                 style={styles.actionButton}
                                 onPress={() => handleEditEntry(entry)}
                               >
-                                <Pencil size={18} color="#2563EB" />
+                                <Pencil size={18} color={colors.primaryText} />
                               </TouchableOpacity>
                               <TouchableOpacity
                                 style={styles.actionButton}
                                 onPress={() => handleDeleteEntry(entry.id)}
                               >
-                                <Trash2 size={18} color="#EF4444" />
+                                <Trash2 size={18} color={colors.danger} />
                               </TouchableOpacity>
                             </>
                           )}
@@ -1546,7 +1556,7 @@ export default function PartTimeTimesheet() {
                   backgroundColor: 'transparent',
                   borderWidth: 2.5,
                   borderRadius: 20,
-                  borderColor: '#111827',
+                  borderColor: colors.text,
                 }
               ]}>
                 <ThemedText style={styles.legendSymbolTextOC}>O</ThemedText>
@@ -1566,7 +1576,7 @@ export default function PartTimeTimesheet() {
             <View style={styles.legendItem}>
               <View style={[styles.legendSiteSymbol, { backgroundColor: 'transparent' }]}>
                 <View style={styles.legendSiteIconScale}>
-                  <TriangleShape color="#9CA3AF" />
+                  <TriangleShape color={colors.textMuted} />
                 </View>
                 <ThemedText style={styles.legendSiteSymbolText}>S</ThemedText>
               </View>
@@ -1583,7 +1593,7 @@ export default function PartTimeTimesheet() {
               onPress={() => toggleSalaryDetail(true)}
               style={styles.salaryInfoButton}
             >
-              <Info size={20} color="#9CA3AF" />
+              <Info size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
           
@@ -1683,7 +1693,7 @@ export default function PartTimeTimesheet() {
               resetDutyAllocations();
               setSiteName('');
             }}>
-              <X size={24} color="#6B7280" />
+              <X size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -1750,7 +1760,7 @@ export default function PartTimeTimesheet() {
                   placeholder="Enter site name"
                   value={siteName}
                   onChangeText={setSiteName}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
             )}
@@ -1761,7 +1771,7 @@ export default function PartTimeTimesheet() {
                 <ThemedText style={styles.formLabel}>Duty (Optional, max 3)</ThemedText>
                 {canAddDutyInput && (
                   <TouchableOpacity style={styles.addDutyInputButton} onPress={addDutyAllocationInput}>
-                    <Plus size={16} color="#2563EB" />
+                    <Plus size={16} color={colors.primaryText} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -1782,7 +1792,7 @@ export default function PartTimeTimesheet() {
                         }
                         setDutySuggestIndex(null);
                       }}
-                      placeholderTextColor="#9CA3AF"
+                      placeholderTextColor={colors.textMuted}
                     />
                     {index === 0 ? (
                       <View style={styles.autoDutyHoursBadge}>
@@ -1792,21 +1802,21 @@ export default function PartTimeTimesheet() {
                       <>
                         <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
                           <TextInput
-                            style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
+                            style={{ flex: 1, textAlign: 'center', fontSize: 14, color: colors.text }}
                             value={allocation.hours}
                             onChangeText={(text) => updateDutyHours(index, text)}
                             keyboardType="decimal-pad"
                             placeholder="—"
-                            placeholderTextColor="#9CA3AF"
+                            placeholderTextColor={colors.textMuted}
                             returnKeyType="done"
                           />
-                          <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                          <Text style={{ fontSize: 14, color: colors.text }}>hrs</Text>
                         </View>
                         <TouchableOpacity
                           style={styles.removeDutyButton}
                           onPress={() => removeDutyAllocationInput(index)}
                         >
-                          <Trash2 size={16} color="#EF4444" />
+                          <Trash2 size={16} color={colors.danger} />
                         </TouchableOpacity>
                       </>
                     )}
@@ -1960,7 +1970,7 @@ export default function PartTimeTimesheet() {
               resetDutyAllocations();
               setSiteName('');
             }}>
-              <X size={24} color="#6B7280" />
+              <X size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -2006,7 +2016,7 @@ export default function PartTimeTimesheet() {
                   placeholder="Enter site name"
                   value={siteName}
                   onChangeText={setSiteName}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
             )}
@@ -2017,7 +2027,7 @@ export default function PartTimeTimesheet() {
                 <ThemedText style={styles.formLabel}>Duty (Optional, max 3)</ThemedText>
                 {canAddDutyInput && (
                   <TouchableOpacity style={styles.addDutyInputButton} onPress={addDutyAllocationInput}>
-                    <Plus size={16} color="#2563EB" />
+                    <Plus size={16} color={colors.primaryText} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -2038,7 +2048,7 @@ export default function PartTimeTimesheet() {
                         }
                         setDutySuggestIndex(null);
                       }}
-                      placeholderTextColor="#9CA3AF"
+                      placeholderTextColor={colors.textMuted}
                     />
                     {index === 0 ? (
                       <View style={styles.autoDutyHoursBadge}>
@@ -2048,21 +2058,21 @@ export default function PartTimeTimesheet() {
                       <>
                         <View style={[styles.dutyHoursSelector, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }]}>
                           <TextInput
-                            style={{ flex: 1, textAlign: 'center', fontSize: 14, color: '#111827' }}
+                            style={{ flex: 1, textAlign: 'center', fontSize: 14, color: colors.text }}
                             value={allocation.hours}
                             onChangeText={(text) => updateDutyHours(index, text)}
                             keyboardType="decimal-pad"
                             placeholder="—"
-                            placeholderTextColor="#9CA3AF"
+                            placeholderTextColor={colors.textMuted}
                             returnKeyType="done"
                           />
-                          <Text style={{ fontSize: 14, color: '#000000' }}>hrs</Text>
+                          <Text style={{ fontSize: 14, color: colors.text }}>hrs</Text>
                         </View>
                         <TouchableOpacity
                           style={styles.removeDutyButton}
                           onPress={() => removeDutyAllocationInput(index)}
                         >
-                          <Trash2 size={16} color="#EF4444" />
+                          <Trash2 size={16} color={colors.danger} />
                         </TouchableOpacity>
                       </>
                     )}
@@ -2211,10 +2221,10 @@ export default function PartTimeTimesheet() {
             </ThemedText>
             <View style={styles.salaryDetailHeaderActions}>
               <TouchableOpacity onPress={handleDownloadCSV} style={styles.downloadButton}>
-                <Download size={20} color="#2563EB" />
+                <Download size={20} color={colors.primaryText} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => toggleSalaryDetail(false)}>
-                <X size={24} color="#6B7280" />
+                <X size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -2298,10 +2308,10 @@ export default function PartTimeTimesheet() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -2323,14 +2333,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   monthNavigator: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   navButton: {
     padding: 8,
@@ -2338,20 +2348,20 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   addButtonContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     borderRadius: 8,
     gap: 8,
@@ -2367,7 +2377,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   calendar: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     margin: 16,
     borderRadius: 12,
     padding: 8,
@@ -2389,7 +2399,7 @@ const styles = StyleSheet.create({
   weekDayText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -2401,38 +2411,38 @@ const styles = StyleSheet.create({
     minWidth: 0, // Prevent overflow
     padding: 2,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     justifyContent: 'space-between',
     height: 56,
   },
   calendarDayOtherMonth: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   calendarDayToday: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
     borderWidth: 2,
   },
   calendarDayNumber: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 1,
   },
   calendarDayNumberOtherMonth: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   calendarDayNumberToday: {
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   calendarDaySelected: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryMuted,
     borderColor: '#1D4ED8',
     borderWidth: 2,
   },
   calendarDayNumberSelected: {
-    color: '#1D4ED8',
+    color: colors.primaryStrongText,
     fontWeight: '700',
   },
   entriesContainer: {
@@ -2458,7 +2468,7 @@ const styles = StyleSheet.create({
   },
   confirmedSymbol: {
     borderWidth: 2,
-    borderColor: '#334155',
+    borderColor: colors.textStrong,
     shadowColor: '#334155',
     shadowOpacity: 0.6,
   },
@@ -2510,7 +2520,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   legend: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     margin: 16,
     marginTop: 0,
     padding: 16,
@@ -2524,7 +2534,7 @@ const styles = StyleSheet.create({
   legendTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 12,
   },
   legendItems: {
@@ -2557,7 +2567,7 @@ const styles = StyleSheet.create({
   legendSymbolTextOC: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#000000',
+    color: colors.text,
   },
   legendSiteSymbol: {
     width: 30,
@@ -2577,11 +2587,11 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2590,12 +2600,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   modalContent: {
     flex: 1,
@@ -2607,21 +2617,21 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
   },
   readOnlyField: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   readOnlyText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   memberButtons: {
     flexDirection: 'row',
@@ -2631,50 +2641,50 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   memberButtonSelected: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
   },
   memberButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   memberButtonTextSelected: {
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   dateButton: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   dateButtonText: {
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F3F4F6',
+    color: colors.text,
+    backgroundColor: colors.surfaceMuted,
   },
   dutyHeaderRow: {
     flexDirection: 'row',
@@ -2689,14 +2699,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
     borderRadius: 20,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
   },
   addDutyInputButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   dutyInputRow: {
     flexDirection: 'row',
@@ -2715,15 +2725,15 @@ const styles = StyleSheet.create({
     width: 110,
     height: 44,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
   dutyHoursSelectorText: {
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
   },
   removeDutyButton: {
@@ -2731,8 +2741,8 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    backgroundColor: '#FEF2F2',
+    borderColor: colors.dangerBorder,
+    backgroundColor: colors.dangerSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2742,18 +2752,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
-    backgroundColor: '#EFF6FF',
+    borderColor: colors.primaryBorder,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
   },
   autoDutyHoursText: {
     fontSize: 12,
-    color: '#1D4ED8',
+    color: colors.primaryStrongText,
     fontWeight: '600',
   },
   dutyHintText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   periodButtons: {
@@ -2764,26 +2774,26 @@ const styles = StyleSheet.create({
   periodButton: {
     paddingVertical: 10,
     paddingHorizontal: 16,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   periodButtonSelected: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
   },
   periodButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   periodButtonTextSelected: {
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   timeRow: {
     flexDirection: 'row',
@@ -2795,25 +2805,25 @@ const styles = StyleSheet.create({
   timeLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   timeButton: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   timeButtonText: {
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   saveButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -2828,7 +2838,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   detailsSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 12,
@@ -2846,12 +2856,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   detailsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
   },
   emptyState: {
@@ -2860,17 +2870,17 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   detailsList: {
     gap: 12,
   },
   detailCard: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   detailCardHeader: {
     flexDirection: 'row',
@@ -2911,7 +2921,7 @@ const styles = StyleSheet.create({
   detailWorkerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   detailCardContent: {
     gap: 6,
@@ -2923,12 +2933,12 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   detailValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
   },
   adminConfirmationRow: {
     flexDirection: 'row',
@@ -2936,7 +2946,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
     gap: 8,
   },
   confirmCheckbox: {
@@ -2944,22 +2954,22 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxChecked: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   checkboxUnchecked: {
     fontSize: 14,
-    color: '#D1D5DB',
+    color: colors.textDisabled,
   },
   confirmLabel: {
     fontSize: 14,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '500',
   },
   addNewWorkTimeButton: {
@@ -2967,7 +2977,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -2984,7 +2994,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2992,11 +3002,11 @@ const styles = StyleSheet.create({
   salaryToggleText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
   },
   // Salary Calculator Styles
   salaryCalculatorSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginBottom: 24,
     borderRadius: 12,
@@ -3010,7 +3020,7 @@ const styles = StyleSheet.create({
   salaryTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 16,
   },
   salaryGroup: {
@@ -3019,7 +3029,7 @@ const styles = StyleSheet.create({
   salaryLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 10,
   },
   workerSelectionButtons: {
@@ -3032,24 +3042,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   workerSelectionButtonSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   workerSelectionButtonText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   workerSelectionButtonTextSelected: {
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
   hourTypeButtons: {
@@ -3061,32 +3071,32 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   hourTypeButtonSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   hourTypeButtonText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   hourTypeButtonTextSelected: {
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
   salaryResultBox: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     marginTop: 4,
   },
   salaryResultRow: {
@@ -3097,23 +3107,23 @@ const styles = StyleSheet.create({
   },
   salaryResultRowBorder: {
     borderTopWidth: 1,
-    borderTopColor: '#D1D5DB',
+    borderTopColor: colors.borderStrong,
     paddingTop: 12,
     marginTop: 4,
   },
   salaryResultLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   salaryResultValue: {
     fontSize: 14,
-    color: '#374151',
+    color: colors.textStrong,
     fontWeight: '600',
   },
   salaryTotalLabel: {
     fontSize: 15,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '700',
   },
   salaryTotalValue: {
@@ -3141,7 +3151,7 @@ const styles = StyleSheet.create({
   },
   salaryDetailContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   salaryDetailHeader: {
     flexDirection: 'row',
@@ -3150,23 +3160,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   salaryDetailTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   salaryDetailContent: {
     flex: 1,
     padding: 16,
   },
   salaryDetailEntryContainer: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -3181,7 +3191,7 @@ const styles = StyleSheet.create({
   salaryDetailDate: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   salaryDetailHourSection: {
     flex: 1,
@@ -3190,7 +3200,7 @@ const styles = StyleSheet.create({
   salaryDetailHours: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   salaryDetailAmountSection: {
     flex: 1,
@@ -3203,11 +3213,11 @@ const styles = StyleSheet.create({
   },
   salaryDetailDuty: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   salaryDetailSeparator: {
     height: 2,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
     marginVertical: 16,
   },
   salaryDetailTotal: {
@@ -3216,19 +3226,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 12,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
   },
   salaryDetailTotalLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   salaryDetailTotalHours: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   salaryDetailTotalAmount: {
@@ -3246,17 +3256,17 @@ const styles = StyleSheet.create({
   },
   dutySummarySection: {
     marginTop: 16,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   dutySummaryTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 10,
   },
   dutySummaryRow: {
@@ -3265,23 +3275,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   dutySummaryName: {
     fontSize: 13,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
     flex: 1,
   },
   dutySummaryHours: {
     fontSize: 13,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
   dutySuggestionList: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     marginTop: 2,
     marginBottom: 6,
@@ -3296,11 +3306,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   dutySuggestionText: {
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
   },
 });

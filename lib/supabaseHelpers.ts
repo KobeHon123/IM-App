@@ -8,7 +8,7 @@ import { floorQtyKey, getButtonSetTotal } from './floorUtils';
 // A single place to convert database snake_case to app camelCase
 // and ensure data types are correct (e.g., creating Date objects)
 const fromSupabase = {
-  project: (p: any): Project => ({ id: p.id, name: p.name, description: p.description, pic: p.pic, thumbnail: p.thumbnail, createdAt: new Date(p.created_at) }),
+  project: (p: any): Project => ({ id: p.id, name: p.name, description: p.description, pic: p.pic, thumbnail: p.thumbnail, fuhongVisible: !!p.fuhong_visible, createdAt: new Date(p.created_at) }),
   venue: (v: any): Venue => ({ id: v.id, projectId: v.project_id, name: v.name, description: v.description, pic: v.pic, thumbnail: v.thumbnail, partQuantities: v.part_quantities || {}, createdAt: new Date(v.created_at) }),
   part: (p: any): Part => ({ id: p.id, projectId: p.project_id, parentPartId: p.parent_part_id, name: p.name, type: p.type, status: p.status, description: p.description, designer: p.designer, dimensions: p.dimensions || {}, cadDrawing: p.cad_drawing, pictures: p.pictures || [], comments: [], createdAt: new Date(p.created_at) }),
   event: (e: any): Event => ({ id: e.id, projectId: e.project_id, date: e.date, type: e.type, description: e.description, parts: e.parts || [] }),
@@ -230,13 +230,17 @@ export const getEvents = async () => {
 // --- Create/Update/Delete Functions ---
 
 export const createProject = async (project: Omit<Project, 'id' | 'createdAt'>) => {
-  const { data, error } = await supabase.from('projects').insert(project).select().single();
+  const { fuhongVisible, ...rest } = project;
+  const { data, error } = await supabase.from('projects').insert({ ...rest, fuhong_visible: !!fuhongVisible }).select().single();
   if (error) throw error;
   return fromSupabase.project(data);
 };
 
 export const updateProject = async (id: string, updates: Partial<Project>) => {
-  const { data, error } = await supabase.from('projects').update(updates).eq('id', id).select().single();
+  const { fuhongVisible, ...rest } = updates;
+  const payload: Record<string, any> = { ...rest };
+  if (fuhongVisible !== undefined) payload.fuhong_visible = fuhongVisible;
+  const { data, error } = await supabase.from('projects').update(payload).eq('id', id).select().single();
   if (error) throw error;
   return fromSupabase.project(data);
 };
@@ -285,21 +289,31 @@ export const updateVenuePartQuantity = async (venueId: string, partId: string, q
   return await updateVenue(venueId, { partQuantities: newQuantities });
 };
 
+export const updateVenueFloorQuantities = async (
+  venueId: string,
+  partId: string,
+  floors: string[],
+  updates: Record<string, number>
+) => {
+  const venue = await getVenue(venueId);
+  if (!venue) throw new Error('Venue not found');
+
+  const newQuantities = { ...venue.partQuantities };
+  Object.entries(updates).forEach(([floor, quantity]) => {
+    newQuantities[floorQtyKey(partId, floor)] = quantity;
+  });
+  newQuantities[partId] = getButtonSetTotal(newQuantities, partId, floors);
+  const updated = await updateVenue(venueId, { partQuantities: newQuantities });
+  return updated.partQuantities;
+};
+
 export const updateVenueFloorQuantity = async (
   venueId: string,
   partId: string,
   floors: string[],
   floor: string,
   quantity: number
-) => {
-  const venue = await getVenue(venueId);
-  if (!venue) throw new Error('Venue not found');
-
-  const newQuantities = { ...venue.partQuantities, [floorQtyKey(partId, floor)]: quantity };
-  newQuantities[partId] = getButtonSetTotal(newQuantities, partId, floors);
-  const updated = await updateVenue(venueId, { partQuantities: newQuantities });
-  return updated.partQuantities;
-};
+) => updateVenueFloorQuantities(venueId, partId, floors, { [floor]: quantity });
 
 export interface FloorChangeImpact {
   removedWithQuantity: { floor: string; quantity: number }[];
@@ -617,4 +631,14 @@ export const deleteEvent = async (id: string) => {
   const { error } = await supabase.from('events').delete().eq('id', id);
   if (error) throw error;
   return true;
+};
+
+export const updateUserRole = async (targetId: string, role: string): Promise<boolean> => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ role, is_authorized: role !== 'not_authorized' })
+    .eq('id', targetId)
+    .select('id');
+  if (error) throw error;
+  return !!data && data.length > 0;
 };

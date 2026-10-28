@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, FlatList, Alert, RefreshControl, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Trash2, ChevronDown } from 'lucide-react-native';
@@ -6,6 +6,8 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { useData } from '@/hooks/useData';
 import { supabase } from '@/lib/supabase';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface ResinRecord {
   id: string;
@@ -62,6 +64,9 @@ const calculateResinBreakdown = (records: ResinRecord[]) => {
 };
 
 export default function ResinRecordManagement() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const router = useRouter();
   const { projects } = useData();
   const [records, setRecords] = useState<ResinRecord[]>([]);
@@ -103,12 +108,12 @@ export default function ResinRecordManagement() {
 
       setRecords(loadedRecords);
 
-      // Use projects from useData hook
-      if (projects.length > 0 && !selectedProject) {
-        setSelectedProject(projects[0].id);
-        setFilteredRecords(loadedRecords.filter((r) => r.project_id === projects[0].id));
-      } else if (selectedProject) {
+      // Default to "All Projects" when no project is selected.
+      // If a specific project is selected, filter to that project only.
+      if (selectedProject) {
         setFilteredRecords(loadedRecords.filter((r) => r.project_id === selectedProject));
+      } else {
+        setFilteredRecords(loadedRecords);
       }
     } catch (error) {
       console.error('Error loading records:', error);
@@ -210,7 +215,7 @@ export default function ResinRecordManagement() {
             <ThemedText style={styles.totalGrams}>{totalGrams.toFixed(2)} g</ThemedText>
             <ChevronDown
               size={20}
-              color="#6B7280"
+              color={colors.textSecondary}
               style={[styles.chevron, isExpanded && styles.chevronRotated]}
             />
           </View>
@@ -250,7 +255,7 @@ export default function ResinRecordManagement() {
 
             <View style={styles.recordFooter}>
               <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteRecord(item.id)}>
-                <Trash2 size={18} color="#EF4444" />
+                <Trash2 size={18} color={colors.danger} />
                 <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
               </TouchableOpacity>
             </View>
@@ -266,7 +271,7 @@ export default function ResinRecordManagement() {
         <View style={styles.headerSection}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <ArrowLeft size={24} color="#111827" />
+              <ArrowLeft size={24} color={colors.text} />
             </TouchableOpacity>
             <ThemedText style={styles.headerTitle}>Resin Records</ThemedText>
             <View style={styles.headerPlaceholder} />
@@ -289,7 +294,7 @@ export default function ResinRecordManagement() {
                 </View>
                 <ChevronDown
                   size={20}
-                  color="#2563EB"
+                  color={colors.primaryText}
                   style={showProjectDropdown && styles.chevronUp}
                 />
               </TouchableOpacity>
@@ -354,8 +359,28 @@ export default function ResinRecordManagement() {
         </Modal>
 
         <ScrollView style={styles.scrollableContent} showsVerticalScrollIndicator={false}>
-          {/* Records List */}
-          {filteredRecords.length > 0 ? (
+          {!selectedProject ? (
+            projects.length > 0 ? (
+              <View style={styles.recordsList}>
+                {[...projects]
+                  .sort((a, b) => a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase()))
+                  .map((project) => (
+                    <TouchableOpacity
+                      key={project.id}
+                      style={styles.projectCard}
+                      onPress={() => handleFilterChange(project.id)}
+                      activeOpacity={0.7}
+                    >
+                      <ThemedText style={styles.projectCardName}>{project.name}</ThemedText>
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <ThemedText style={styles.emptyStateTitle}>No Projects Found</ThemedText>
+              </View>
+            )
+          ) : filteredRecords.length > 0 ? (
             <View style={styles.recordsList}>
               {[...filteredRecords].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => renderRecordItem({ item }))}
             </View>
@@ -442,7 +467,7 @@ export default function ResinRecordManagement() {
               <View style={styles.expandIcon}>
                 <ChevronDown
                   size={20}
-                  color="#2563EB"
+                  color={colors.primaryText}
                   style={expandSummary && styles.expandIconRotated}
                 />
               </View>
@@ -454,33 +479,33 @@ export default function ResinRecordManagement() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     flexDirection: 'column',
   },
   headerSection: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   scrollableContent: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   backButton: {
     padding: 8,
@@ -491,14 +516,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   filterContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   filterLabel: {
     flexDirection: 'row',
@@ -509,7 +534,7 @@ const styles = StyleSheet.create({
   filterLabelText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -521,18 +546,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     marginRight: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   filterButtonActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterButtonText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   filterButtonTextActive: {
     color: '#FFFFFF',
@@ -545,14 +570,31 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FEE2E2',
+    borderColor: colors.dangerBorder,
     marginRight: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.dangerSoft,
   },
   filterClearText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#EF4444',
+    color: colors.danger,
+  },
+  projectCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  projectCardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
   },
   recordsList: {
     paddingHorizontal: 12,
@@ -560,7 +602,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   recordCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -582,13 +624,13 @@ const styles = StyleSheet.create({
   recordMaterial: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   recordDate: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   headerActions: {
     flexDirection: 'row',
@@ -598,7 +640,7 @@ const styles = StyleSheet.create({
   totalGrams: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   chevron: {
     width: 20,
@@ -612,7 +654,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: colors.borderSubtle,
   },
   deleteButton: {
     flexDirection: 'row',
@@ -621,16 +663,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.dangerSoft,
   },
   deleteButtonText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#EF4444',
+    color: colors.danger,
   },
   recordDivider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     marginBottom: 12,
   },
   recordDetails: {
@@ -645,27 +687,27 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   detailValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   detailDivider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     marginVertical: 8,
   },
   detailLabelTotal: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   detailValueTotal: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   emptyState: {
     paddingHorizontal: 20,
@@ -675,13 +717,13 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   dropdownButton: {
@@ -692,8 +734,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
   dropdownContent: {
     flex: 1,
@@ -704,14 +746,14 @@ const styles = StyleSheet.create({
   dropdownLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   dropdownValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
   },
   chevronUp: {
     transform: [{ rotate: '180deg' }],
@@ -723,7 +765,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dropdownMenu: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     minWidth: 280,
     maxWidth: '85%',
@@ -738,25 +780,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
   },
   dropdownMenuItemActive: {
-    backgroundColor: '#EFF6FF',
-    borderBottomColor: '#DBEAFE',
+    backgroundColor: colors.primarySoft,
+    borderBottomColor: colors.primaryMuted,
   },
   dropdownMenuItemText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   dropdownMenuItemTextActive: {
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
   summaryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 16,
     shadowColor: '#000',
@@ -778,7 +820,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
@@ -786,12 +828,12 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   summarySeparator: {
     width: 1,
     height: 32,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
     marginHorizontal: 16,
   },
   expandIcon: {
@@ -802,7 +844,7 @@ const styles = StyleSheet.create({
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
     marginVertical: 12,
   },
   breakdownContainer: {
@@ -828,12 +870,12 @@ const styles = StyleSheet.create({
   },
   expandedGridColumnWithBorder: {
     borderRightWidth: 1,
-    borderRightColor: '#E5E7EB',
+    borderRightColor: colors.border,
     paddingRight: 8,
   },
   columnSeparator: {
     width: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
     marginVertical: 4,
   },
   expandedSummaryItem: {
@@ -843,11 +885,11 @@ const styles = StyleSheet.create({
   breakdownLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   breakdownValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
 });

@@ -1,11 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock, LogOut, User, RefreshCw } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 export function WaitingForApprovalScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { profile, signOut, refreshProfile } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -58,7 +63,7 @@ export function WaitingForApprovalScreen() {
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <User color="#6B7280" size={40} />
+                <User color={colors.textSecondary} size={40} />
               </View>
             )}
 
@@ -88,10 +93,10 @@ export function WaitingForApprovalScreen() {
             disabled={isRefreshing}
           >
             {isRefreshing ? (
-              <ActivityIndicator color="#2563EB" />
+              <ActivityIndicator color={colors.primaryText} />
             ) : (
               <>
-                <RefreshCw color="#2563EB" size={20} />
+                <RefreshCw color={colors.primaryText} size={20} />
                 <ThemedText style={styles.refreshButtonText}>Check Status</ThemedText>
               </>
             )}
@@ -101,7 +106,7 @@ export function WaitingForApprovalScreen() {
             style={styles.signOutButton}
             onPress={handleSignOut}
           >
-            <LogOut color="#EF4444" size={20} />
+            <LogOut color={colors.danger} size={20} />
             <ThemedText style={styles.signOutButtonText}>Sign Out</ThemedText>
           </TouchableOpacity>
         </View>
@@ -110,10 +115,10 @@ export function WaitingForApprovalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -128,7 +133,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 120,
     height: 120,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.warningSoft,
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
@@ -137,13 +142,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 16,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 16,
@@ -152,7 +157,7 @@ const styles = StyleSheet.create({
     marginVertical: 32,
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     flexDirection: 'row',
@@ -173,7 +178,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -184,26 +189,26 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   profileEmail: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   infoSection: {
     marginBottom: 32,
   },
   infoBox: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#2563EB',
+    borderLeftColor: colors.primary,
   },
   infoText: {
     fontSize: 14,
-    color: '#1E40AF',
+    color: colors.primaryStrongText,
     lineHeight: 20,
   },
   actionsSection: {
@@ -213,16 +218,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     paddingVertical: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#BFDBFE',
+    borderColor: colors.primaryBorder,
   },
   refreshButtonText: {
     fontSize: 16,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
     marginLeft: 8,
   },
@@ -230,15 +235,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#FEE2E2',
+    borderColor: colors.dangerBorder,
   },
   signOutButtonText: {
     fontSize: 16,
-    color: '#EF4444',
+    color: colors.danger,
     fontWeight: '600',
     marginLeft: 8,
   },

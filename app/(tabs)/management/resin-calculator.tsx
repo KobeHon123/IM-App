@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, FlatList, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Check } from 'lucide-react-native';
@@ -6,6 +6,8 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { useData } from '@/hooks/useData';
 import { supabase } from '@/lib/supabase';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 const getComponentNames = (material: string) => {
   switch (material) {
@@ -212,6 +214,9 @@ const getMaterialCalculator = (material: string) => {
 };
 
 export default function ResinRecord() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const router = useRouter();
   const { projects } = useData();
   const insets = useSafeAreaInsets();
@@ -433,7 +438,7 @@ export default function ResinRecord() {
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <ArrowLeft color="#2563EB" size={24} />
+            <ArrowLeft color={colors.primaryText} size={24} />
           </TouchableOpacity>
           <ThemedText style={styles.headerTitle}>Resin Calculator</ThemedText>
           <View style={styles.headerPlaceholder} />
@@ -507,7 +512,7 @@ export default function ResinRecord() {
             <TextInput
               style={styles.input}
               placeholder="0.00"
-              placeholderTextColor="#D1D5DB"
+              placeholderTextColor={colors.textDisabled}
               keyboardType="decimal-pad"
               value={totalGrams}
               onChangeText={handleTotalChange}
@@ -521,7 +526,7 @@ export default function ResinRecord() {
             <TextInput
               style={styles.input}
               placeholder="0.00"
-              placeholderTextColor="#D1D5DB"
+              placeholderTextColor={colors.textDisabled}
               keyboardType="decimal-pad"
               value={onyxGrams}
               onChangeText={handleOnyxChange}
@@ -536,7 +541,7 @@ export default function ResinRecord() {
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={colors.textDisabled}
                   keyboardType="decimal-pad"
                   value={tough74Grams}
                   onChangeText={handleTough74Change}
@@ -553,7 +558,7 @@ export default function ResinRecord() {
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={colors.textDisabled}
                   keyboardType="decimal-pad"
                   value={oilGrams}
                   onChangeText={handleOilChange}
@@ -653,10 +658,10 @@ export default function ResinRecord() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   header: {
     flexDirection: 'row',
@@ -673,7 +678,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   content: {
     flex: 1,
@@ -683,7 +688,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -696,13 +701,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 12,
   },
   segmentedControl: {
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     padding: 4,
   },
@@ -715,12 +720,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   segmentActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   segmentText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   segmentTextActive: {
     color: '#FFFFFF',
@@ -731,25 +736,25 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
   },
   inputDivider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     marginVertical: 12,
   },
   summaryRow: {
@@ -761,16 +766,16 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   summaryValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     marginVertical: 10,
   },
   summaryRowTotal: {
@@ -779,19 +784,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: colors.primarySoft,
     borderRadius: 8,
     marginTop: 4,
   },
   summaryLabelTotal: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   summaryValueTotal: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   spacer: {
     height: 20,
@@ -800,9 +805,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
   },
   submitButton: {
     backgroundColor: '#10B981',
@@ -824,7 +829,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -833,17 +838,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalCloseText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#EF4444',
+    color: colors.danger,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalHeaderPlaceholder: {
     width: 60,
@@ -858,7 +863,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
   },
   projectContent: {
     flex: 1,
@@ -866,19 +871,19 @@ const styles = StyleSheet.create({
   projectName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   projectDescription: {
     fontSize: 13,
     fontWeight: '400',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   projectArrow: {
     paddingLeft: 12,
   },
   projectArrowText: {
     fontSize: 24,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
 });

@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Calendar, Clock, Package, FileText, Edit2, Trash2, Pencil } from 'lucide-react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Part } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors, useTheme } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 interface EventCardSimplifiedProps {
   date: string;
@@ -36,9 +38,17 @@ const eventBgColors = {
 };
 
 const EventCardSimplified: React.FC<EventCardSimplifiedProps> = ({ date, type, parts, projectParts, description, time, onEdit, onDelete, isPast }) => {
+  const colors = useColors();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const baseColor = eventColors[type] || '#6B7280';
-  const color = isPast ? '#9CA3AF' : baseColor;
-  const bgColor = isPast ? '#F3F4F6' : (eventBgColors[type] || '#F9FAFB');
+  const color = isPast ? colors.textMuted : baseColor;
+  const bgColor = isPast
+    ? colors.surfaceMuted
+    : isDark
+      ? `${baseColor}26`
+      : (eventBgColors[type] || '#F9FAFB');
   const partNames = parts.map((id) => projectParts.find((p) => p.id === id)?.name || 'Unknown');
 
   // Parse time from description (format: "HH:MM - description")
@@ -55,7 +65,7 @@ const EventCardSimplified: React.FC<EventCardSimplifiedProps> = ({ date, type, p
 
   return (
     <ReanimatedSwipeable
-      containerStyle={{ backgroundColor: '#F9FAFB' }}
+      containerStyle={{ backgroundColor: colors.background }}
       renderLeftActions={(_prog, _drag, swipeable) => (
         <View style={styles.swipeActionsLeft}>
           {onEdit && (
@@ -145,7 +155,7 @@ const EventCardSimplified: React.FC<EventCardSimplifiedProps> = ({ date, type, p
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   eventCard: {
     borderRadius: 12,
     marginVertical: 10,
@@ -207,7 +217,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   timeGroup: {
     flexDirection: 'row',
@@ -217,7 +227,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   section: {
     marginBottom: 12,
@@ -234,7 +244,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textStrong,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
@@ -248,7 +258,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1.5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   partText: {
     fontSize: 12,
@@ -256,7 +266,7 @@ const styles = StyleSheet.create({
   },
   descriptionText: {
     fontSize: 13,
-    color: '#374151',
+    color: colors.textStrong,
     lineHeight: 20,
     fontWeight: '500',
   },
@@ -283,7 +293,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   swipeEditCircle: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   swipeDeleteCircle: {
     backgroundColor: '#EF4444',

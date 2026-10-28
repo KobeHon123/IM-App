@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,8 +24,15 @@ import { DesignerSelector } from '@/components/DesignerSelector';
 import { SearchBar } from '@/components/SearchBar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMode?: 'cards' | 'matrix' }) => {
+  const colors = useColors();
+  const { canEdit } = useAuth();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { profiles, parts: globalParts } = useData();
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
   const [venues, setVenues] = React.useState<Venue[]>([]);
@@ -231,7 +238,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
               onPress={() => setSortAsc(prev => !prev)}
               accessibilityLabel="Toggle sort order"
             >
-              <ArrowUpDown color={sortAsc ? '#2563EB' : '#374151'} size={20} />
+              <ArrowUpDown color={sortAsc ? colors.primaryText : colors.textStrong} size={20} />
             </TouchableOpacity>
           </View>
 
@@ -243,8 +250,8 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
             {filteredVenues.map((venue) => (
           <ReanimatedSwipeable
             key={venue.id}
-            containerStyle={{ backgroundColor: '#F9FAFB' }}
-            renderLeftActions={(_prog, _drag, swipeable) => (
+            containerStyle={{ backgroundColor: colors.background }}
+            renderLeftActions={!canEdit ? undefined : (_prog, _drag, swipeable) => (
               <View style={styles.swipeActionsLeft}>
                 <GHTouchableOpacity
                   style={styles.swipeActionButton}
@@ -411,7 +418,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
           )}
         </ScrollView>
       )}
-      {viewMode === 'cards' && (
+      {viewMode === 'cards' && canEdit && (
         <TouchableOpacity
           style={styles.floatingAddButton}
           onPress={() => {
@@ -486,7 +493,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
                   style={styles.editPictureButton}
                   onPress={() => handleSelectThumbnail(false)}
                 >
-                  <Camera color="#334155" size={22} />
+                  <Camera color={colors.textStrong} size={22} />
                   <ThemedText style={styles.editPictureButtonText}>Add Thumbnail</ThemedText>
                 </TouchableOpacity>
                 {newVenue.thumbnail && (
@@ -586,7 +593,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
                   style={styles.editPictureButton}
                   onPress={() => handleSelectThumbnail(true)}
                 >
-                  <Camera color="#334155" size={22} />
+                  <Camera color={colors.textStrong} size={22} />
                   <ThemedText style={styles.editPictureButtonText}>Change Thumbnail</ThemedText>
                 </TouchableOpacity>
                 {editingVenue.thumbnail && (
@@ -621,7 +628,7 @@ const VenueTab = ({ projectId, viewMode = 'cards' }: { projectId: string; viewMo
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   tabContent: {
     flex: 1,
   },
@@ -654,7 +661,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   venueList: {
     flex: 1,
@@ -676,7 +683,7 @@ const styles = StyleSheet.create({
     maxHeight: 520,
     borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   matrixVerticalScroll: {
     maxHeight: 520,
@@ -686,7 +693,7 @@ const styles = StyleSheet.create({
     paddingRight: 24,
   },
   matrixCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 12,
     shadowColor: '#000',
@@ -697,12 +704,12 @@ const styles = StyleSheet.create({
   },
   matrixHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: '#EEF2FF',
+    backgroundColor: colors.primarySoft,
   },
   matrixRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   matrixLastRow: {
     borderBottomWidth: 0,
@@ -714,7 +721,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 14,
   },
   matrixRowAlternate: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   matrixHeaderCell: {
     width: 132,
@@ -723,7 +730,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     justifyContent: 'center',
     borderRightWidth: 1,
-    borderRightColor: '#D1D5DB',
+    borderRightColor: colors.borderStrong,
   },
   matrixCell: {
     width: 132,
@@ -733,7 +740,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRightWidth: 1,
-    borderRightColor: '#E5E7EB',
+    borderRightColor: colors.border,
   },
   matrixLastColumnCell: {
     borderRightWidth: 0,
@@ -759,25 +766,25 @@ const styles = StyleSheet.create({
   matrixHeaderText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.text,
     textAlign: 'center',
   },
   matrixPartText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
   },
   matrixSubPartText: {
-    color: '#4B5563',
+    color: colors.textSecondary,
   },
   matrixValueText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   matrixEmptyState: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
@@ -786,17 +793,17 @@ const styles = StyleSheet.create({
   matrixEmptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 8,
   },
   matrixEmptyText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   venueCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -822,7 +829,7 @@ const styles = StyleSheet.create({
   venueIconContainer: {
     width: 48,
     height: 48,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.successSoft,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -833,7 +840,7 @@ const styles = StyleSheet.create({
   venueName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   venueNameNoDescription: {
@@ -841,12 +848,12 @@ const styles = StyleSheet.create({
   },
   venueDescription: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   venuePic: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   venueMoreButton: {
     display: 'none',
@@ -857,7 +864,7 @@ const styles = StyleSheet.create({
     right: 32,
     width: 56,
     height: 56,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
@@ -869,7 +876,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -878,16 +885,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalClose: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modalContent: {
     flex: 1,
@@ -895,7 +902,7 @@ const styles = StyleSheet.create({
   },
   editModalContainer: {
     flex: 1,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: colors.background,
   },
   editModalScroll: {
     flex: 1,
@@ -905,31 +912,31 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   editModalIntroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editModalEyebrow: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   editModalTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   editModalSectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editPictureButton: {
     flexDirection: 'row',
@@ -938,14 +945,14 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   editPictureButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    color: colors.textStrong,
   },
   editThumbnailPreview: {
     width: 128,
@@ -954,7 +961,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editActionRow: {
     flexDirection: 'row',
@@ -969,13 +976,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
   },
   editSecondaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    color: colors.textStrong,
   },
   editPrimaryButton: {
     flex: 1,
@@ -991,10 +998,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   editPrimaryButtonDisabled: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.surfaceStrong,
   },
   editPrimaryButtonTextDisabled: {
-    color: '#94A3B8',
+    color: colors.textMuted,
   },
   inputGroup: {
     marginBottom: 20,
@@ -1002,18 +1009,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   textArea: {
     height: 100,
@@ -1024,14 +1031,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 20,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderStyle: 'dashed',
     borderRadius: 8,
   },
   pictureButtonText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   thumbnailPreview: {
     width: 100,
@@ -1041,7 +1048,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   createButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1055,13 +1062,13 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
   },
   disabledButtonText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   duplicateWarning: {
-    color: '#EF4444',
+    color: colors.danger,
     fontSize: 12,
     marginTop: 4,
     marginBottom: 8,
@@ -1105,7 +1112,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   swipeEditCircle: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   swipeDeleteCircle: {
     backgroundColor: '#EF4444',

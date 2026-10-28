@@ -4,8 +4,11 @@ import { useLocalSearchParams } from 'expo-router';
 import { ResetPasswordScreen } from '@/components/ResetPasswordScreen';
 import { supabase } from '@/lib/supabase';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { useColors } from '@/context/ThemeContext';
 
 export default function ResetPassword() {
+  const colors = useColors();
+
   const params = useLocalSearchParams();
   const [isReady, setIsReady] = useState(false);
 
@@ -34,7 +37,7 @@ export default function ResetPassword() {
   if (!isReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <LoadingSpinner size={50} color="#2563EB" strokeWidth={5} />
+        <LoadingSpinner size={50} color={colors.primaryText} strokeWidth={5} />
       </View>
     );
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -9,8 +9,13 @@ import VenueTab from './VenueTab';
 import PartTab from './PartTab';
 import CalendarTabSimplified from './CalendarTabSimplified';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 export default function ProjectDetailScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { id } = useLocalSearchParams();
   const { projects } = useData();
   const [activeTab, setActiveTab] = useState<'venue' | 'part' | 'calendar'>('venue');
@@ -36,7 +41,7 @@ export default function ProjectDetailScreen() {
             router.back();
           }}
         >
-          <ArrowLeft color="#6B7280" size={24} />
+          <ArrowLeft color={colors.textSecondary} size={24} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <ThemedText style={styles.headerTitle}>{project.name}</ThemedText>
@@ -48,7 +53,7 @@ export default function ProjectDetailScreen() {
             onPress={() => setVenueViewMode(prev => prev === 'cards' ? 'matrix' : 'cards')}
             accessibilityLabel={venueViewMode === 'matrix' ? 'Switch to venue cards view' : 'Switch to venue matrix view'}
           >
-            <Table2 color={venueViewMode === 'matrix' ? '#FFFFFF' : '#6B7280'} size={20} />
+            <Table2 color={venueViewMode === 'matrix' ? '#FFFFFF' : colors.textSecondary} size={20} />
           </TouchableOpacity>
         )}
       </View>
@@ -60,7 +65,7 @@ export default function ProjectDetailScreen() {
             setActiveTab('venue');
           }}
         >
-          <MapPin color={activeTab === 'venue' ? '#2563EB' : '#6B7280'} size={20} />
+          <MapPin color={activeTab === 'venue' ? colors.primaryText : colors.textSecondary} size={20} />
           <ThemedText style={[styles.tabText, activeTab === 'venue' && styles.activeTabText]}>
             Venue
           </ThemedText>
@@ -72,7 +77,7 @@ export default function ProjectDetailScreen() {
             setActiveTab('part');
           }}
         >
-          <Package color={activeTab === 'part' ? '#2563EB' : '#6B7280'} size={20} />
+          <Package color={activeTab === 'part' ? colors.primaryText : colors.textSecondary} size={20} />
           <ThemedText style={[styles.tabText, activeTab === 'part' && styles.activeTabText]}>
             Part
           </ThemedText>
@@ -84,7 +89,7 @@ export default function ProjectDetailScreen() {
             setActiveTab('calendar');
           }}
         >
-          <CalendarIcon color={activeTab === 'calendar' ? '#2563EB' : '#6B7280'} size={20} />
+          <CalendarIcon color={activeTab === 'calendar' ? colors.primaryText : colors.textSecondary} size={20} />
           <ThemedText style={[styles.tabText, activeTab === 'calendar' && styles.activeTabText]}>
             Calendar
           </ThemedText>
@@ -97,23 +102,23 @@ export default function ProjectDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   notFoundText: {
     fontSize: 18,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   backButton: {
     marginRight: 16,
@@ -124,11 +129,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   headerModeButton: {
     width: 44,
@@ -136,16 +141,16 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   headerModeButtonActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   tab: {
     flex: 1,
@@ -157,15 +162,15 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: '#2563EB',
+    borderBottomColor: colors.primary,
   },
   tabText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 8,
   },
   activeTabText: {
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '600',
   },
 });

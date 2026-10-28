@@ -3,10 +3,15 @@ import { FolderOpen, Search, User, LayoutGrid } from 'lucide-react-native';
 import { View, TouchableOpacity, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEasterEgg } from '@/context/EasterEggContext';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 function TabsContent() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { showOffWorkCounter, setShowOffWorkCounter, timeLeft, isOffTime, isBeforeTenAM, isWeekend } = useEasterEgg();
   const [cannonActive, setCannonActive] = useState(false);
   const backgroundColor = useRef(new Animated.Value(0)).current;
@@ -162,11 +167,11 @@ function TabsContent() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: '#2563EB',
-          tabBarInactiveTintColor: '#6B7280',
+          tabBarActiveTintColor: colors.primaryText,
+          tabBarInactiveTintColor: colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: '#FFFFFF',
-            borderTopColor: '#E5E7EB',
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
             paddingTop: 8,
             paddingBottom: Math.max(insets.bottom, 8),
             height: 60 + Math.max(insets.bottom, 0),
@@ -306,7 +311,7 @@ export default function TabLayout() {
   return <TabsContent />;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
   },

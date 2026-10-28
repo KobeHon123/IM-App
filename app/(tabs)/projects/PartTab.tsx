@@ -7,7 +7,7 @@ import { Part, PartType, Comment } from '@/types';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { supabase } from '@/lib/supabase';
 import { Camera, ChevronDown, ChevronRight, X, Check, Grid, List } from 'lucide-react-native';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { findSimilarPart } from '@/lib/similarityDetection';
 import {
@@ -25,11 +25,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
+import { useColors } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import type { ThemeColors } from '@/constants/Colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 const statusList = ['measured', 'designed', 'tested', 'printed', 'installed'];
 
 const PartTab = ({ projectId }: { projectId: string }) => {
+  const colors = useColors();
+  const { canEdit } = useAuth();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const {
     loading,
     getPartsByProject,
@@ -752,7 +759,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
               style={styles.closeButton}
               onPress={exitSelectionMode}
             >
-              <X color="#78350F" size={20} />
+              <X color={colors.warningStrong} size={20} />
             </TouchableOpacity>
           </View>
         </View>
@@ -766,9 +773,9 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                 onPress={() => toggleCategory(type)}
               >
                 {collapsedCategories[type] ? (
-                  <ChevronRight color="#6B7280" size={20} />
+                  <ChevronRight color={colors.textSecondary} size={20} />
                 ) : (
-                  <ChevronDown color="#6B7280" size={20} />
+                  <ChevronDown color={colors.textSecondary} size={20} />
                 )}
                 <ThemedText style={styles.categoryTitle}>{type} ({parts.length})</ThemedText>
               </TouchableOpacity>
@@ -799,14 +806,15 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                             setShowPartDetailModal(true);
                           }
                         }}
-                        onLongPress={() => handlePartLongPress(part.id)}
-                        onMorePress={() => {
+                        onLongPress={canEdit ? () => handlePartLongPress(part.id) : undefined}
+                        onMorePress={canEdit ? () => {
                           if (!isSelectionMode) {
                             console.log('Opening part action modal for ID:', part.id);
                             setSelectedPart(part);
                             setShowPartActionModal(true);
                           }
-                        }}
+                        } : undefined}
+                        showCommentButton={canEdit}
                         onCommentSend={(text) => handleCommentSend(part.id, text)}
                       />
                     );
@@ -1104,7 +1112,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
                   style={styles.editPictureButton}
                   onPress={() => handleSelectPictures(false)}
                 >
-                  <Camera color="#334155" size={22} />
+                  <Camera color={colors.textStrong} size={22} />
                   <ThemedText style={styles.editPictureButtonText}>Add Pictures</ThemedText>
                 </TouchableOpacity>
                 <FlatList
@@ -1208,10 +1216,10 @@ const PartTab = ({ projectId }: { projectId: string }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   tabContent: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   loadingContainer: {
     flex: 1,
@@ -1223,9 +1231,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
     marginHorizontal: 0,
   },
   statusSummaryItem: {
@@ -1236,36 +1244,36 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   activeStatusSummaryItem: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryMuted,
   },
   statusSummaryLabel: {
     fontSize: 9,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginBottom: 6,
     fontWeight: '500',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   activeStatusSummaryLabel: {
-    color: '#1E40AF',
+    color: colors.primaryStrongText,
     fontWeight: '600',
   },
   statusSummaryValue: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryText,
   },
   activeStatusSummaryValue: {
-    color: '#1E40AF',
+    color: colors.primaryStrongText,
     fontSize: 24,
   },
   statusTabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
     display: 'none',
   },
   statusTab: {
@@ -1278,7 +1286,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   activeStatusTab: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderBottomWidth: 0,
   },
   statusTabContent: {
@@ -1288,7 +1296,7 @@ const styles = StyleSheet.create({
   },
   statusTabText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   activeStatusTabText: {
@@ -1304,7 +1312,7 @@ const styles = StyleSheet.create({
   partsList: {
     flex: 1,
     paddingHorizontal: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   partCategory: {
     marginTop: 4,
@@ -1323,7 +1331,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 32,
     right: 16,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 50,
     width: 56,
     height: 56,
@@ -1344,29 +1352,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginBottom: 2,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   categoryTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#374151',
+    color: colors.textStrong,
     marginLeft: 8,
     letterSpacing: 0.2,
   },
   bulkActionHeader: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#BFDBFE',
+    borderBottomColor: colors.primaryBorder,
   },
   selectionCountText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1E40AF',
+    color: colors.primaryStrongText,
     letterSpacing: 0.3,
   },
   bulkActionButtons: {
@@ -1375,7 +1383,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bulkActionButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 8,
@@ -1407,7 +1415,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1416,16 +1424,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
   },
   modalClose: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   modalContent: {
     flex: 1,
@@ -1433,7 +1441,7 @@ const styles = StyleSheet.create({
   },
   editModalContainer: {
     flex: 1,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: colors.background,
   },
   editModalScroll: {
     flex: 1,
@@ -1443,36 +1451,36 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   editModalIntroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   editModalEyebrow: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   editModalTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   editModalSectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   statusSelectionLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 16,
   },
   statusOptionsContainer: {
@@ -1483,13 +1491,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#F9FAFB',
-    borderColor: '#E5E7EB',
+    backgroundColor: colors.background,
+    borderColor: colors.border,
   },
   statusOptionText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
   },
   // Modern Bulk Status Modal Styles
   bulkStatusModalOverlay: {
@@ -1499,7 +1507,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bulkStatusModal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 24,
     padding: 0,
     minWidth: 300,
@@ -1512,21 +1520,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   bulkStatusModalHeader: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     paddingVertical: 20,
     paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: colors.border,
   },
   bulkStatusModalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 4,
   },
   bulkStatusModalSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   bulkStatusOptionsContainer: {
     padding: 16,
@@ -1538,7 +1546,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
     marginBottom: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -1557,7 +1565,7 @@ const styles = StyleSheet.create({
   },
   bulkStatusOptionText: {
     fontSize: 16,
-    color: '#374151',
+    color: colors.textStrong,
     fontWeight: '500',
     textTransform: 'capitalize',
   },
@@ -1574,24 +1582,24 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.textStrong,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   textArea: {
     height: 100,
   },
   createButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1607,15 +1615,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
     paddingVertical: 12,
     gap: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   editPictureButtonText: {
     fontSize: 14,
-    color: '#334155',
+    color: colors.textStrong,
     fontWeight: '600',
   },
   editActionRow: {
@@ -1631,13 +1639,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
   },
   editSecondaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    color: colors.textStrong,
   },
   editPrimaryButton: {
     flex: 1,
@@ -1658,7 +1666,7 @@ const styles = StyleSheet.create({
   similarPartContainer: {
     marginBottom: 16,
     padding: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.dangerSoft,
     borderRadius: 8,
     borderLeftWidth: 4,
     borderLeftColor: '#EF4444',
@@ -1668,7 +1676,7 @@ const styles = StyleSheet.create({
   },
   similarPartMessage: {
     fontSize: 14,
-    color: '#7F1D1D',
+    color: colors.dangerStrong,
     fontWeight: '500',
   },
   useSimilarPartButton: {
@@ -1691,7 +1699,7 @@ const styles = StyleSheet.create({
   },
   sameProjectWarning: {
     fontSize: 12,
-    color: '#DC2626',
+    color: colors.danger,
     textAlign: 'center',
     marginTop: 8,
     fontWeight: '500',
@@ -1721,7 +1729,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionModal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     minWidth: 200,
@@ -1729,21 +1737,21 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   actionButtonText: {
     fontSize: 16,
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
   },
   deleteButton: {
     borderBottomWidth: 0,
   },
   deleteButtonText: {
-    color: '#EF4444',
+    color: colors.danger,
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -1758,13 +1766,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
     paddingBottom: 8,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     marginLeft: 8,
   },
   fieldRow: {
@@ -1774,14 +1782,14 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 8,
     marginRight: 4,
   },
   fieldValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.text,
     flex: 1,
   },
   descriptionSection: {
@@ -1789,7 +1797,7 @@ const styles = StyleSheet.create({
   },
   descriptionValue: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   imagePreview: {
@@ -1800,7 +1808,7 @@ const styles = StyleSheet.create({
   },
   noContentText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 8,
   },
@@ -1821,29 +1829,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderSubtle,
   },
   dimensionKey: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textTransform: 'capitalize',
   },
   dimensionValue: {
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     fontWeight: '500',
   },
   actionModalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 16,
   },
   statusButton: {
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   typeContainer: {
     flexDirection: 'row',
@@ -1851,16 +1859,16 @@ const styles = StyleSheet.create({
   typeButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     marginRight: 8,
   },
   selectedTypeButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   typeButtonText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   selectedTypeButtonText: {
     color: '#FFFFFF',
@@ -1870,10 +1878,10 @@ const styles = StyleSheet.create({
   },
   disabledTypeButton: {
     opacity: 0.6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceStrong,
   },
   disabledTypeButtonText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   buttonShapeContainer: {
     flexDirection: 'row',
@@ -1881,16 +1889,16 @@ const styles = StyleSheet.create({
   shapeButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     marginRight: 8,
   },
   selectedShapeButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   shapeButtonText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   selectedShapeButtonText: {
     color: '#FFFFFF',
@@ -1901,14 +1909,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 20,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.borderStrong,
     borderStyle: 'dashed',
     borderRadius: 8,
   },
   pictureButtonText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   previewList: {
     marginTop: 10,
@@ -1934,7 +1942,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   commentItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -1954,22 +1962,22 @@ const styles = StyleSheet.create({
   commentText: {
     flex: 1,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     marginRight: 8,
   },
   commentTextCompleted: {
     textDecorationLine: 'line-through',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   commentEditInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
     borderRadius: 6,
     padding: 8,
     fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    color: colors.text,
+    backgroundColor: colors.surface,
     minHeight: 60,
     textAlignVertical: 'top',
   },
@@ -1986,16 +1994,16 @@ const styles = StyleSheet.create({
   },
   commentDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   commentSeparator: {
     fontSize: 12,
-    color: '#D1D5DB',
+    color: colors.textDisabled,
     marginHorizontal: 6,
   },
   commentVenue: {
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primaryText,
     fontWeight: '500',
   },
   commentActions: {
@@ -2008,12 +2016,12 @@ const styles = StyleSheet.create({
   },
   commentDeleteText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: colors.danger,
     fontWeight: '500',
   },
   commentCancelText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   commentSaveText: {
