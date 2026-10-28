@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, Camera, ArrowUpDown, Pencil, Trash2 } from 'lucide-react-native';
+import { Plus, Camera, ArrowUpDown, Pencil, Trash2, ChevronDown, Calendar, Package, FileText, Clock } from 'lucide-react-native';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { useData } from '@/hooks/useData';
 import { DesignerSelector } from '@/components/DesignerSelector';
@@ -34,7 +34,7 @@ export default function ProjectsScreen() {
   const { canEdit, canManageUsers } = useAuth();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { projects, venues, parts, createProject, updateProject, deleteProject, profiles } = useData();
+  const { projects, venues, parts, events, refresh, createProject, updateProject, deleteProject, profiles } = useData();
 
   const finishedProjectIds = useMemo(() => {
     const finished = new Set<string>();
@@ -53,6 +53,7 @@ export default function ProjectsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandUpcomingEvents, setExpandUpcomingEvents] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -72,6 +73,54 @@ export default function ProjectsScreen() {
   });
   const [newProjectPics, setNewProjectPics] = useState<string[]>([]);
   const [editingProjectPics, setEditingProjectPics] = useState<string[]>([]);
+
+  // Event type colors (from EventCardSimplified)
+  const eventColors: Record<string, string> = {
+    Measurement: '#3B82F6',
+    'Test-Fit': '#10B981',
+    Installation: '#F97316',
+    Delivery: '#F59E0B',
+    Meeting: '#EC4899',
+    Other: '#6B7280',
+  };
+
+  const parseEventDate = (value: string) => {
+    // Parse DD-MM-YYYY format
+    const dateParts = value.split('-');
+    if (dateParts.length !== 3) return null;
+    const day = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1; // JS months are 0-indexed
+    const year = parseInt(dateParts[2], 10);
+    const date = new Date(year, month, day);
+    if (isNaN(date.getTime())) return null;
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  // Get upcoming events (sorted by date, closest first)
+  const getUpcomingEvents = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return events
+      .map(event => ({ event, date: parseEventDate(event.date) }))
+      .filter((item): item is { event: typeof events[number]; date: Date } => !!item.date && item.date >= today)
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 3) // Get top 3 upcoming events
+      .map(item => item.event);
+  };
+
+  // Calculate days left
+  const getDaysLeft = (eventDate: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const date = parseEventDate(eventDate);
+    if (!date) return 0;
+    return Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const upcomingEvents = getUpcomingEvents();
+  const closestEvent = upcomingEvents[0] || null;
 
   const filteredProjects = [...projects]
     .filter(project =>
@@ -95,9 +144,8 @@ export default function ProjectsScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // The projects will auto-update from the context
-      // Just need to trigger a small delay to show the refresh animation
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Refresh data from the context (this will update events as well)
+      await refresh();
     } finally {
       setRefreshing(false);
     }
@@ -224,6 +272,119 @@ export default function ProjectsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Upcoming Events Card */}
+      {closestEvent && (
+        <View style={styles.upcomingEventsContainer}>
+          <TouchableOpacity
+            onPress={() => setExpandUpcomingEvents(!expandUpcomingEvents)}
+            activeOpacity={0.7}
+          >
+            <View style={[
+              styles.upcomingEventsCard,
+              { borderColor: eventColors[closestEvent.type] || '#6B7280' }
+            ]}>
+              {/* Collapsed View */}
+              {!expandUpcomingEvents && (() => {
+                const eventColor = eventColors[closestEvent.type] || '#6B7280';
+                return (
+                  <View style={styles.upcomingEventsCollapsed}>
+                    <View style={styles.upcomingEventInfo}>
+                      <View style={styles.upcomingEventHeader}>
+                        <Calendar color={eventColor} size={18} />
+                        <ThemedText style={[styles.upcomingEventLabel, { color: eventColor }]}>
+                          Upcoming {closestEvent.type} Event
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={[styles.upcomingEventDays, { color: eventColor }]}>
+                        {getDaysLeft(closestEvent.date)} day{getDaysLeft(closestEvent.date) !== 1 ? 's' : ''} left
+                      </ThemedText>
+                    </View>
+                    <ChevronDown
+                      size={20}
+                      color={eventColor}
+                      style={expandUpcomingEvents && styles.expandIconRotated}
+                    />
+                  </View>
+                );
+              })()}
+
+              {/* Expanded View */}
+              {expandUpcomingEvents && (
+                <View style={styles.upcomingEventsExpanded}>
+                  {upcomingEvents.map((event) => {
+                    const daysLeft = getDaysLeft(event.date);
+                    const partNames = event.parts.map((id) => parts.find((p) => p.id === id)?.name || 'Unknown');
+                    const project = projects.find(p => p.id === event.projectId);
+                    const eventColor = eventColors[event.type] || '#6B7280';
+
+                    // Parse time from description (format: "HH:MM - description")
+                    let eventTime = '';
+                    let displayDescription = event.description;
+                    if (event.description) {
+                      const descriptionParts = event.description.split(' - ');
+                      if (descriptionParts.length === 2 && /^\d{2}:\d{2}$/.test(descriptionParts[0])) {
+                        eventTime = descriptionParts[0];
+                        displayDescription = descriptionParts[1];
+                      }
+                    }
+
+                    return (
+                      <View key={event.id} style={styles.upcomingEventItem}>
+                        <View style={styles.upcomingEventItemHeader}>
+                          <View style={[styles.upcomingEventTypeBadge, { backgroundColor: eventColor }]}>
+                            <ThemedText style={styles.upcomingEventTypeText}>{event.type}</ThemedText>
+                          </View>
+                          <ThemedText style={[styles.upcomingEventItemDays, { color: eventColor }]}>
+                            {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                          </ThemedText>
+                        </View>
+                        <View style={styles.upcomingEventItemDetails}>
+                          {project && (
+                            <View style={styles.upcomingEventProjectRow}>
+                              <ThemedText style={[styles.upcomingEventProjectText, { color: eventColor }]}>
+                                {project.name}
+                              </ThemedText>
+                            </View>
+                          )}
+                          <View style={styles.upcomingEventDateRow}>
+                            <Calendar color={eventColor} size={14} />
+                            <ThemedText style={styles.upcomingEventDateText}>{event.date}</ThemedText>
+                            {eventTime ? (
+                              <>
+                                <ThemedText style={styles.upcomingEventDateSeparator}>•</ThemedText>
+                                <Clock color={eventColor} size={14} />
+                                <ThemedText style={styles.upcomingEventDateText}>{eventTime}</ThemedText>
+                              </>
+                            ) : null}
+                          </View>
+                          {partNames.length > 0 && (
+                            <View style={styles.upcomingEventPartsRow}>
+                              <Package color={eventColor} size={14} />
+                              <ThemedText style={styles.upcomingEventPartsText}>
+                                {partNames.join(', ')}
+                              </ThemedText>
+                            </View>
+                          )}
+                          {displayDescription && (
+                            <View style={styles.upcomingEventDescRow}>
+                              <FileText color={eventColor} size={14} />
+                              <ThemedText style={styles.upcomingEventDescText}>
+                                {displayDescription}
+                              </ThemedText>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={styles.listContainer}>
       <FlatList
         data={filteredProjects}
         keyExtractor={(item) => item.id}
@@ -285,7 +446,9 @@ export default function ProjectsScreen() {
         )}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListFooterComponent={<View style={{ height: 0 }} />}
       />
+      </View>
 
       {canEdit && (
       <TouchableOpacity 
@@ -640,7 +803,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
   },
   listContent: {
-    paddingVertical: 4,
+    paddingVertical: 0,
+  },
+  listContainer: {
+    flex: 1,
   },
   modalContainer: {
     flex: 1,
@@ -959,5 +1125,127 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textMuted,
     fontSize: 16,
     fontWeight: '600',
+  },
+  upcomingEventsContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  upcomingEventsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 2,
+  },
+  upcomingEventsCardUrgent: {
+    backgroundColor: colors.dangerSoft,
+  },
+  upcomingEventsCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  upcomingEventInfo: {
+    flex: 1,
+  },
+  upcomingEventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  upcomingEventLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  upcomingEventDays: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  expandIconRotated: {
+    transform: [{ rotate: '180deg' }],
+  },
+  upcomingEventsExpanded: {
+    gap: 12,
+  },
+  upcomingEventItem: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 1,
+    borderWidth: 1,
+    borderColor: colors.surface,
+  },
+  upcomingEventItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  upcomingEventTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  upcomingEventTypeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  upcomingEventItemDays: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  upcomingEventItemDetails: {
+    gap: 6,
+  },
+  upcomingEventProjectRow: {
+    marginBottom: 4,
+  },
+  upcomingEventProjectText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  upcomingEventDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingEventDateText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textStrong,
+  },
+  upcomingEventDateSeparator: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textMuted,
+    marginHorizontal: 4,
+  },
+  upcomingEventPartsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingEventPartsText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textStrong,
+  },
+  upcomingEventDescRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingEventDescText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textStrong,
   },
 });

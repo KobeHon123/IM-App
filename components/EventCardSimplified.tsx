@@ -37,6 +37,14 @@ const eventBgColors = {
   Other: '#F9FAFB',
 };
 
+const blendColors = (top: string, bottom: string, alpha: number) => {
+  const toRgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [tr, tg, tb] = toRgb(top);
+  const [br, bg, bb] = toRgb(bottom);
+  const mix = (t: number, b: number) => Math.round(t * alpha + b * (1 - alpha)).toString(16).padStart(2, '0');
+  return `#${mix(tr, br)}${mix(tg, bg)}${mix(tb, bb)}`;
+};
+
 const EventCardSimplified: React.FC<EventCardSimplifiedProps> = ({ date, type, parts, projectParts, description, time, onEdit, onDelete, isPast }) => {
   const colors = useColors();
   const { isDark } = useTheme();
@@ -47,7 +55,7 @@ const EventCardSimplified: React.FC<EventCardSimplifiedProps> = ({ date, type, p
   const bgColor = isPast
     ? colors.surfaceMuted
     : isDark
-      ? `${baseColor}26`
+      ? blendColors(baseColor, colors.surface, 0.15)
       : (eventBgColors[type] || '#F9FAFB');
   const partNames = parts.map((id) => projectParts.find((p) => p.id === id)?.name || 'Unknown');
 
