@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Text, TextInput, Alert, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Trash2, Play, Pause, RotateCcw } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Plus, Trash2, Play, Pause, RotateCcw, ArrowLeft } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -9,6 +10,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
+<<<<<<< HEAD
 import { useStopwatches, MAX_STOPWATCHES } from '@/context/StopwatchContext';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useColors } from '@/context/ThemeContext';
@@ -28,6 +30,81 @@ export default function StopwatchScreen() {
   } = useStopwatches();
   const [inputLabel, setInputLabel] = useState('');
   const scrollViewRef = useRef<ScrollViewInstance>(null);
+=======
+import { Swipeable } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router';
+
+interface Stopwatch {
+  id: string;
+  elapsed: number; // in seconds
+  isRunning: boolean;
+  label: string;
+}
+
+export default function StopwatchScreen() {
+  const router = useRouter();
+  const [stopwatches, setStopwatches] = useState<Stopwatch[]>([]);
+  const [inputLabel, setInputLabel] = useState('');
+  const [inputDuration, setInputDuration] = useState('');
+  const intervalRef = useRef<NodeJS.Timeout | number | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const isRunningRef = useRef(false);
+
+  // Load stopwatches from AsyncStorage on mount
+  useEffect(() => {
+    loadStopwatches();
+  }, []);
+
+  const loadStopwatches = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('stopwatches');
+      if (saved) {
+        setStopwatches(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading stopwatches:', error);
+    }
+  };
+
+  // Save stopwatches to AsyncStorage whenever they change
+  useEffect(() => {
+    AsyncStorage.setItem('stopwatches', JSON.stringify(stopwatches));
+  }, [stopwatches]);
+
+  // Update isRunningRef when stopwatches change
+  useEffect(() => {
+    const hasRunning = stopwatches.some(s => s.isRunning);
+    if (hasRunning !== isRunningRef.current) {
+      isRunningRef.current = hasRunning;
+      if (hasRunning) {
+        intervalRef.current = setInterval(() => {
+          setStopwatches(prev =>
+            prev.map(stopwatch => {
+              if (stopwatch.isRunning) {
+                return { ...stopwatch, elapsed: stopwatch.elapsed + 1 };
+              }
+              return stopwatch;
+            })
+          );
+        }, 1000);
+      } else {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      }
+    }
+  }, [stopwatches]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
 
   const addStopwatch = () => {
     if (stopwatches.length >= MAX_STOPWATCHES) {
@@ -57,39 +134,58 @@ export default function StopwatchScreen() {
 
   const renderRightActions = (id: string) => {
     return (
-      <TouchableOpacity
-        style={styles.deleteAction}
-        onPress={() => deleteStopwatch(id)}
-      >
-        <Trash2 size={24} color="#FFFFFF" strokeWidth={2} />
-      </TouchableOpacity>
+      <View style={styles.actionContainer}>
+        <TouchableOpacity
+          style={styles.deleteAction}
+          onPress={() => deleteStopwatch(id)}
+        >
+          <Trash2 size={24} color="#FFFFFF" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
     );
   };
 
   const renderLeftActions = (id: string) => {
     return (
-      <TouchableOpacity
-        style={styles.resetAction}
-        onPress={() => resetStopwatch(id)}
-      >
-        <RotateCcw size={24} color="#FFFFFF" strokeWidth={2} />
-      </TouchableOpacity>
+      <View style={styles.actionContainer}>
+        <TouchableOpacity
+          style={styles.resetAction}
+          onPress={() => resetStopwatch(id)}
+        >
+          <RotateCcw size={24} color="#FFFFFF" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
     );
   };
 
   return (
     <GestureHandlerRootView style={styles.container}>
+<<<<<<< HEAD
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <ThemedText style={styles.headerTitle}>Stopwatch</ThemedText>
         </View>
 
+=======
+      <SafeAreaView style={styles.container} edges={['top']}>
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
         <ScrollView 
           ref={scrollViewRef}
           style={styles.content} 
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft color="#2563EB" size={24} />
+            </TouchableOpacity>
+            <ThemedText style={styles.headerTitle}>Stopwatch</ThemedText>
+            <View style={styles.headerPlaceholder} />
+          </View>
+
           {/* Stopwatches List */}
           {stopwatches.length === 0 ? (
             <View style={styles.emptyState}>
@@ -160,11 +256,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
+<<<<<<< HEAD
     backgroundColor: colors.surface,
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+=======
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerPlaceholder: {
+    width: 40,
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
   },
   headerTitle: {
     fontSize: 24,
@@ -228,8 +337,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 12,
   },
   stopwatchCard: {
+<<<<<<< HEAD
     backgroundColor: colors.surface,
     borderRadius: 12,
+=======
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -237,10 +351,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 10, height: 10 },
+    shadowRadius: 8,
+    elevation: 3,
   },
   playPauseButton: {
     width: 48,
@@ -269,22 +382,39 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.primaryText,
     marginLeft: 12,
   },
+  actionContainer: {
+    justifyContent: 'center',
+  },
   deleteAction: {
     backgroundColor: '#EF4444',
     justifyContent: 'center',
     alignItems: 'center',
+<<<<<<< HEAD
     width: 56,
     height: 56,
     borderRadius: 28,
     marginTop: 9,
+=======
+    width: 52,
+    height: 52,
+    borderRadius: 40,
+    marginLeft: 12,
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
   },
   resetAction: {
     backgroundColor: '#6B7280',
     justifyContent: 'center',
     alignItems: 'center',
+<<<<<<< HEAD
     width: 56,
     height: 56,
     borderRadius: 28,
     marginTop: 9,
+=======
+    width: 52,
+    height: 52,
+    borderRadius: 40,
+    marginRight: 12,
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
   },
 });

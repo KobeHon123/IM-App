@@ -223,7 +223,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 12,
   },
   listContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     paddingVertical: 16,
   },
   columnWrapper: {
@@ -234,7 +234,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   contactCard: {
     width: '31%',
     alignItems: 'center',
+<<<<<<< HEAD
     marginHorizontal: 4,
+=======
+    margin: 6,
+    marginBottom: 24,
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
   },
   photoWrapper: {
     marginBottom: 12,

@@ -123,7 +123,11 @@ const ResinRecordTab = ({ projectId }: { projectId: string }) => {
 
   if (loading) {
     return (
+<<<<<<< HEAD
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+=======
+      <SafeAreaView style={styles.container} edges={['top']}>
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
         <View style={styles.loadingContainer}>
           <LoadingSpinner size={50} color={colors.primaryText} strokeWidth={5} />
         </View>
@@ -132,7 +136,11 @@ const ResinRecordTab = ({ projectId }: { projectId: string }) => {
   }
 
   return (
+<<<<<<< HEAD
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+=======
+    <SafeAreaView style={styles.container} edges={['top']}>
+>>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         {resinSummaries.length === 0 ? (
           <View style={styles.emptyContainer}>
