@@ -22,7 +22,7 @@ import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
-import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers } from '@/lib/supabaseHelpers';
+import { getVenue, getPartsByProject, createPart, createSubPart, deletePart, findDuplicatePart, getVenuePartQuantity, updateVenuePartQuantity, checkPartNumberExists, createComment, getCommentsByPart, toggleCommentCompletion, getCurrentPartNumber, getUsedPartNumbers, updateVenueFloorQuantity } from '@/lib/supabaseHelpers';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/hooks/useData';
 import { PartCard } from '@/components/PartCard';
@@ -31,6 +31,9 @@ import { EditPartModal } from '@/components/EditPartModal';
 import { PartDetailModal } from '@/components/PartDetailModal';
 import { Part, PartType, Comment } from '@/types';
 import { calculateDimensionSimilarity, findSimilarPart } from '@/lib/similarityDetection';
+import { ButtonSetSelector, FloorPicker } from '@/components/ButtonSetSelector';
+import { ButtonSetFloors } from '@/components/ButtonSetFloors';
+import { getPartFloors, getFloorQuantity, getButtonSetTotal, isButtonSet } from '@/lib/floorUtils';
 import { ThemedText } from '@/components/ThemedText';
 export default function VenueDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -155,6 +158,7 @@ export default function VenueDetailScreen() {
   const [nextPartNumber, setNextPartNumber] = useState<number>(0);
   const [manualPartNumber, setManualPartNumber] = useState<number | null>(null);
   const [showPartNumberPicker, setShowPartNumberPicker] = useState(false);
+  const [showFloorPicker, setShowFloorPicker] = useState(false);
   const [usedPartNumbers, setUsedPartNumbers] = useState<number[]>([]);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [similarPart, setSimilarPart] = useState<{ part: Part; similarity: number } | null>(null);
@@ -368,6 +372,24 @@ export default function VenueDetailScreen() {
     }
   };
 
+  const handleFloorQuantityChange = async (part: Part, floor: string, quantity: number) => {
+    await impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const floors = getPartFloors(part);
+    const previous = partQuantities;
+    const optimistic = { ...partQuantities, [`${part.id}::${floor}`]: quantity };
+    optimistic[part.id] = getButtonSetTotal(optimistic, part.id, floors);
+    setPartQuantities(optimistic);
+
+    try {
+      const saved = await updateVenueFloorQuantity(venue.id, part.id, floors, floor, quantity);
+      setPartQuantities(saved || optimistic);
+    } catch (error) {
+      console.error('Error updating floor quantity:', error);
+      setPartQuantities(previous);
+    }
+  };
+
   const handleStatusChange = async (partId: string, newStatus: string) => {
     try {
       await updatePart(partId, { status: newStatus as any });
@@ -544,6 +566,11 @@ export default function VenueDetailScreen() {
       return;
     }
     
+    if (newPart.type === 'Button' && newPart.dimensions.buttonSet === true && !(newPart.dimensions.floors || []).length) {
+      Alert.alert('Error', 'Please select at least one floor for the button set');
+      return;
+    }
+
     // Generate manual part name if user selected a number
     let manualPartName: string | undefined;
     if (isToiletCapLifter(newPart.type, newPart.dimensions)) {
@@ -596,6 +623,7 @@ export default function VenueDetailScreen() {
       setSimilarPart(null);
       setManualPartNumber(null);
       setShowCreatePartModal(false);
+      setShowFloorPicker(false);
       await loadVenueData();
       
       Alert.alert('Success', 'Part created successfully with all images uploaded!');
@@ -622,7 +650,7 @@ export default function VenueDetailScreen() {
         type: part.type,
         description: `Sub-part of ${part.name}`,
         pictures: [],
-        dimensions: part.dimensions,
+        dimensions: (({ buttonSet, floors, ...rest }) => rest)(part.dimensions as Record<string, any>) as any,
         status: 'measured' as const,
         projectId: part.projectId,
         designer: part.designer || undefined,
@@ -954,6 +982,16 @@ export default function VenueDetailScreen() {
       case 'Button':
         return (
           <>
+            <ButtonSetSelector
+              buttonSet={newPart.dimensions.buttonSet === true}
+              floors={newPart.dimensions.floors || []}
+              disabled={usingSimilarPart}
+              onChange={({ buttonSet, floors }) => setNewPart(prev => {
+                const { buttonSet: _b, floors: _f, ...rest } = prev.dimensions;
+                return { ...prev, dimensions: buttonSet ? { ...rest, buttonSet: true, floors } : rest };
+              })}
+              onOpenPicker={() => setShowFloorPicker(true)}
+            />
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Button Type *</ThemedText>
               <View style={styles.buttonShapeContainer}>
@@ -1433,7 +1471,11 @@ export default function VenueDetailScreen() {
                 )}
               </TouchableOpacity>
               {!isCollapsed && parts.map((part) => {
-                const quantity = partQuantities[part.id] || 0;
+                const partIsSet = isButtonSet(part);
+                const partFloors = getPartFloors(part);
+                const quantity = partIsSet
+                  ? getButtonSetTotal(partQuantities, part.id, partFloors)
+                  : partQuantities[part.id] || 0;
                 const subParts = getSubParts(part.id);
                 const hasComments = hasUnfinishedComments(part.id);
                 const isSelectedForPhotos = showPhotos && selectedPartIdForPhotos === part.id;
@@ -1493,6 +1535,38 @@ export default function VenueDetailScreen() {
                       friction={2}
                       leftThreshold={80}
                     >
+                      {partIsSet ? (
+                        <View style={styles.buttonSetCard}>
+                        <PartCard
+                          embedded={partIsSet}
+                          part={part}
+                          quantity={quantity}
+                          showQuantity={true}
+                          countingMode={countingMode}
+                          hasComments={hasComments}
+                          isSelected={isSelectedForPhotos}
+                          allowPressInCountingMode={showPhotos}
+                          venueName={venue.name}
+                          simplifyDisplay={true}
+                          onQuantityChange={partIsSet ? undefined : (delta) => handleQuantityChange(part.id, delta)}
+                          onCommentSend={(text) => handleCommentSend(part.id, text)}
+                          onPress={() => {
+                            if (showPhotos) {
+                              setSelectedPartIdForPhotos(part.id);
+                            } else {
+                              setSelectedPart(part);
+                              setShowPartDetailModal(true);
+                            }
+                          }}
+                        />
+                          <ButtonSetFloors
+                            floors={partFloors}
+                            getQuantity={(floor) => getFloorQuantity(partQuantities, part.id, floor)}
+                            countingMode={countingMode}
+                            onQuantityChange={(floor, qty) => handleFloorQuantityChange(part, floor, qty)}
+                          />
+                        </View>
+                      ) : (
                       <PartCard
                         part={part}
                         quantity={quantity}
@@ -1503,7 +1577,7 @@ export default function VenueDetailScreen() {
                         allowPressInCountingMode={showPhotos}
                         venueName={venue.name}
                         simplifyDisplay={true}
-                        onQuantityChange={(delta) => handleQuantityChange(part.id, delta)}
+                        onQuantityChange={partIsSet ? undefined : (delta) => handleQuantityChange(part.id, delta)}
                         onCommentSend={(text) => handleCommentSend(part.id, text)}
                         onPress={() => {
                           if (showPhotos) {
@@ -1514,6 +1588,7 @@ export default function VenueDetailScreen() {
                           }
                         }}
                       />
+                      )}
                     </ReanimatedSwipeable>
                     {subParts.map((subPart) => {
                       const subQuantity = partQuantities[subPart.id] || 0;
@@ -1604,7 +1679,7 @@ export default function VenueDetailScreen() {
               <ThemedText style={styles.photoGalleryClose}>×</ThemedText>
             </TouchableOpacity>
           </View>
-          {projectParts.find(p => p.id === selectedPartIdForPhotos)?.pictures && projectParts.find(p => p.id === selectedPartIdForPhotos)?.pictures.length > 0 ? (
+          {projectParts.find(p => p.id === selectedPartIdForPhotos)?.pictures && projectParts.find(p => p.id === selectedPartIdForPhotos)?.pictures?.length ?  (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1647,6 +1722,7 @@ export default function VenueDetailScreen() {
             <TouchableOpacity onPress={() => {
               console.log('Closing create part modal');
               setShowCreatePartModal(false);
+              setShowFloorPicker(false);
             }}>
               <ThemedText style={styles.modalClose}>Cancel</ThemedText>
             </TouchableOpacity>
@@ -1946,6 +2022,14 @@ export default function VenueDetailScreen() {
             )}
           </ScrollView>
 
+          {showFloorPicker && (
+            <FloorPicker
+              selected={newPart.dimensions.floors || []}
+              onChange={(floors) => setNewPart(prev => ({ ...prev, dimensions: { ...prev.dimensions, buttonSet: true, floors } }))}
+              onClose={() => setShowFloorPicker(false)}
+            />
+          )}
+
           {/* Part Number Picker Overlay - Inside Create Part Modal */}
           {showPartNumberPicker && (
             <View style={styles.partNumberPickerOverlay}>
@@ -2020,6 +2104,7 @@ export default function VenueDetailScreen() {
             });
             setShowEditPartModal(false);
             setSelectedPart(null);
+            await loadVenueData();
           } catch (error) {
             console.error('Error updating part:', error);
             Alert.alert('Error', 'Failed to update part');
@@ -2626,6 +2711,17 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontWeight: '500',
   },
+  buttonSetCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
   subPartContainer: {
     marginLeft: 32,
     borderLeftWidth: 2,
@@ -2927,7 +3023,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#374151',
     textAlign: 'center',
-    numberOfLines: 2,
   },
   photoGalleryHeader: {
     flexDirection: 'row',

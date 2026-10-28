@@ -64,6 +64,8 @@ export const findSimilarPart = (
   for (const part of partsToSearch) {
     // Only compare with parts of the same type
     if (part.type !== currentPartType) continue;
+    // Button sets are identified by their floors, so never match them with other parts
+    if (currentDimensions?.buttonSet === true || (part.dimensions as Record<string, any> | undefined)?.buttonSet === true) continue;
 
     const similarity = calculateDimensionSimilarity(
       currentDimensions,

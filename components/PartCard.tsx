@@ -4,6 +4,7 @@ import { usePlatformHaptics } from '@/hooks/usePlatformHaptics';
 import { Part, Project } from '@/types';
 import { EllipsisVertical, Package, MessageCircle, Send, Check, Minus, Plus, ChevronRight, ImageIcon } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
+import { isButtonSet } from '@/lib/floorUtils';
 
 interface PartCardProps {
   part: Part;
@@ -20,6 +21,7 @@ interface PartCardProps {
   allowPressInCountingMode?: boolean;
   gridLayout?: boolean;
   isPartTab?: boolean;
+  embedded?: boolean;
   onPress?: () => void;
   onMorePress?: () => void;
   onLongPress?: () => void;
@@ -43,6 +45,7 @@ export function PartCard({
   allowPressInCountingMode = false,
   gridLayout = false,
   isPartTab = false,
+  embedded = false,
   onPress,
   onMorePress,
   onLongPress,
@@ -173,7 +176,7 @@ export function PartCard({
         {/* Content */}
         <View style={styles.gridCardContent}>
           <View style={styles.gridCardFooter}>
-            <ThemedText style={styles.gridCardName}>{part.name}</ThemedText>
+            <ThemedText style={styles.gridCardName}>{part.name}{isButtonSet(part) ? ' · SET' : ''}</ThemedText>
             {showQuantity && (
               <View style={styles.gridCardQuantityBadge}>
                 <ThemedText style={styles.gridCardQuantityText}>{isPartTab ? 'Total Qty:' : 'Qty:'} {quantity}</ThemedText>
@@ -184,7 +187,7 @@ export function PartCard({
       </TouchableOpacity>
     ) : (
     <TouchableOpacity
-      style={[styles.card, isSelected && styles.cardSelected]}
+      style={[styles.card, embedded && styles.cardEmbedded, isSelected && styles.cardSelected]}
       onPress={() => {
         if (!shouldDisablePress) {
           handleCardPress();
@@ -214,7 +217,14 @@ export function PartCard({
           
           <View style={styles.details}>
             <View style={styles.header}>
-              <ThemedText style={styles.name}>{displayName}</ThemedText>
+              <View style={styles.nameRow}>
+                <ThemedText style={styles.name}>{displayName}</ThemedText>
+                {isButtonSet(part) && (
+                  <View style={styles.setBadge}>
+                    <ThemedText style={styles.setBadgeText}>SET</ThemedText>
+                  </View>
+                )}
+              </View>
             </View>
             {simplifyDisplay && part.description && (
               <ThemedText style={styles.description} numberOfLines={1}>{part.description}</ThemedText>
@@ -447,11 +457,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   gridCardOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   gridCardContent: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'flex-end',
     padding: 12,
   },
@@ -508,6 +518,14 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
+  cardEmbedded: {
+    marginHorizontal: 0,
+    marginVertical: 0,
+    borderRadius: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+    backgroundColor: 'transparent',
+  },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -539,8 +557,13 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    flexWrap: 'nowrap',
   },
   name: {
     fontSize: 16,
@@ -548,7 +571,7 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginBottom: 2,
     letterSpacing: 0.3,
-    flex: 1,
+    flexShrink: 1,
   },
   type: {
     fontSize: 12,
@@ -631,6 +654,18 @@ const styles = StyleSheet.create({
   },
   moreButton: {
     padding: 6,
+  },
+  setBadge: {
+    backgroundColor: '#DBEAFE',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  setBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1D4ED8',
   },
   // Modern Counting Mode Styles
   countingModeContainer: {
@@ -988,8 +1023,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-  },
-  moreButton: {
-    padding: 6,
   },
 });

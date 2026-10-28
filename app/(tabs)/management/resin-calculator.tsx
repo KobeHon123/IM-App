@@ -275,6 +275,7 @@ export default function ResinRecord() {
     if (value && !isNaN(parseFloat(value))) {
       const component2 = parseFloat(value);
       const calculator = getMaterialCalculator(selectedMaterial);
+      if (!('fromComponent2' in calculator)) return;
       const calc = calculator.fromComponent2(component2, withOil);
       setTotalGrams(calc.total.toFixed(2));
       setOnyxGrams(calc.component1.toFixed(2));

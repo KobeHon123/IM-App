@@ -196,7 +196,7 @@ export default function ResinRecordManagement() {
     const oilGrams = Number(item.oil_grams || 0);
 
     return (
-      <View style={styles.recordCard}>
+      <View key={item.id} style={styles.recordCard}>
         <TouchableOpacity
           style={styles.recordHeader}
           onPress={() => toggleCardExpand(item.id)}
@@ -357,7 +357,7 @@ export default function ResinRecordManagement() {
           {/* Records List */}
           {filteredRecords.length > 0 ? (
             <View style={styles.recordsList}>
-              {filteredRecords.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => renderRecordItem({ item }))}
+              {[...filteredRecords].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => renderRecordItem({ item }))}
             </View>
           ) : (
             <View style={styles.emptyState}>

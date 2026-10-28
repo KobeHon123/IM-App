@@ -235,7 +235,7 @@ const ProfileScreen = () => {
     });
 
     if (result && profile) {
-      const uri = result.uri;
+      const uri = (Array.isArray(result) ? result[0] : result).uri;
       setIsUploadingPhoto(true);
 
       try {

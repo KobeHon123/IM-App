@@ -64,8 +64,8 @@ export default function ProjectsScreen() {
       }
 
       // When toggle is off: sort by created_at, newest first
-      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return bTime - aTime;
     });
 
@@ -162,7 +162,7 @@ export default function ProjectsScreen() {
     });
 
     if (result) {
-      const uri = result.uri;
+      const uri = (Array.isArray(result) ? result[0] : result).uri;
       console.log('Selected thumbnail:', uri);
       if (isEdit) {
         setEditingProject(prev => ({ ...prev, thumbnail: uri }));

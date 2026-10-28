@@ -69,6 +69,8 @@ export interface ButtonPart extends BasePart {
     width?: number; // Not for Circle
     fillet?: number; // Not for Circle
     thickness: number;
+    buttonSet?: boolean; // true when this part is a set of buttons, one per floor
+    floors?: string[]; // Floors in the set (e.g. 'G', '1', '2', 'B1'), only when buttonSet is true
   };
 }
 

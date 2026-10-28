@@ -170,7 +170,7 @@ export const DesignerSelector: React.FC<DesignerSelectorProps> = ({
                       "{value}" (custom)
                     </ThemedText>
                   </TouchableOpacity>
-                ) : null
+                ) : undefined
               }
             />
           </View>

@@ -33,3 +33,9 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# build output
+dist-check/
+
+# supabase cli state
+supabase/.temp/

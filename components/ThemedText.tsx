@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text as RNText, TextProps } from 'react-native';
+import { Text as RNText, type TextInstance, type TextProps } from 'react-native';
 
 /**
  * Custom Text component that prevents font scaling based on system font size settings.
@@ -10,7 +10,7 @@ import { Text as RNText, TextProps } from 'react-native';
  * - For buttons and labels where scaling shouldn't happen, use maxFontSizeMultiplier={1}
  * - Can override with custom maxFontSizeMultiplier value if needed
  */
-export const ThemedText = React.forwardRef<RNText, TextProps & { allowFontScaling?: boolean; maxFontSizeMultiplier?: number }>(
+export const ThemedText = React.forwardRef<TextInstance, TextProps & { allowFontScaling?: boolean; maxFontSizeMultiplier?: number }>(
   (
     {
       maxFontSizeMultiplier = 1.2,

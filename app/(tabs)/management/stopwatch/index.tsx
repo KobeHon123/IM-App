@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Text, TextInput, Alert } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Text, TextInput, Alert, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Trash2, Play, Pause, RotateCcw } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
@@ -9,89 +9,34 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-import { Swipeable } from 'react-native-gesture-handler';
-
-interface Stopwatch {
-  id: string;
-  elapsed: number; // in seconds
-  isRunning: boolean;
-  label: string;
-}
+import { useStopwatches, MAX_STOPWATCHES } from '@/context/StopwatchContext';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 export default function StopwatchScreen() {
-  const [stopwatches, setStopwatches] = useState<Stopwatch[]>([]);
+  const {
+    stopwatches,
+    addStopwatch: addToContext,
+    deleteStopwatch,
+    toggleStopwatch,
+    resetStopwatch,
+    getElapsedSeconds,
+  } = useStopwatches();
   const [inputLabel, setInputLabel] = useState('');
-  const [inputDuration, setInputDuration] = useState('');
-  const intervalRef = useRef<NodeJS.Timeout | number | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  // Main stopwatch loop
-  useEffect(() => {
-    if (stopwatches.some(s => s.isRunning)) {
-      intervalRef.current = setInterval(() => {
-        setStopwatches(prev =>
-          prev.map(stopwatch => {
-            if (stopwatch.isRunning) {
-              return { ...stopwatch, elapsed: stopwatch.elapsed + 1 };
-            }
-            return stopwatch;
-          })
-        );
-      }, 1000);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [stopwatches]);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
 
   const addStopwatch = () => {
-    if (stopwatches.length >= 10) {
-      Alert.alert('Maximum Stopwatches', 'You can only create up to 10 stopwatches');
+    if (stopwatches.length >= MAX_STOPWATCHES) {
+      Alert.alert('Maximum Stopwatches', `You can only create up to ${MAX_STOPWATCHES} stopwatches`);
       return;
     }
 
-    const newStopwatch: Stopwatch = {
-      id: Date.now().toString(),
-      elapsed: 0,
-      isRunning: false,
-      label: inputLabel || `Stopwatch ${stopwatches.length + 1}`,
-    };
-
-    setStopwatches([...stopwatches, newStopwatch]);
+    addToContext(inputLabel);
     setInputLabel('');
-    
+
     // Scroll to bottom to show the new stopwatch
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  };
-
-  const deleteStopwatch = (id: string) => {
-    setStopwatches(stopwatches.filter(s => s.id !== id));
-  };
-
-  const toggleStopwatch = (id: string) => {
-    setStopwatches(stopwatches.map(s =>
-      s.id === id
-        ? { ...s, isRunning: !s.isRunning }
-        : s
-    ));
-  };
-
-  const resetStopwatch = (id: string) => {
-    setStopwatches(stopwatches.map(s =>
-      s.id === id
-        ? { ...s, elapsed: 0, isRunning: false }
-        : s
-    ));
   };
 
   const formatTime = (seconds: number) => {
@@ -158,11 +103,11 @@ export default function StopwatchScreen() {
                     <TouchableOpacity
                       style={[
                         styles.playPauseButton,
-                        stopwatch.isRunning ? styles.pauseButton : styles.playButton,
+                        stopwatch.startedAt !== null ? styles.pauseButton : styles.playButton,
                       ]}
                       onPress={() => toggleStopwatch(stopwatch.id)}
                     >
-                      {stopwatch.isRunning ? (
+                      {stopwatch.startedAt !== null ? (
                         <Pause size={24} color="#FFFFFF" strokeWidth={2.5} />
                       ) : (
                         <Play size={20} color="#FFFFFF" strokeWidth={2.5} />
@@ -174,7 +119,7 @@ export default function StopwatchScreen() {
 
                     {/* Right: Time Display */}
                     <Text style={styles.timeText}>
-                      {formatTime(stopwatch.elapsed)}
+                      {formatTime(getElapsedSeconds(stopwatch))}
                     </Text>
                   </View>
                 </Swipeable>
@@ -259,7 +204,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: '#2563EB',
-    borderRadius: 12,
+    borderRadius: 24,
     width: 48,
     height: 48,
     justifyContent: 'center',
@@ -323,15 +268,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginTop: 9,
   },
   resetAction: {
     backgroundColor: '#6B7280',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
-    borderRadius: 12,
-    marginRight: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginTop: 9,
   },
 });

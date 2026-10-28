@@ -187,7 +187,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
           description: selectedPart.description,
           pictures: selectedPart.pictures || [],
           cadDrawing: selectedPart.cadDrawing || '',
-          dimensions: { ...selectedPart.dimensions },
+          dimensions: (({ buttonSet, floors, ...rest }) => rest)(selectedPart.dimensions as Record<string, any>),
           designer: selectedPart.designer || '',
         });
         setShowEditPartModal(true);
@@ -368,7 +368,7 @@ const PartTab = ({ projectId }: { projectId: string }) => {
       quality: 1,
     });
     if (result) {
-      const uri = result.uri;
+      const uri = (Array.isArray(result) ? result[0] : result).uri;
       console.log('Selected CAD drawing:', uri);
       if (isEdit) {
         setEditingPart(prev => ({ ...prev, cadDrawing: uri }));

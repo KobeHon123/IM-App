@@ -12,45 +12,47 @@ interface ProjectCardProps {
 export function ProjectCard({ project, onPress }: ProjectCardProps) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={1}>
-      {project.thumbnail ? (
-        <ImageBackground
-          source={{ uri: project.thumbnail }}
-          style={styles.background}
-          imageStyle={styles.backgroundImage}
-        >
-          <View style={styles.overlay}>
-            <View style={styles.content}>
-              <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
-              {project.description ? (
-                <ThemedText style={styles.description} numberOfLines={2}>
-                  {project.description}
-                </ThemedText>
-              ) : null}
-              <View style={styles.footer}>
-                <User color="#6B7280" size={16} />
-                <ThemedText style={styles.pic}> {project.pic}</ThemedText>
+      <View style={styles.cardShell}>
+        {project.thumbnail ? (
+          <ImageBackground
+            source={{ uri: project.thumbnail }}
+            style={styles.background}
+            imageStyle={styles.backgroundImage}
+          >
+            <View style={styles.overlay}>
+              <View style={styles.content}>
+                <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
+                {project.description ? (
+                  <ThemedText style={styles.description} numberOfLines={2}>
+                    {project.description}
+                  </ThemedText>
+                ) : null}
+                <View style={styles.footer}>
+                  <User color="#6B7280" size={16} />
+                  <ThemedText style={styles.pic}> {project.pic}</ThemedText>
+                </View>
+              </View>
+            </View>
+          </ImageBackground>
+        ) : (
+          <View style={styles.plainCard}>
+            <View style={styles.overlayPlain}>
+              <View style={styles.content}>
+                <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
+                {project.description ? (
+                  <ThemedText style={styles.description} numberOfLines={2}>
+                    {project.description}
+                  </ThemedText>
+                ) : null}
+                <View style={styles.footer}>
+                  <User color="#6B7280" size={16} />
+                  <ThemedText style={styles.pic}>{project.pic}</ThemedText>
+                </View>
               </View>
             </View>
           </View>
-        </ImageBackground>
-      ) : (
-        <View style={styles.plainCard}>
-          <View style={styles.overlayPlain}>
-            <View style={styles.content}>
-            <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
-            {project.description ? (
-              <ThemedText style={styles.description} numberOfLines={2}>
-                {project.description}
-              </ThemedText>
-            ) : null}
-            <View style={styles.footer}>
-              <User color="#6B7280" size={16} />
-              <ThemedText style={styles.pic}>{project.pic}</ThemedText>
-            </View>
-          </View>
-          </View>
-        </View>
-      )}
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -75,6 +77,11 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  cardShell: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -83,6 +90,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
     borderRadius: 12,
     overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
   },
   plainCard: {
     minHeight: 120,
@@ -95,7 +103,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
     justifyContent: 'center',
     padding: 16,
   },

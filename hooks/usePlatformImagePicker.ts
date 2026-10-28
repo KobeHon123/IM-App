@@ -118,9 +118,9 @@ export const usePlatformImagePicker = () => {
         if (options?.allowsMultipleSelection && result.assets.length > 1) {
           return result.assets.map(asset => ({
             uri: asset.uri,
-            type: asset.type,
+            type: asset.type ?? undefined,
             size: asset.fileSize,
-            name: asset.fileName,
+            name: asset.fileName ?? undefined,
           }));
         }
         
@@ -128,9 +128,9 @@ export const usePlatformImagePicker = () => {
         const asset = result.assets[0];
         return {
           uri: asset.uri,
-          type: asset.type,
+          type: asset.type ?? undefined,
           size: asset.fileSize,
-          name: asset.fileName,
+          name: asset.fileName ?? undefined,
         };
       }
 

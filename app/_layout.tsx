@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { EasterEggProvider } from '@/context/EasterEggContext';
+import { StopwatchProvider } from '@/context/StopwatchContext';
 import { LoginScreen } from '@/components/LoginScreen';
 import { SetupNameScreen } from '@/components/SetupNameScreen';
 import { WaitingForApprovalScreen } from '@/components/WaitingForApprovalScreen';
@@ -86,7 +87,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <EasterEggProvider>
-            <RootLayoutNav />
+            <StopwatchProvider>
+              <RootLayoutNav />
+            </StopwatchProvider>
           </EasterEggProvider>
         </AuthProvider>
       </SafeAreaProvider>

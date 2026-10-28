@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Animated, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, Pencil, Trash2, Info, Download, ArrowLeft } from 'lucide-react-native';
@@ -211,9 +211,9 @@ interface TimeWheelPickerModalProps {
 }
 
 const TimeWheelPickerModal = ({ visible, hour, minute, title, onConfirm, onCancel }: TimeWheelPickerModalProps) => {
-  const hourRef = useRef<ScrollView>(null);
-  const minuteRef = useRef<ScrollView>(null);
-  const ampmRef = useRef<ScrollView>(null);
+  const hourRef = useRef<ScrollViewInstance>(null);
+  const minuteRef = useRef<ScrollViewInstance>(null);
+  const ampmRef = useRef<ScrollViewInstance>(null);
   const slideAnim = useRef(new Animated.Value(SHEET_SLIDE_AMOUNT)).current;
   const [rendered, setRendered] = useState(false);
 

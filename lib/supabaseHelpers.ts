@@ -3,6 +3,7 @@ import { Project, Venue, Part, Event, Comment } from '@/types';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { decode } from 'base64-arraybuffer';
+import { floorQtyKey, getButtonSetTotal } from './floorUtils';
 
 // A single place to convert database snake_case to app camelCase
 // and ensure data types are correct (e.g., creating Date objects)
@@ -282,6 +283,94 @@ export const updateVenuePartQuantity = async (venueId: string, partId: string, q
 
   const newQuantities = { ...venue.partQuantities, [partId]: quantity };
   return await updateVenue(venueId, { partQuantities: newQuantities });
+};
+
+export const updateVenueFloorQuantity = async (
+  venueId: string,
+  partId: string,
+  floors: string[],
+  floor: string,
+  quantity: number
+) => {
+  const venue = await getVenue(venueId);
+  if (!venue) throw new Error('Venue not found');
+
+  const newQuantities = { ...venue.partQuantities, [floorQtyKey(partId, floor)]: quantity };
+  newQuantities[partId] = getButtonSetTotal(newQuantities, partId, floors);
+  const updated = await updateVenue(venueId, { partQuantities: newQuantities });
+  return updated.partQuantities;
+};
+
+export interface FloorChangeImpact {
+  removedWithQuantity: { floor: string; quantity: number }[];
+  legacyQuantity: number;
+}
+
+export const analyzeFloorChange = async (
+  projectId: string,
+  partId: string,
+  oldFloors: string[],
+  newFloors: string[] | null
+): Promise<FloorChangeImpact> => {
+  const venues = await getVenuesByProject(projectId);
+  const kept = new Set(newFloors || []);
+  const removedTotals: Record<string, number> = {};
+  let legacyQuantity = 0;
+
+  for (const venue of venues) {
+    for (const floor of oldFloors) {
+      if (kept.has(floor)) continue;
+      const qty = venue.partQuantities?.[floorQtyKey(partId, floor)] || 0;
+      if (qty > 0) removedTotals[floor] = (removedTotals[floor] || 0) + qty;
+    }
+    if (oldFloors.length === 0 && newFloors) {
+      legacyQuantity += venue.partQuantities?.[partId] || 0;
+    }
+  }
+
+  return {
+    removedWithQuantity: Object.entries(removedTotals).map(([floor, quantity]) => ({ floor, quantity })),
+    legacyQuantity,
+  };
+};
+
+export const applyFloorChange = async (
+  projectId: string,
+  partId: string,
+  oldFloors: string[],
+  newFloors: string[] | null
+) => {
+  const venues = await getVenuesByProject(projectId);
+  const kept = new Set(newFloors || []);
+  const removed = oldFloors.filter(floor => !kept.has(floor));
+
+  for (const venue of venues) {
+    const quantities = { ...(venue.partQuantities || {}) };
+    let changed = false;
+
+    for (const floor of removed) {
+      const key = floorQtyKey(partId, floor);
+      if (key in quantities) {
+        delete quantities[key];
+        changed = true;
+      }
+    }
+
+    let total = quantities[partId] || 0;
+    if (newFloors) {
+      total = oldFloors.length === 0 ? 0 : getButtonSetTotal(quantities, partId, newFloors);
+    } else if (oldFloors.length > 0) {
+      total = 0;
+    }
+    if (total !== (quantities[partId] || 0)) {
+      quantities[partId] = total;
+      changed = true;
+    }
+
+    if (changed) {
+      await updateVenue(venue.id, { partQuantities: quantities });
+    }
+  }
 };
 
 export const getUsedPartNumbers = async (partType: string, projectId?: string): Promise<number[]> => {

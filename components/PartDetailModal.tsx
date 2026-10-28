@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
+import { sortFloors } from '@/lib/floorUtils';
 import {
   AlertCircle,
   AlignLeft,
@@ -393,8 +394,16 @@ export function PartDetailModal({
                     keyExtractor={([key]) => key}
                     renderItem={({ item: [key, value] }) => (
                       <View style={styles.dimensionRow}>
-                        <ThemedText style={styles.dimensionKey}>{key.charAt(0).toUpperCase() + key.slice(1)}:</ThemedText>
-                        <ThemedText style={styles.dimensionValue}>{value}</ThemedText>
+                        <ThemedText style={styles.dimensionKey}>
+                          {key === 'buttonSet' ? 'Button Set' : key.charAt(0).toUpperCase() + key.slice(1)}:
+                        </ThemedText>
+                        <ThemedText style={styles.dimensionValue}>
+                          {key === 'buttonSet'
+                            ? (value ? 'Yes' : 'No')
+                            : Array.isArray(value)
+                              ? sortFloors(value as string[]).join(', ')
+                              : String(value)}
+                        </ThemedText>
                       </View>
                     )}
                     scrollEnabled={false}

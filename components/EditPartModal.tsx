@@ -17,6 +17,9 @@ import { usePlatformImagePicker } from '@/hooks/usePlatformImagePicker';
 import { DesignerSelector } from '@/components/DesignerSelector';
 import { Part, PartType, Profile } from '@/types';
 import { ThemedText } from '@/components/ThemedText';
+import { ButtonSetSelector, FloorPicker } from '@/components/ButtonSetSelector';
+import { analyzeFloorChange, applyFloorChange } from '@/lib/supabaseHelpers';
+import { isButtonSet, getPartFloors } from '@/lib/floorUtils';
 
 interface EditPartModalProps {
   visible: boolean;
@@ -47,7 +50,12 @@ export function EditPartModal({
   onEditingPartChange,
 }: Omit<EditPartModalProps, 'onSyncWithPart'>) {
   const { requestPermissionsAsync, launchImageLibraryAsync } = usePlatformImagePicker();
+  const [showFloorPicker, setShowFloorPicker] = React.useState(false);
   
+  React.useEffect(() => {
+    if (!visible) setShowFloorPicker(false);
+  }, [visible]);
+
   React.useEffect(() => {
     if (visible) {
       console.log('=== EditPartModal Opened ===');
@@ -340,6 +348,15 @@ export function EditPartModal({
       case 'Button':
         return (
           <>
+            <ButtonSetSelector
+              buttonSet={editingPart.dimensions.buttonSet === true}
+              floors={editingPart.dimensions.floors || []}
+              onChange={({ buttonSet, floors }) => {
+                const { buttonSet: _b, floors: _f, ...rest } = editingPart.dimensions;
+                onEditingPartChange({ dimensions: buttonSet ? { ...rest, buttonSet: true, floors } : rest });
+              }}
+              onOpenPicker={() => setShowFloorPicker(true)}
+            />
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Button Type *</ThemedText>
               <View style={styles.buttonShapeContainer}>
@@ -488,7 +505,7 @@ export function EditPartModal({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedPart || !editingPart.description.trim()) {
       Alert.alert('Error', 'Please fill in the description');
       return;
@@ -501,7 +518,63 @@ export function EditPartModal({
       Alert.alert('Error', `Please fill in all required dimensions: ${missingFields.join(', ')}`);
       return;
     }
-    onSave(editingPart);
+    if (editingPart.type === 'Button' && editingPart.dimensions.buttonSet === true && !(editingPart.dimensions.floors || []).length) {
+      Alert.alert('Error', 'Please select at least one floor for the button set');
+      return;
+    }
+
+    if (selectedPart.type !== 'Button') {
+      onSave(editingPart);
+      return;
+    }
+
+    const oldFloors = isButtonSet(selectedPart) ? getPartFloors(selectedPart) : [];
+    const newFloors: string[] | null =
+      editingPart.type === 'Button' && editingPart.dimensions.buttonSet === true
+        ? (editingPart.dimensions.floors as string[])
+        : null;
+    const floorsChanged =
+      oldFloors.length !== (newFloors?.length ?? 0) || oldFloors.some(f => !(newFloors || []).includes(f));
+
+    if (!floorsChanged) {
+      onSave(editingPart);
+      return;
+    }
+
+    try {
+      const impact = await analyzeFloorChange(selectedPart.projectId, selectedPart.id, oldFloors, newFloors);
+      const finish = async () => {
+        try {
+          await applyFloorChange(selectedPart.projectId, selectedPart.id, oldFloors, newFloors);
+          onSave(editingPart);
+        } catch (error) {
+          console.error('Error updating floor quantities:', error);
+          Alert.alert('Error', 'Failed to update floor quantities');
+        }
+      };
+
+      const lines: string[] = [];
+      if (impact.removedWithQuantity.length > 0) {
+        const list = impact.removedWithQuantity.map(r => `Floor ${r.floor} (qty ${r.quantity})`).join(', ');
+        lines.push(`${list} ${impact.removedWithQuantity.length === 1 ? 'has' : 'have'} quantity. Unselecting ${impact.removedWithQuantity.length === 1 ? 'it' : 'them'} will permanently delete the existing quantity data.`);
+      }
+      if (impact.legacyQuantity > 0) {
+        lines.push(`This part currently has a total quantity of ${impact.legacyQuantity}. After becoming a button set, quantities are tracked per floor and the existing quantity will be reset to 0.`);
+      }
+
+      if (lines.length === 0) {
+        await finish();
+        return;
+      }
+
+      Alert.alert('Confirm Floor Changes', lines.join('\n\n'), [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm', style: 'destructive', onPress: finish },
+      ]);
+    } catch (error) {
+      console.error('Error checking floor quantities:', error);
+      Alert.alert('Error', 'Failed to check existing floor quantities');
+    }
   };
 
   return (
@@ -638,6 +711,13 @@ export function EditPartModal({
             </TouchableOpacity>
           </View>
         </ScrollView>
+        {showFloorPicker && (
+          <FloorPicker
+            selected={editingPart.dimensions.floors || []}
+            onChange={(floors) => onEditingPartChange({ dimensions: { ...editingPart.dimensions, buttonSet: true, floors } })}
+            onClose={() => setShowFloorPicker(false)}
+          />
+        )}
       </SafeAreaView>
 
 
