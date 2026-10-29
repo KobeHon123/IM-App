@@ -55,11 +55,7 @@ export default function ManagementTab() {
   ];
 
   return (
-<<<<<<< HEAD
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-=======
-    <SafeAreaView style={styles.container} edges={['top']}>
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
       <View style={styles.header}>
         <ThemedText style={styles.headerTitle}>Management</ThemedText>
       </View>
@@ -78,17 +74,17 @@ export default function ManagementTab() {
                 }}
                 disabled={program.disabled}
               >
-                <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
                   <IconComponent 
                     size={48} 
                     color={program.disabled ? colors.textMuted : colors.primaryText} 
                     strokeWidth={1.5} 
                     opacity={program.disabled ? 0.5 : 1}
                   />
-                  <ThemedText style={[styles.programName, program.disabled && styles.programNameDisabled]}>
-                    {program.name}
-                  </ThemedText>
                 </View>
+                <ThemedText style={[styles.programName, program.disabled && styles.programNameDisabled]}>
+                  {program.name}
+                </ThemedText>
               </TouchableOpacity>
             );
           })}
@@ -125,18 +121,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+    justifyContent: 'space-between',
   },
   programCard: {
     width: '47%',
-<<<<<<< HEAD
     aspectRatio: 1,
     backgroundColor: colors.surface,
-=======
-    aspectRatio: 1.1,
-    backgroundColor: '#FFFFFF',
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
     borderRadius: 20,
-    padding: 16,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
@@ -150,11 +144,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.borderStrong,
     opacity: 0.5,
   },
-  cardContent: {
-    flex: 1,
+  iconContainer: {
+    marginBottom: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
   },
   programName: {
     fontSize: 16,

@@ -119,7 +119,7 @@ export interface VenuePartQuantity {
 export interface Event {
   id: string;
   date: string;
-  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Meeting' | 'Other' | 'Teaching';
+  type: 'Measurement' | 'Test-Fit' | 'Installation' | 'Meeting' | 'Other' | 'Delivery';
   parts: string[];
   description: string;
   projectId: string;

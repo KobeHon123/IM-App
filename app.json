@@ -2,11 +2,7 @@
   "expo": {
     "name": "IM-App",
     "slug": "bolt-expo-nativewind",
-<<<<<<< HEAD
     "version": "1.17.0",
-=======
-    "version": "1.17.1",
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
     "orientation": "portrait",
     "icon": "./assets/images/IML_Company Logo  (Black)_20221104 (1).png",
     "scheme": "myapp",

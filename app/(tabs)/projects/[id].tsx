@@ -25,22 +25,14 @@ export default function ProjectDetailScreen() {
 
   if (!project) {
     return (
-<<<<<<< HEAD
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-=======
-      <SafeAreaView style={styles.container} edges={['top']}>
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
         <ThemedText style={styles.notFoundText}>Project not found</ThemedText>
       </SafeAreaView>
     );
   }
 
   return (
-<<<<<<< HEAD
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-=======
-    <SafeAreaView style={styles.container} edges={['top']}>
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}

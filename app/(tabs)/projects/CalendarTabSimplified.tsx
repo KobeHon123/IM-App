@@ -26,7 +26,7 @@ const eventColors = {
   Measurement: '#3B82F6',
   'Test-Fit': '#10B981',
   Installation: '#F97316',
-  Teaching: '#F59E0B',
+  Delivery: '#F59E0B',
   Meeting: '#EC4899',
   Other: '#6B7280',
 };
@@ -43,7 +43,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDatePickerInline, setShowDatePickerInline] = useState(false);
   const [selectedDateForCreation, setSelectedDateForCreation] = useState<Date | null>(null);
-  const [selectedType, setSelectedType] = useState<'Measurement' | 'Test-Fit' | 'Installation' | 'Teaching' | 'Meeting' | 'Other'>('Measurement');
+  const [selectedType, setSelectedType] = useState<'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other'>('Measurement');
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
@@ -194,7 +194,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
           // Update existing event
           const result = await updateEvent(editingEventId, {
             date: formatDate(selectedDateForCreation),
-            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Teaching' | 'Meeting' | 'Other',
+            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other',
             parts: selectedParts,
             description: finalDescription,
             projectId,
@@ -209,7 +209,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
           // Create new event
           const result = await createEvent({
             date: formatDate(selectedDateForCreation),
-            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Teaching' | 'Meeting' | 'Other',
+            type: selectedType as 'Measurement' | 'Test-Fit' | 'Installation' | 'Delivery' | 'Meeting' | 'Other',
             parts: selectedParts,
             description: finalDescription,
             projectId,
@@ -588,11 +588,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
                       }
                       weeks.push(<View key={`week-${week}`} style={styles.inlineCalendarWeekRow}>{days}</View>);
                     }
-<<<<<<< HEAD
                     
-=======
-
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
                     return weeks;
                   })()}
                 </View>
@@ -614,7 +610,7 @@ const CalendarTabSimplified = ({ projectId }: { projectId: string }) => {
             <View style={styles.sectionContainer}>
               <ThemedText style={styles.sectionTitle}>Event Type</ThemedText>
               <View style={styles.eventTypeGrid}>
-                {(['Measurement', 'Test-Fit', 'Installation', 'Teaching', 'Meeting', 'Other'] as const).map((type) => {
+                {(['Measurement', 'Test-Fit', 'Installation', 'Delivery', 'Meeting', 'Other'] as const).map((type) => {
                   const isSelected = selectedType === type;
                   const color = eventColors[type];
                   return (
@@ -1270,11 +1266,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
   },
   inlineCalendarGrid: {
-<<<<<<< HEAD
      flexDirection: 'column',
-=======
-    flexDirection: 'column',
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
   },
   inlineCalendarWeekRow: {
     flexDirection: 'row',

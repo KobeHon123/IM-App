@@ -185,7 +185,7 @@ export default function ResinRecordManagement() {
     }));
   };
 
-  const renderRecordItem = ({ item, key }: { item: ResinRecord; key?: string }) => {
+  const renderRecordItem = ({ item }: { item: ResinRecord }) => {
     const componentNames = getComponentNames(item.material);
     const formattedDate = new Date(item.created_at).toLocaleDateString('en-US', {
       month: 'short',
@@ -268,14 +268,10 @@ export default function ResinRecordManagement() {
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <ScrollView style={styles.scrollableContent} contentContainerStyle={styles.scrollableContentContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.headerSection}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-<<<<<<< HEAD
               <ArrowLeft size={24} color={colors.text} />
-=======
-              <ArrowLeft color="#2563EB" size={24} />
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
             </TouchableOpacity>
             <ThemedText style={styles.headerTitle}>Resin Records</ThemedText>
             <View style={styles.headerPlaceholder} />
@@ -304,27 +300,7 @@ export default function ResinRecordManagement() {
               </TouchableOpacity>
             </View>
           )}
-
-          {/* Records List */}
-          {filteredRecords.length > 0 ? (
-            <View style={styles.recordsList}>
-              {filteredRecords.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => (
-                <View key={item.id}>
-                  {renderRecordItem({ item })}
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <ThemedText style={styles.emptyStateTitle}>No Records Found</ThemedText>
-              <ThemedText style={styles.emptyStateText}>
-                {records.length === 0
-                  ? 'Start by creating a resin record in the Resin Record and Calculator'
-                  : 'No records found for the selected project'}
-              </ThemedText>
-            </View>
-          )}
-        </ScrollView>
+        </View>
 
         {/* Project Selection Modal */}
         <Modal
@@ -381,7 +357,6 @@ export default function ResinRecordManagement() {
             </View>
           </TouchableOpacity>
         </Modal>
-<<<<<<< HEAD
 
         <ScrollView style={styles.scrollableContent} showsVerticalScrollIndicator={false}>
           {!selectedProject ? (
@@ -420,8 +395,6 @@ export default function ResinRecordManagement() {
             </View>
           )}
         </ScrollView>
-=======
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
       </SafeAreaView>
 
       {/* Summary Card */}
@@ -523,23 +496,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surfaceMuted,
   },
-  scrollableContentContainer: {
-    padding: 16,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-<<<<<<< HEAD
     marginBottom: 0,
     backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-=======
-    marginBottom: 20,
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
   },
   backButton: {
     padding: 8,
@@ -556,13 +522,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
-<<<<<<< HEAD
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-=======
-    borderRadius: 12,
-    marginBottom: 12,
->>>>>>> 545897cc8f0debf77bdca2f658ade5a7abf5c977
   },
   filterLabel: {
     flexDirection: 'row',
