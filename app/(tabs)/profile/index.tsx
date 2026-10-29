@@ -22,6 +22,7 @@ import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import PublicProfile from '@/components/PublicProfile';
+import * as Updates from 'expo-updates';
 import ContactList from '@/components/ContactList';
 import { PendingApprovals } from '@/components/PendingApprovals';
 import { useEasterEgg } from '@/context/EasterEggContext';
@@ -500,6 +501,11 @@ const ProfileScreen = () => {
 
         <View style={styles.versionContainer}>
           <ThemedText style={styles.versionText}>Version {appVersion}</ThemedText>
+          <ThemedText style={styles.versionText}>
+            channel: {Updates.channel ?? 'none'}{'\n'}
+            updateId: {Updates.updateId ?? 'none'}{'\n'}
+            embedded: {String(Updates.isEmbeddedLaunch)}
+          </ThemedText>
         </View>
       </View>
 

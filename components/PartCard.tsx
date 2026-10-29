@@ -183,7 +183,7 @@ export function PartCard({
           <View style={styles.gridCardFooter}>
             <View style={styles.gridCardNameBlock}>
               <ThemedText style={styles.gridCardName}>{part.name}{isButtonSet(part) ? ' · SET' : ''}</ThemedText>
-              {getLiftBadges(part).length > 0 && (
+              {!isPartTab && getLiftBadges(part).length > 0 && (
                 <View style={styles.gridBadgeRow}>
                   {getLiftBadges(part).map((badge) => (
                     <View key={badge.kind} style={[styles.gridBadge, badge.kind === 'surface' ? styles.gridSurfaceBadge : styles.gridBrailleBadge]}>
@@ -242,7 +242,7 @@ export function PartCard({
                     <ThemedText style={styles.setBadgeText}>SET</ThemedText>
                   </View>
                 )}
-                {getLiftBadges(part).map((badge) => (
+                {!isPartTab && getLiftBadges(part).map((badge) => (
                   <View key={badge.kind} style={[styles.setBadge, badge.kind === 'surface' ? styles.surfaceBadge : styles.brailleBadge]}>
                     <ThemedText style={[styles.setBadgeText, badge.kind === 'surface' ? styles.surfaceBadgeText : styles.brailleBadgeText]}>
                       {badge.label.toUpperCase()}
