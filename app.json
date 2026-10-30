@@ -4,7 +4,7 @@
     "slug": "bolt-expo-nativewind",
     "version": "1.18.0",
     "orientation": "portrait",
-    "icon": "./assets/images/IML_Company Logo  (Black)_20221104 (1).png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -14,43 +14,22 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png",
       "publicPath": "/",
       "modules": true
     },
     "plugins": [
-      "expo-router",
-      "expo-font",
-      "expo-web-browser",
-      "@react-native-community/datetimepicker",
-      "expo-secure-store",
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "Allow IM-App to save salary breakdowns to your photo library.",
-          "savePhotosPermission": "Allow IM-App to save salary breakdowns to your photo library.",
-          "isAccessMediaLocationEnabled": true
-        }
-      ],
-      "expo-sharing",
-      "expo-splash-screen",
       "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "android": {
-      "package": "com.anonymous.boltexponativewind"
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "88c0fd38-d5e2-4c16-ab67-99098765c7da"
-      }
-    },
+    "android": {},
+    "extra": {},
     "updates": {
       "url": "https://u.expo.dev/88c0fd38-d5e2-4c16-ab67-99098765c7da"
     },
-    "runtimeVersion": "2.0.0"
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
