@@ -34,11 +34,14 @@ import { calculateDimensionSimilarity, findSimilarPart } from '@/lib/similarityD
 import { ButtonSetSelector, FloorPicker } from '@/components/ButtonSetSelector';
 import { ButtonSetFloors } from '@/components/ButtonSetFloors';
 import { LiftOptions } from '@/components/LiftOptions';
+import { PartTypeSelector } from '@/components/PartTypeSelector';
 import { getPartFloors, getFloorQuantity, getButtonSetTotal, isButtonSet } from '@/lib/floorUtils';
 import { ThemedText } from '@/components/ThemedText';
 import { useColors } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import type { ThemeColors } from '@/constants/Colors';
+const CREATE_PART_TYPES = ['U shape', 'Straight', 'Knob', 'Button', 'Push Pad', 'Cover', 'X - Special Design', 'Gadget'] as const;
+
 export default function VenueDetailScreen() {
   const colors = useColors();
   const { canEdit } = useAuth();
@@ -1782,38 +1785,19 @@ export default function VenueDetailScreen() {
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
               <ThemedText style={styles.inputLabel}>Part Type *</ThemedText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.typeContainer, usingSimilarPart && styles.disabledTypeContainer]}>
-                {[
-                  'U shape', 'Straight', 'Knob', 'Button', 'Push Pad',
-                  'Cover', 'X - Special Design', 'Gadget'
-                ].map((type) => {
-                  const displayType = type === 'U shape' ? 'U/Curved shape' : type === 'X - Special Design' ? 'X - Special Handle' : type === 'Push Pad' ? 'Push Plate' : type;
-                  return (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeButton,
-                      newPart.type === type && styles.selectedTypeButton,
-                      usingSimilarPart && styles.disabledTypeButton
-                    ]}
-                    onPress={() => !usingSimilarPart && setNewPart(prev => ({
-                      ...prev,
-                      type: type as PartType,
-                      dimensions: {}
-                    }))}
-                    disabled={usingSimilarPart}
-                  >
-                    <ThemedText style={[
-                      styles.typeButtonText,
-                      newPart.type === type && styles.selectedTypeButtonText,
-                      usingSimilarPart && styles.disabledTypeButtonText
-                    ]}>
-                      {displayType}
-                    </ThemedText>
-                  </TouchableOpacity>
-                );
-                })}
-              </ScrollView>
+              <PartTypeSelector
+                options={CREATE_PART_TYPES.map((type) => ({
+                  value: type,
+                  label: type === 'U shape' ? 'U/Curved shape' : type === 'X - Special Design' ? 'X - Special Handle' : type === 'Push Pad' ? 'Push Plate' : type,
+                }))}
+                value={newPart.type}
+                disabled={usingSimilarPart}
+                onChange={(type) => setNewPart(prev => ({
+                  ...prev,
+                  type: type as PartType,
+                  dimensions: {}
+                }))}
+              />
               {usingSimilarPart && (
                 <ThemedText style={styles.lockedIndicator}>🔒 Fixed from existing part</ThemedText>
               )}
