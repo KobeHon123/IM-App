@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Clipboard, Calculator, History, FlaskConical, Hourglass } from 'lucide-react-native';
+import { Clipboard, Calculator, History, FlaskConical, Hourglass, Boxes } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { useMemo } from 'react';
@@ -45,6 +45,12 @@ export default function ManagementTab() {
       name: 'Quick Test\nReport',
       icon: FlaskConical,
       route: '/(tabs)/management/quick-test-report',
+    },
+    {
+      id: 'three-d-lab',
+      name: '3D Lab',
+      icon: Boxes,
+      route: '/(tabs)/management/3d-lab',
     },
     {
       id: 'stopwatch',
