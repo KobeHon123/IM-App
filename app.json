@@ -18,7 +18,8 @@
       "modules": true
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
