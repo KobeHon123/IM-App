@@ -27,9 +27,9 @@ const comingSoon = (id: PartTypeId, label: string): PartTypeDefinition => ({
   exportFileName: () => `${id}.stl`,
 });
 
-const curvedShape: PartTypeDefinition = {
-  id: 'curved-shape',
-  label: 'U/Curved shape',
+const straight: PartTypeDefinition = {
+  id: 'straight',
+  label: 'Straight',
   title: 'Handle Cover – Half (round, S-type)',
   description: 'Half of a round handle cover. The lip and groove on the split edge are fixed.',
   status: 'ready',
@@ -40,15 +40,30 @@ const curvedShape: PartTypeDefinition = {
   exportFileName: handleCoverFileName,
 };
 
+const curvedShape: PartTypeDefinition = {
+  id: 'curved-shape',
+  label: 'U/Curved shape',
+  title: 'U/Curved shape',
+  description: 'This part type is not available yet.',
+  status: 'coming-soon',
+  parameters: [],
+  normalize: (values) => values,
+  describe: () => [],
+  build: () => {
+    throw new Error('U/Curved shape is not implemented yet');
+  },
+  exportFileName: () => 'u-curved-shape.stl',
+};
+
 export const PART_TYPES: PartTypeDefinition[] = [
   comingSoon('qc-block', 'QC Block'),
+  straight,
   curvedShape,
-  comingSoon('straight', 'Straight'),
   comingSoon('knob', 'Knob'),
   comingSoon('button', 'Button'),
   comingSoon('push-plate', 'Push Plate'),
 ];
 
-export const DEFAULT_PART_TYPE: PartTypeId = 'curved-shape';
+export const DEFAULT_PART_TYPE: PartTypeId = 'straight';
 
-export const getPartType = (id: PartTypeId): PartTypeDefinition => PART_TYPES.find((t) => t.id === id) ?? curvedShape;
+export const getPartType = (id: PartTypeId): PartTypeDefinition => PART_TYPES.find((t) => t.id === id) ?? straight;
