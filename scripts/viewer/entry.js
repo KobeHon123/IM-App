@@ -101,6 +101,28 @@ if (renderer) {
     dirty = true;
   };
 
+  const applyLimits = () => {
+    const radius = Math.max(sphere.radius, 5);
+    controls.minDistance = radius * 0.25;
+    controls.maxDistance = radius * 12;
+    camera.near = Math.max(radius / 200, 0.1);
+    camera.far = radius * 40;
+    camera.updateProjectionMatrix();
+  };
+
+  // keep the user's viewing direction, but follow the part when its size or position changes
+  const refit = (previousCenter, previousRadius) => {
+    const ratio = sphere.radius / previousRadius;
+    const shift = sphere.center.clone().sub(previousCenter);
+    camera.position.add(shift);
+    controls.target.add(shift);
+    const offset = camera.position.clone().sub(controls.target).multiplyScalar(ratio);
+    camera.position.copy(controls.target).add(offset);
+    applyLimits();
+    controls.update();
+    dirty = true;
+  };
+
   const frame = () => {
     const radius = Math.max(sphere.radius, 5);
     const fov = (camera.fov * Math.PI) / 180;
@@ -112,11 +134,7 @@ if (renderer) {
     home.position.copy(sphere.center).addScaledVector(dir, distance);
     camera.position.copy(home.position);
     controls.target.copy(home.target);
-    controls.minDistance = radius * 0.25;
-    controls.maxDistance = radius * 12;
-    camera.near = Math.max(radius / 200, 0.1);
-    camera.far = radius * 40;
-    camera.updateProjectionMatrix();
+    applyLimits();
     controls.update();
     dirty = true;
   };
@@ -129,6 +147,8 @@ if (renderer) {
     geometry.setAttribute('normal', new BufferAttribute(normals, 3, true));
     geometry.computeBoundingBox();
 
+    const previousCenter = sphere.center.clone();
+    const previousRadius = sphere.radius;
     if (part) {
       scene.remove(part);
       part.geometry.dispose();
@@ -147,8 +167,9 @@ if (renderer) {
       grid.geometry.dispose();
     }
     const extent = Math.max(box.max.x - box.min.x, box.max.z - box.min.z, 20);
-    const size = Math.ceil((extent * 1.8) / 10) * 10;
-    grid = new GridHelper(size, size / 10, 0x8a94a3, 0x8a94a3);
+    const cell = extent > 150 ? 20 : 10;
+    const size = Math.ceil((extent * 1.8) / cell) * cell;
+    grid = new GridHelper(size, size / cell, 0x8a94a3, 0x8a94a3);
     grid.position.set(sphere.center.x, box.min.y - 0.05, sphere.center.z);
     scene.add(grid);
 
@@ -156,6 +177,8 @@ if (renderer) {
     if (!fitted) {
       frame();
       fitted = true;
+    } else if (previousRadius > 0 && Math.abs(sphere.radius / previousRadius - 1) > 0.03) {
+      refit(previousCenter, previousRadius);
     }
     dirty = true;
     post({ type: 'rendered' });

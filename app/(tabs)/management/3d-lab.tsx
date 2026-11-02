@@ -106,11 +106,9 @@ export default function ThreeDLabScreen() {
   }, [typeId, scheduleBuild]);
 
   const setValue = (key: string, value: number | boolean, immediate: boolean) => {
-    setValuesByType((prev) => {
-      const next = { ...(prev[typeId] ?? defaultValues(definition)), [key]: value };
-      latest.current = { typeId, values: next };
-      return { ...prev, [typeId]: next };
-    });
+    const next = { ...latest.current.values, [key]: value };
+    latest.current = { typeId, values: next };
+    setValuesByType((prev) => ({ ...prev, [typeId]: next }));
     scheduleBuild(immediate);
   };
 
@@ -217,7 +215,7 @@ export default function ThreeDLabScreen() {
                         thumbColor="#FFFFFF"
                       />
                     </View>
-                    {noteViews.length > 0 && values[spec.key] === true && <View style={styles.notes}>{noteViews}</View>}
+                    {noteViews.length > 0 && values[spec.key] === true && <View style={styles.toggleNotes}>{noteViews}</View>}
                   </View>
                 );
               })}
@@ -303,6 +301,7 @@ const createStyles = (colors: ThemeColors) =>
     partTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
     partDescription: { fontSize: 13, color: colors.textSecondary, marginTop: 4, lineHeight: 18 },
     notes: { marginTop: -8, marginBottom: 14, gap: 6 },
+    toggleNotes: { marginTop: 10, marginBottom: 6, gap: 6 },
     note: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: colors.primarySoft },
     noteWarning: { backgroundColor: colors.warningSoft },
     errorNote: { marginTop: 0 },

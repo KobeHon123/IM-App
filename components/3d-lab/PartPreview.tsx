@@ -1,12 +1,38 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import type { WebView as WebViewComponent, WebViewMessageEvent } from 'react-native-webview';
 import { RotateCcw } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { useColors, useTheme } from '@/context/ThemeContext';
 import type { ThemeColors } from '@/constants/Colors';
 import { VIEWER_HTML } from '@/lib/3d-lab/viewerHtml.generated';
 import type { ViewerMeshPayload } from '@/lib/3d-lab/viewerPayload';
+
+/**
+ * react-native-webview is a native module. Builds made before it was added (or without it) cannot show the
+ * preview, so it is loaded lazily and any failure turns into the "not supported" notice instead of a crash.
+ */
+function loadWebView(): typeof WebViewComponent | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('react-native-webview').WebView as typeof WebViewComponent;
+  } catch {
+    return null;
+  }
+}
+
+class PreviewBoundary extends React.Component<{ onCrash: (message: string) => void; children: React.ReactNode }, { crashed: boolean }> {
+  state = { crashed: false };
+  static getDerivedStateFromError() {
+    return { crashed: true };
+  }
+  componentDidCatch(error: Error) {
+    this.props.onCrash(error?.message ?? 'unknown error');
+  }
+  render() {
+    return this.state.crashed ? null : this.props.children;
+  }
+}
 
 export type PreviewStatus = 'loading' | 'ready' | 'unsupported' | 'error';
 
@@ -31,12 +57,17 @@ export const PartPreview = forwardRef<PartPreviewHandle, PartPreviewProps>(funct
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<InstanceType<typeof WebViewComponent>>(null);
+  const WebView = useMemo(() => (Platform.OS === 'web' ? null : loadWebView()), []);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const pageReady = useRef(false);
   const [status, setStatus] = useState<PreviewStatus>('loading');
   const [reloadKey, setReloadKey] = useState(0);
   const [detail, setDetail] = useState('');
+  const nativeMissing = Platform.OS !== 'web' && !WebView;
+  useEffect(() => {
+    if (nativeMissing) onStatusChange?.('unsupported');
+  }, [nativeMissing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const theme = useMemo(
     () => ({
@@ -115,7 +146,8 @@ export const PartPreview = forwardRef<PartPreviewHandle, PartPreviewProps>(funct
     setReloadKey((k) => k + 1);
   };
 
-  const failed = status === 'unsupported' || status === 'error';
+  const failed = nativeMissing || status === 'unsupported' || status === 'error';
+  const effectiveStatus: PreviewStatus = nativeMissing ? 'unsupported' : status;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -130,9 +162,15 @@ export const PartPreview = forwardRef<PartPreviewHandle, PartPreviewProps>(funct
             title: '3D preview',
             style: { border: 0, width: '100%', height: '100%', display: 'block' },
           })
-        ) : (
-          <WebView
+        ) : WebView ? (
+          <PreviewBoundary
             key={reloadKey}
+            onCrash={(message) => {
+              setDetail(message);
+              updateStatus('unsupported');
+            }}
+          >
+          <WebView
             ref={webViewRef}
             originWhitelist={['*']}
             source={{ html: VIEWER_HTML }}
@@ -160,20 +198,23 @@ export const PartPreview = forwardRef<PartPreviewHandle, PartPreviewProps>(funct
               updateStatus('error');
             }}
           />
-        )
+          </PreviewBoundary>
+        ) : null
       )}
 
       {failed && (
         <View style={styles.notice}>
           <ThemedText style={styles.noticeTitle}>
-            {status === 'unsupported' ? '3D preview is not supported on this device' : 'The 3D preview stopped'}
+            {effectiveStatus === 'unsupported' ? '3D preview is not available' : 'The 3D preview stopped'}
           </ThemedText>
           <ThemedText style={styles.noticeText}>
-            {status === 'unsupported'
-              ? 'Your device has no WebGL support. You can still adjust the parameters and download the STL.'
-              : detail || 'Something went wrong while drawing the part.'}
+            {nativeMissing
+              ? 'This app build does not include the preview engine yet - install the latest build. You can still adjust the parameters and download the STL.'
+              : effectiveStatus === 'unsupported'
+                ? 'This device has no WebGL support. You can still adjust the parameters and download the STL.'
+                : detail || 'Something went wrong while drawing the part.'}
           </ThemedText>
-          {status === 'error' && (
+          {effectiveStatus === 'error' && (
             <TouchableOpacity style={styles.retry} onPress={retry}>
               <ThemedText style={styles.retryText}>Try again</ThemedText>
             </TouchableOpacity>
@@ -213,7 +254,7 @@ export const PartPreview = forwardRef<PartPreviewHandle, PartPreviewProps>(funct
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, overflow: 'hidden', borderRadius: 14, borderWidth: 1, borderColor: colors.border },
-    overlayCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+    overlayCenter: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
     resetButton: {
       position: 'absolute',
       top: 10,
