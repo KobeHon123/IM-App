@@ -154,8 +154,8 @@ if (renderer) {
       part.geometry.dispose();
     }
     part = new Mesh(geometry, material);
-    // part coordinates: axis along Y, outer surface towards +Z  ->  Y-up scene: (x, y, z) -> (x, z, -y)
-    part.rotation.x = -Math.PI / 2;
+    // Upright standing orientation
+    part.rotation.set(0, Math.PI / 2, 0);
     scene.add(part);
     part.updateMatrixWorld(true);
 

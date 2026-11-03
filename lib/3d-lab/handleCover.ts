@@ -155,7 +155,7 @@ export function logoScale(outerRadius: number, y1: number, y2: number): number {
 }
 
 export function placeLogo(outerRadius: number, y1: number, y2: number, withContours: boolean): LogoPlacement {
-  const scale = logoScale(outerRadius, y1, y2);
+  const scale = logoScale(outerRadius, y1, y2)*0.25;
   const minFeatureMm = Math.min(LOGO_MIN_STROKE_PX, LOGO_MIN_GAP_PX) * scale;
   const placement: LogoPlacement = {
     scale,
