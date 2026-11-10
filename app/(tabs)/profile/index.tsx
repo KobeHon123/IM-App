@@ -67,7 +67,8 @@ const ProfileScreen = () => {
   const successOpacityAnim = useRef(new Animated.Value(1)).current;
   const errorOpacityAnim = useRef(new Animated.Value(1)).current;
   const modalTransformAnim = useRef(new Animated.Value(0)).current;
-  const slideUpAnim = useRef(new Animated.Value(1000)).current;
+  // translateX: 800 = parked off-screen (closed). The overlay is always mounted, so it must start parked.
+  const slideUpAnim = useRef(new Animated.Value(800)).current;
 
   useEffect(() => {
     if (profile) {
@@ -92,7 +93,7 @@ const ProfileScreen = () => {
         useNativeDriver: true,
       }).start();
     } else {
-      slideUpAnim.setValue(0);
+      // Only animate out. Setting the value to 0 here would bring the overlay on screen on first mount.
       Animated.timing(slideUpAnim, {
         toValue: 800,
         duration: 300,

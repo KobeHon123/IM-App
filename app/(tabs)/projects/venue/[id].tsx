@@ -3015,7 +3015,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    marginBottom: -32,
   },
   photoGalleryContent: {
     paddingHorizontal: 16,
