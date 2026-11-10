@@ -47,15 +47,16 @@ interface TimesheetEntry {
   confirmed?: boolean;
 }
 
-const TEAM_MEMBERS = ['Kobe', 'Joyce', 'Cynthia'];
+const TEAM_MEMBERS = ['Kobe', 'Joyce', 'Cynthia', 'Sumi'];
 const VENUES = ['Office', 'PolyU', 'Site'];
-const ACTIVE_TEAM_MEMBERS = TEAM_MEMBERS.filter(member => member !== 'Joyce' && member !== 'Cynthia');
+const ACTIVE_TEAM_MEMBERS = TEAM_MEMBERS.filter(member => member !== 'Cynthia');
 const ACTIVE_VENUES = VENUES.filter(venue => venue !== 'Office');
 
 const WORKER_SYMBOLS = {
   'Kobe': { symbol: 'K' },
   'Joyce': { symbol: 'J' },
   'Cynthia': { symbol: 'C' },
+  'Sumi': { symbol: 'S' },
 };
 
 // Star shape component for Site location
@@ -785,8 +786,12 @@ export default function PartTimeTimesheet() {
   }, [currentDate, user]);
 
   useEffect(() => {
-    if (!canSeeKobeSalary && selectedWorkerForSalary === 'Kobe') {
-      setSelectedWorkerForSalary('Joyce');
+    const availableWorkers = TEAM_MEMBERS.filter(
+      member => (canSeeKobeSalary || member !== 'Kobe') && member !== 'Cynthia'
+    );
+
+    if (!availableWorkers.includes(selectedWorkerForSalary)) {
+      setSelectedWorkerForSalary(availableWorkers[0] || 'Joyce');
     }
   }, [canSeeKobeSalary, selectedWorkerForSalary]);
 
@@ -1126,7 +1131,7 @@ export default function PartTimeTimesheet() {
 
   const calculateSalary = () => {
     const hours = calculateWorkerHours(selectedWorkerForSalary, salaryCalculationType);
-    return hours * 70; // HKD 70 per hour
+    return hours * 80; // HKD 80 per hour
   };
 
   const handleDownloadCSV = async () => {
@@ -1150,16 +1155,15 @@ export default function PartTimeTimesheet() {
         block.push(['Date', 'Hours', 'Amount (HKD)']);        // row 1 — column headers
 
         entries.forEach(entry => {
-          const dateStr = new Date(entry.work_date).toLocaleDateString('en-US', {
+          const dateStr = new Date(entry.work_date + 'T00:00:00').toLocaleDateString('en-US', {
             month: 'short', day: 'numeric', year: 'numeric',
           });
           const hours = calculateWorkedHours(entry);
-          block.push([dateStr, parseFloat(hours.toFixed(1)), parseFloat((hours * 70).toFixed(1))]);
+          block.push([dateStr, parseFloat(hours.toFixed(1)), parseFloat((hours *80).toFixed(1))]);
         });
 
         const totalHours = calculateWorkerHours(worker, salaryCalculationType);
-        block.push(['Total', parseFloat(totalHours.toFixed(1)), parseFloat((totalHours * 70).toFixed(1))]);
-
+        block.push(['Total', parseFloat(totalHours.toFixed(1)), parseFloat((totalHours * 80).toFixed(1))]);
         // Duty summary
         const dutyMap: Record<string, number> = {};
         entries.forEach(entry => {
@@ -1518,7 +1522,7 @@ export default function PartTimeTimesheet() {
         <View style={styles.legend}>
           <ThemedText style={styles.legendTitle}>Workers</ThemedText>
           <View style={styles.legendItems}>
-            {Object.entries(WORKER_SYMBOLS).filter(([name]) => name !== 'Joyce' && name !== 'Cynthia').map(([name, info]) => (
+            {Object.entries(WORKER_SYMBOLS).filter(([name]) => name !== 'Cynthia').map(([name, info]) => (
               <View key={name} style={styles.legendItem}>
                 <View style={[styles.legendSymbol, { backgroundColor: '#9CA3AF' }]}>
                   <ThemedText style={styles.legendSymbolText}>{info.symbol}</ThemedText>
@@ -1601,7 +1605,7 @@ export default function PartTimeTimesheet() {
           <View style={styles.salaryGroup}>
             <ThemedText style={styles.salaryLabel}>Select Worker</ThemedText>
             <View style={styles.workerSelectionButtons}>
-              {TEAM_MEMBERS.filter(member => canSeeKobeSalary || member !== 'Kobe').map(member => (
+              {TEAM_MEMBERS.filter(member => (canSeeKobeSalary || member !== 'Kobe') && member !== 'Cynthia').map(member => (
                 <TouchableOpacity
                   key={member}
                   style={[
@@ -1987,7 +1991,7 @@ export default function PartTimeTimesheet() {
             <View style={styles.formGroup}>
               <ThemedText style={styles.formLabel}>Venue (optional for Kobe on call)</ThemedText>
               <View style={styles.memberButtons}>
-                {VENUES.map(venue => (
+                {ACTIVE_VENUES.map(venue => (
                   <TouchableOpacity
                     key={venue}
                     style={[
@@ -2239,7 +2243,7 @@ export default function PartTimeTimesheet() {
                   <View style={styles.salaryDetailRow}>
                     <View style={styles.salaryDetailDateSection}>
                       <ThemedText style={styles.salaryDetailDate}>
-                        {new Date(entry.work_date).toLocaleDateString('en-US', {
+                        {new Date(entry.work_date + 'T00:00:00').toLocaleDateString('en-US', {
                           weekday: 'short',
                           month: 'short',
                           day: 'numeric',
@@ -2253,7 +2257,7 @@ export default function PartTimeTimesheet() {
                     </View>
                     <View style={styles.salaryDetailAmountSection}>
                       <ThemedText style={styles.salaryDetailAmount}>
-                        HKD ${(calculateWorkedHours(entry) * 70).toFixed(1)}
+                        HKD ${(calculateWorkedHours(entry) * 80).toFixed(1)}
                       </ThemedText>
                     </View>
                   </View>
@@ -2493,16 +2497,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
-  },
-  symbolText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  symbolTextOverlay: {
-    position: 'absolute',
-    zIndex: 10,
-
   },
   entryBadge: {
     paddingHorizontal: 6,
@@ -3246,6 +3240,42 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '700',
     color: '#10B981',
   },
+
+  symbolText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  symbolTextOverlay: {
+    position: 'absolute',
+    zIndex: 10,
+
+  },
+  dutySuggestionList: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: 8,
+    marginTop: 2,
+    marginBottom: 6,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dutySuggestionItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  dutySuggestionText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
   salaryDetailHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3287,30 +3317,5 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     color: colors.primaryText,
     fontWeight: '600',
-  },
-  dutySuggestionList: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 8,
-    marginTop: 2,
-    marginBottom: 6,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  dutySuggestionItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  dutySuggestionText: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '500',
   },
 });
