@@ -103,7 +103,6 @@ const ContactList = ({ onClose, currentUserId }: ContactListProps) => {
               <User color={colors.textSecondary} size={40} />
             </View>
           )}
-          {isAdmin && <View style={styles.adminBadge} />}
         </View>
         <ThemedText style={styles.contactName} numberOfLines={2}>
           {item.full_name}
@@ -239,17 +238,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   photoWrapper: {
     marginBottom: 12,
     position: 'relative',
-  },
-  adminBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primary,
-    borderWidth: 3,
-    borderColor: colors.surface,
   },
   contactPhoto: {
     width: 100,

@@ -150,12 +150,22 @@ function TabsContent() {
     }
   }, [isOffTime]);
 
-  // Trigger cannon when banner is first shown (after 3 taps)
+  // Latest banner / off-time state for the tab focus listener (listeners are captured once per mount)
+  const bannerActiveRef = useRef(showOffWorkCounter);
+  bannerActiveRef.current = showOffWorkCounter;
+  const isOffTimeRef = useRef(isOffTime);
+  isOffTimeRef.current = isOffTime;
+
+  // Cannon whenever the banner is activated (after 3 taps) during off time
   useEffect(() => {
-    if (showOffWorkCounter && !isOffTime) {
+    if (showOffWorkCounter && isOffTime) {
       triggerCannonAnimation();
     }
-  }, [showOffWorkCounter]);
+  }, [showOffWorkCounter, isOffTime]);
+
+  // Same height as the tab bar set in screenOptions below (60 + bottom inset), so the banner sits above it.
+  const tabBarHeight = 60 + Math.max(insets.bottom, 0);
+  const particleBottom = tabBarHeight + 5;
 
   const animatedBackgroundColor = backgroundColor.interpolate({
     inputRange: [0, 1],
@@ -204,6 +214,11 @@ function TabsContent() {
         />
         <Tabs.Screen
           name="profile"
+          listeners={{
+            focus: () => {
+              if (bannerActiveRef.current && isOffTimeRef.current) triggerCannonAnimation();
+            },
+          }}
           options={{
             tabBarIcon: ({ size, color }) => (
               <User size={30} color={color} />
@@ -214,7 +229,7 @@ function TabsContent() {
       
       {showOffWorkCounter && (
         <>
-          <Animated.View style={[styles.offWorkCounterContainer, { backgroundColor: animatedBackgroundColor }]}>
+          <Animated.View style={[styles.offWorkCounterContainer, { bottom: tabBarHeight, backgroundColor: animatedBackgroundColor }]}>
             {isWeekend ? (
               <View style={styles.offWorkCounter}>
                 <ThemedText style={styles.offWorkCounterText}>Please enjoy your holiday 💢</ThemedText>
@@ -247,6 +262,7 @@ function TabsContent() {
               <Animated.View
                 style={[
                   styles.cannonParticle,
+                  { bottom: particleBottom },
                   styles.cannonParticle1,
                   {
                     transform: [
@@ -261,6 +277,7 @@ function TabsContent() {
               <Animated.View
                 style={[
                   styles.cannonParticle,
+                  { bottom: particleBottom },
                   styles.cannonParticle2,
                   {
                     transform: [
@@ -275,6 +292,7 @@ function TabsContent() {
               <Animated.View
                 style={[
                   styles.cannonParticle,
+                  { bottom: particleBottom },
                   styles.cannonParticle3,
                   {
                     transform: [
@@ -289,6 +307,7 @@ function TabsContent() {
               <Animated.View
                 style={[
                   styles.cannonParticle,
+                  { bottom: particleBottom },
                   styles.cannonParticle4,
                   {
                     transform: [
