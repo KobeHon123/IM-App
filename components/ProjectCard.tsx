@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Project } from '@/types';
 import { User } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
@@ -20,11 +20,12 @@ export function ProjectCard({ project, onPress, isFinished = false }: ProjectCar
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={1}>
       <View style={[styles.cardShell, isFinished && styles.cardShellFinished]}>
         {project.thumbnail ? (
-          <ImageBackground
-            source={{ uri: project.thumbnail }}
-            style={styles.background}
-            imageStyle={styles.backgroundImage}
-          >
+          <View style={styles.background}>
+            <Image
+              source={{ uri: project.thumbnail }}
+              style={[StyleSheet.absoluteFill, styles.backgroundImage]}
+              resizeMode="cover"
+            />
             <View style={styles.overlay}>
               <View style={styles.content}>
                 <ThemedText style={[styles.title, !project.description && styles.titleNoDescription]}>{project.name}</ThemedText>
@@ -39,7 +40,7 @@ export function ProjectCard({ project, onPress, isFinished = false }: ProjectCar
                 </View>
               </View>
             </View>
-          </ImageBackground>
+          </View>
         ) : (
           <View style={styles.plainCard}>
             <View style={styles.overlayPlain}>
